@@ -29,7 +29,7 @@ impl Backend for FileBackend {
         }
 
         let mut names: Vec<String> = vec![];
-		let entries = fs::read_dir(path)?;
+        let entries = fs::read_dir(path)?;
         for entry in entries {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -116,17 +116,17 @@ impl Lock for FileBackend {
 }
 
 impl FileBackend {
-	pub fn new(conf: &HashMap<String, String>) -> Result<Self, RvError> {
-		match conf.get("path") {
-			Some(path) => {
-				Ok(FileBackend {
-					path: PathBuf::from(path),
-					lock: Arc::new(Mutex::new(0)),
-				})
-			}
-			None => Err(RvError::ErrPhysicalConfigItemMissing)
-		}
-	}
+    pub fn new(conf: &HashMap<String, String>) -> Result<Self, RvError> {
+        match conf.get("path") {
+            Some(path) => {
+                Ok(FileBackend {
+                    path: PathBuf::from(path),
+                    lock: Arc::new(Mutex::new(0)),
+                })
+            }
+            None => Err(RvError::ErrPhysicalConfigItemMissing)
+        }
+    }
 
     fn path_key(&self, k: &str) -> (PathBuf, String) {
         let path = self.path.join(k);

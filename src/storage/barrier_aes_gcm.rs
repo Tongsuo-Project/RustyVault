@@ -21,20 +21,24 @@ struct BarrierInit {
     key: Vec<u8>,
 }
 
-pub struct AESGCMBarrier {
-    backend: Arc<Box<dyn Backend>>,
-    lock: Arc<Mutex<i32>>,
+struct BarrierInfo {
     sealed: bool,
     key: Option<Vec<u8>>,
     cipher: Option<&'static CipherRef>,
     cipher_ctx: Option<RefCell<CipherCtx>>,
 }
 
+pub struct AESGCMBarrier {
+    lock: Arc<Mutex<i32>>,
+    barrier_info: Arc<RefCell<BarrierInfo>>,
+    backend: Arc<Box<dyn Backend>>,
+}
+
 impl Storage for AESGCMBarrier {
     fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
         let lock = self.lock.clone();
         let _lock = lock.lock().unwrap();
-        if self.sealed {
+        if self.barrier_info.borrow().sealed {
             return Err(RvError::ErrBarrierSealed);
         }
         self.backend.list(prefix)
@@ -43,7 +47,7 @@ impl Storage for AESGCMBarrier {
     fn get(&self, key: &str) -> Result<Option<StorageEntry>, RvError> {
         let lock = self.lock.clone();
         let _lock = lock.lock().unwrap();
-        if self.sealed {
+        if self.barrier_info.borrow().sealed {
             return Err(RvError::ErrBarrierSealed);
         }
 
@@ -66,7 +70,7 @@ impl Storage for AESGCMBarrier {
     fn put(&self, entry: &StorageEntry) -> Result<(), RvError> {
         let lock = self.lock.clone();
         let _lock = lock.lock().unwrap();
-        if self.sealed {
+        if self.barrier_info.borrow().sealed {
             return Err(RvError::ErrBarrierSealed);
         }
 
@@ -85,7 +89,7 @@ impl Storage for AESGCMBarrier {
     fn delete(&self, key: &str) -> Result<(), RvError> {
         let lock = self.lock.clone();
         let _lock = lock.lock().unwrap();
-        if self.sealed {
+        if self.barrier_info.borrow().sealed {
             return Err(RvError::ErrBarrierSealed);
         }
         self.backend.delete(key)
@@ -93,19 +97,19 @@ impl Storage for AESGCMBarrier {
 }
 
 impl SecurityBarrier for AESGCMBarrier {
-    fn initialized(&self) -> Result<bool, RvError> {
+    fn inited(&self) -> Result<bool, RvError> {
         let res = self.backend.get(BARRIER_INIT_PATH)?;
         Ok(res.is_some())
     }
 
-    fn initialize(&mut self, key: &[u8]) -> Result<(), RvError> {
+    fn init(&self, key: &[u8]) -> Result<(), RvError> {
         let (min, max) = self.key_length_range();
         if key.len() < min || key.len() > max {
             return Err(RvError::ErrBarrierKeyInvalid);
         }
 
         // Check if already initialized
-        let inited = self.initialized()?;
+        let inited = self.inited()?;
         if inited {
             return Err(RvError::ErrBarrierAlreadyInit);
         }
@@ -148,15 +152,14 @@ impl SecurityBarrier for AESGCMBarrier {
     }
 
     fn sealed(&self) -> Result<bool, RvError> {
-        let lock = self.lock.clone();
-        let _lock = lock.lock().unwrap();
-        Ok(self.sealed)
+        Ok(self.barrier_info.borrow().sealed)
     }
 
-    fn unseal(&mut self, key: &[u8]) -> Result<(), RvError> {
+    fn unseal(&self, key: &[u8]) -> Result<(), RvError> {
         let lock = self.lock.clone();
         let _lock = lock.lock().unwrap();
-        if self.sealed != true {
+        let sealed = self.sealed()?;
+        if !sealed {
             return Ok(());
         }
 
@@ -171,60 +174,69 @@ impl SecurityBarrier for AESGCMBarrier {
         let barrier_init: BarrierInit = serde_json::from_slice(value.as_slice())?;
 
         self.init_cipher(barrier_init.key.as_slice())?;
-        self.sealed = false;
+        self.barrier_info.borrow_mut().sealed = false;
 
         Ok(())
     }
 
-    fn seal(&mut self) -> Result<(), RvError> {
+    fn seal(&self) -> Result<(), RvError> {
         let lock = self.lock.clone();
         let _lock = lock.lock().unwrap();
         self.reset_cipher()?;
-        self.sealed = true;
+        self.barrier_info.borrow_mut().sealed = true;
         Ok(())
+    }
+
+    fn as_storage(&self) -> &dyn Storage {
+        self
     }
 }
 
 impl AESGCMBarrier {
     pub fn new(physical: Arc<Box<dyn Backend>>) -> Self {
         AESGCMBarrier {
-            backend: physical.clone(),
             lock: Arc::new(Mutex::new(0)),
-            sealed: true,
-            key: None,
-            cipher: None,
-            cipher_ctx: None,
+            backend: physical.clone(),
+            barrier_info: Arc::new(RefCell::new(BarrierInfo {
+                sealed: true,
+                key: None,
+                cipher: None,
+                cipher_ctx: None,
+            })),
         }
     }
 
-    fn init_cipher(&mut self, key: &[u8]) -> Result<(), RvError> {
+    fn init_cipher(&self, key: &[u8]) -> Result<(), RvError> {
         let cipher_ctx = CipherCtx::new()?;
-        self.key = Some(key.to_vec());
-        self.cipher = Some(Cipher::aes_256_gcm());
-        self.cipher_ctx = Some(RefCell::new(cipher_ctx));
+        let mut barrier_info = self.barrier_info.borrow_mut();
+        barrier_info.key = Some(key.to_vec());
+        barrier_info.cipher = Some(Cipher::aes_256_gcm());
+        barrier_info.cipher_ctx = Some(RefCell::new(cipher_ctx));
         Ok(())
     }
 
-    fn reset_cipher(&mut self) -> Result<(), RvError> {
-        self.key = None;
-        self.cipher = None;
-        self.cipher_ctx = None;
+    fn reset_cipher(&self) -> Result<(), RvError> {
+        let mut barrier_info = self.barrier_info.borrow_mut();
+        barrier_info.key = None;
+        barrier_info.cipher = None;
+        barrier_info.cipher_ctx = None;
         Ok(())
     }
     fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, RvError> {
-        if self.key.is_none() || self.cipher_ctx.is_none() || self.cipher.is_none() {
+        let barrier_info = self.barrier_info.borrow();
+        if barrier_info.key.is_none() || barrier_info.cipher_ctx.is_none() || barrier_info.cipher.is_none() {
             return Err(RvError::ErrBarrierNotInit);
         }
 
-        let cipher = self.cipher.unwrap();
-        let mut cipher_ctx = self.cipher_ctx.as_ref().unwrap().borrow_mut();
-        let key = self.key.clone().unwrap();
+        let cipher = barrier_info.cipher.unwrap();
+        let mut cipher_ctx = barrier_info.cipher_ctx.as_ref().unwrap().borrow_mut();
+        let key = barrier_info.key.clone().unwrap();
 
-		// Assuming nonce size is the same as IV size
-		let nonce_size = cipher.iv_length();
+        // Assuming nonce size is the same as IV size
+        let nonce_size = cipher.iv_length();
 
         // Generate a random nonce
-		let mut nonce = vec![0u8; nonce_size];
+        let mut nonce = vec![0u8; nonce_size];
         thread_rng().fill(nonce.as_mut_slice());
 
         // Encrypt
@@ -235,11 +247,11 @@ impl AESGCMBarrier {
         let _final_len = cipher_ctx.cipher_final(&mut ciphertext[len..])?;
 
         let tag_size = cipher_ctx.tag_length();
-		let mut tag = vec![0u8; tag_size];
+        let mut tag = vec![0u8; tag_size];
         cipher_ctx.tag(tag.as_mut_slice())?;
 
         let size: usize = EPOCH_SIZE + 1 + nonce_size + ciphertext.len() + tag_size;
-		let mut out = vec![0u8; size];
+        let mut out = vec![0u8; size];
 
         out[3] = KEY_EPOCH;
         out[4] = AES_GCM_VERSION;
@@ -251,7 +263,8 @@ impl AESGCMBarrier {
     }
 
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, RvError> {
-        if self.key.is_none() || self.cipher_ctx.is_none() || self.cipher.is_none() {
+        let barrier_info = self.barrier_info.borrow();
+        if barrier_info.key.is_none() || barrier_info.cipher_ctx.is_none() || barrier_info.cipher.is_none() {
             return Err(RvError::ErrBarrierNotInit);
         }
 
@@ -259,11 +272,11 @@ impl AESGCMBarrier {
             return Err(RvError::ErrBarrierEpochMismatch);
         }
 
-        let cipher = self.cipher.unwrap();
-        let mut cipher_ctx = self.cipher_ctx.as_ref().unwrap().borrow_mut();
-        let key = self.key.clone().unwrap();
+        let cipher = barrier_info.cipher.unwrap();
+        let mut cipher_ctx = barrier_info.cipher_ctx.as_ref().unwrap().borrow_mut();
+        let key = barrier_info.key.clone().unwrap();
 
-		let nonce_size = cipher.iv_length();
+        let nonce_size = cipher.iv_length();
 
         if ciphertext[4] != AES_GCM_VERSION {
             return Err(RvError::ErrBarrierVersionMismatch);
@@ -278,7 +291,7 @@ impl AESGCMBarrier {
         let raw = &ciphertext[5+nonce_size..ciphertext.len()-tag_size];
         let tag = &ciphertext[ciphertext.len()-tag_size..ciphertext.len()];
         let size = ciphertext.len() - 5 - nonce_size - tag_size;
-		let mut out = vec![0u8; size];
+        let mut out = vec![0u8; size];
 
         cipher_ctx.set_tag(tag)?;
         let len = cipher_ctx.cipher_update(raw, Some(&mut out))?;
@@ -314,7 +327,7 @@ mod test {
         assert!(ctx.is_ok());
         let cipher_ctx = ctx.unwrap();
 
-		let mut key = vec![0u8; cipher.key_length()];
+        let mut key = vec![0u8; cipher.key_length()];
         thread_rng().fill(key.as_mut_slice());
 
         let backend = physical::new_backend("file", &conf).unwrap();
@@ -322,10 +335,12 @@ mod test {
         let barrier = AESGCMBarrier {
             backend: Arc::new(backend),
             lock: Arc::new(Mutex::new(0)),
-            sealed: true,
-            key: Some(key),
-            cipher: Some(cipher),
-            cipher_ctx: Some(RefCell::new(cipher_ctx)),
+            barrier_info: Arc::new(RefCell::new(BarrierInfo {
+                sealed: true,
+                key: Some(key),
+                cipher: Some(cipher),
+                cipher_ctx: Some(RefCell::new(cipher_ctx)),
+            })),
         };
 
         let plaintext = "rusty vault test";
@@ -351,7 +366,7 @@ mod test {
         assert!(ctx.is_ok());
         let cipher_ctx = ctx.unwrap();
 
-		let key = vec![121, 133, 170, 204, 71, 77, 160, 134, 22, 37, 254, 206, 120,
+        let key = vec![121, 133, 170, 204, 71, 77, 160, 134, 22, 37, 254, 206, 120,
                         206, 143, 197, 150, 83, 5, 45, 121, 51, 124, 110, 162, 1,
                         9, 51, 16, 75, 157, 129];
 
@@ -360,10 +375,12 @@ mod test {
         let barrier = AESGCMBarrier {
             backend: Arc::new(backend),
             lock: Arc::new(Mutex::new(0)),
-            sealed: true,
-            key: Some(key),
-            cipher: Some(cipher),
-            cipher_ctx: Some(RefCell::new(cipher_ctx)),
+            barrier_info: Arc::new(RefCell::new(BarrierInfo {
+                sealed: true,
+                key: Some(key),
+                cipher: Some(cipher),
+                cipher_ctx: Some(RefCell::new(cipher_ctx)),
+            })),
         };
 
         let ciphertext = &[0, 0, 0, 1, 1, 99, 115, 28, 164, 208, 39, 20, 70, 150,
@@ -387,9 +404,9 @@ mod test {
 
         let backend = physical::new_backend("file", &conf).unwrap();
 
-        let mut barrier = AESGCMBarrier::new(Arc::new(backend));
+        let barrier = AESGCMBarrier::new(Arc::new(backend));
 
-        let inited = barrier.initialized();
+        let inited = barrier.inited();
         assert!(inited.is_ok());
         assert!(!inited.unwrap());
 
@@ -397,9 +414,9 @@ mod test {
         assert!(sealed.is_ok());
         assert!(sealed.unwrap());
 
-		let mut key = vec![0u8; 32];
+        let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
-        let init = barrier.initialize(key.as_slice());
+        let init = barrier.init(key.as_slice());
         assert!(init.is_ok());
 
         let sealed = barrier.sealed();
@@ -434,11 +451,11 @@ mod test {
 
         let backend = physical::new_backend("file", &conf).unwrap();
 
-        let mut barrier = AESGCMBarrier::new(Arc::new(backend));
+        let barrier = AESGCMBarrier::new(Arc::new(backend));
 
-		let mut key = vec![0u8; 32];
+        let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
-        let init = barrier.initialize(key.as_slice());
+        let init = barrier.init(key.as_slice());
         assert!(init.is_ok());
 
         let unseal = barrier.unseal(key.as_slice());
