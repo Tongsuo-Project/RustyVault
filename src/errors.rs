@@ -3,6 +3,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RvError {
+    #[error("Core logical backend already exists.")]
+    ErrCoreLogicalBackendExist,
+    #[error("Core logical backend does not exist.")]
+    ErrCoreLogicalBackendNoExist,
     #[error("Physical configuration item is missing.")]
     ErrPhysicalConfigItemMissing,
     #[error("Physical type is invalid.")]
@@ -29,6 +33,18 @@ pub enum RvError {
     ErrBarrierKeyGenerationFailed,
     #[error("Router mount conflict.")]
     ErrRouterMountConflict,
+    #[error("Router mount not found.")]
+    ErrRouterMountNotFound,
+    #[error("Mount path is protected, cannot mount.")]
+    ErrMountPathProtected,
+    #[error("Mount path already exists.")]
+    ErrMountPathExist,
+    #[error("Mount table not found.")]
+    ErrMountTableNotFound,
+    #[error("Mount table is not ready.")]
+    ErrMountTableNotReady,
+    #[error("Mount not match.")]
+    ErrMountNotMatch,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]

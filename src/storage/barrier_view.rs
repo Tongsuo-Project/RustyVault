@@ -3,7 +3,7 @@ use crate::errors::RvError;
 use super::{Storage, StorageEntry, barrier::SecurityBarrier};
 
 pub struct BarrierView {
-    barrier: Arc<dyn SecurityBarrier>,
+    barrier: Arc<Box<dyn SecurityBarrier>>,
     prefix: String,
 }
 
@@ -42,11 +42,44 @@ impl Storage for BarrierView {
 }
 
 impl BarrierView {
-    pub fn new(barrier: Arc<dyn SecurityBarrier>, prefix: String) -> Self {
+    pub fn new(barrier: Arc<Box<dyn SecurityBarrier>>, prefix: &str) -> Self {
         BarrierView {
-            barrier: barrier.clone(),
-            prefix: prefix,
+            barrier: barrier,
+            prefix: prefix.to_string(),
         }
+    }
+
+    pub fn get_keys(&self) -> Result<Vec<String>, RvError> {
+        let mut paths = vec!["".to_string()];
+        let mut keys = Vec::new();
+        while !paths.is_empty() {
+            let n = paths.len();
+            let curr = paths[n - 1].to_owned();
+            paths.pop();
+
+            let items = self.list(curr.as_str())?;
+            for p in items {
+                let path = format!("{}{}", curr, p);
+                if p.ends_with("/") {
+                    paths.push(path);
+                } else {
+                    keys.push(path.to_owned());
+                }
+            }
+        }
+        Ok(keys)
+    }
+
+    pub fn clear(&self) -> Result<(), RvError> {
+        let keys = self.get_keys()?;
+        for key in keys {
+            self.delete(key.as_str())?
+        }
+        Ok(())
+    }
+
+    pub fn as_storage(&self) -> &dyn Storage {
+        self
     }
 
     fn sanity_check(&self, key: &str) -> Result<(), RvError> {
@@ -92,17 +125,17 @@ mod test {
         let mut conf: HashMap<String, String> = HashMap::new();
         conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
 
-		let mut key = vec![0u8; 32];
+        let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
 
         let backend = physical::new_backend("file", &conf);
         assert!(backend.is_ok());
-        let mut aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(Arc::new(backend.unwrap()));
+        let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(Arc::new(backend.unwrap()));
 
-        let init = aes_gcm_view.initialize(key.as_slice());
+        let init = aes_gcm_view.init(key.as_slice());
         assert!(init.is_ok());
 
-        let view = barrier_view::BarrierView::new(Arc::new(aes_gcm_view), "test".to_string());
+        let view = barrier_view::BarrierView::new(Arc::new(Box::new(aes_gcm_view)), "test");
         assert_eq!(view.expand_key("foo"), "testfoo");
         assert!(view.sanity_check("foo").is_ok());
         assert!(view.sanity_check("../foo").is_err());
