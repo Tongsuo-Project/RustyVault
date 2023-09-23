@@ -7,6 +7,8 @@ pub enum RvError {
     ErrCoreLogicalBackendExist,
     #[error("Core logical backend does not exist.")]
     ErrCoreLogicalBackendNoExist,
+    #[error("Core router not handling.")]
+    ErrCoreRouterNotHandling,
     #[error("Physical configuration item is missing.")]
     ErrPhysicalConfigItemMissing,
     #[error("Physical type is invalid.")]
@@ -45,6 +47,12 @@ pub enum RvError {
     ErrMountTableNotReady,
     #[error("Mount not match.")]
     ErrMountNotMatch,
+    #[error("Logical backend path not supported.")]
+    ErrLogicalPathUnsupported,
+    #[error("Request is not ready.")]
+    ErrRequestNotReady,
+    #[error("Module kv data field is missing.")]
+    ErrModuleKvDataFieldMissing,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -60,8 +68,47 @@ pub enum RvError {
         #[from]
         source: openssl::error::ErrorStack
     },
+    #[error("Some regex error happened, {:?}", .source)]
+    Regex {
+        #[from]
+        source: regex::Error
+    },
     #[error(transparent)]
     ErrOther (#[from] anyhow::Error),
     #[error("Unknown error.")]
     ErrUnknown,
+}
+
+impl PartialEq for RvError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (RvError::ErrCoreLogicalBackendExist, RvError::ErrCoreLogicalBackendExist)
+            | (RvError::ErrCoreLogicalBackendNoExist, RvError::ErrCoreLogicalBackendNoExist)
+            | (RvError::ErrPhysicalConfigItemMissing, RvError::ErrPhysicalConfigItemMissing)
+            | (RvError::ErrPhysicalTypeInvalid, RvError::ErrPhysicalTypeInvalid)
+            | (RvError::ErrPhysicalBackendPrefixInvalid, RvError::ErrPhysicalBackendPrefixInvalid)
+            | (RvError::ErrPhysicalBackendKeyInvalid, RvError::ErrPhysicalBackendKeyInvalid)
+            | (RvError::ErrBarrierKeySanityCheckFailed, RvError::ErrBarrierKeySanityCheckFailed)
+            | (RvError::ErrBarrierAlreadyInit, RvError::ErrBarrierAlreadyInit)
+            | (RvError::ErrBarrierKeyInvalid, RvError::ErrBarrierKeyInvalid)
+            | (RvError::ErrBarrierNotInit, RvError::ErrBarrierNotInit)
+            | (RvError::ErrBarrierSealed, RvError::ErrBarrierSealed)
+            | (RvError::ErrBarrierEpochMismatch, RvError::ErrBarrierEpochMismatch)
+            | (RvError::ErrBarrierVersionMismatch, RvError::ErrBarrierVersionMismatch)
+            | (RvError::ErrBarrierKeyGenerationFailed, RvError::ErrBarrierKeyGenerationFailed)
+            | (RvError::ErrRouterMountConflict, RvError::ErrRouterMountConflict)
+            | (RvError::ErrRouterMountNotFound, RvError::ErrRouterMountNotFound)
+            | (RvError::ErrMountPathProtected, RvError::ErrMountPathProtected)
+            | (RvError::ErrMountPathExist, RvError::ErrMountPathExist)
+            | (RvError::ErrMountTableNotFound, RvError::ErrMountTableNotFound)
+            | (RvError::ErrMountTableNotReady, RvError::ErrMountTableNotReady)
+            | (RvError::ErrMountNotMatch, RvError::ErrMountNotMatch)
+            | (RvError::ErrCoreRouterNotHandling, RvError::ErrCoreRouterNotHandling)
+            | (RvError::ErrRequestNotReady, RvError::ErrRequestNotReady)
+            | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
+            | (RvError::ErrUnknown, RvError::ErrUnknown)
+            => true,
+            _ => false,
+        }
+    }
 }
