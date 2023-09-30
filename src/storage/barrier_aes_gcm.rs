@@ -194,7 +194,7 @@ impl SecurityBarrier for AESGCMBarrier {
 
 impl AESGCMBarrier {
     pub fn new(physical: Arc<Box<dyn Backend>>) -> Self {
-        AESGCMBarrier {
+        Self {
             lock: Arc::new(Mutex::new(0)),
             backend: physical.clone(),
             barrier_info: Arc::new(RefCell::new(BarrierInfo {

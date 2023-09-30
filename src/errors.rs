@@ -51,8 +51,16 @@ pub enum RvError {
     ErrLogicalPathUnsupported,
     #[error("Request is not ready.")]
     ErrRequestNotReady,
+    #[error("No data is available for the request.")]
+    ErrRequestNoData,
+    #[error("No data field is available for the request.")]
+    ErrRequestNoDataField,
+    #[error("Request is invalid.")]
+    ErrRequestInvalid,
     #[error("Module kv data field is missing.")]
     ErrModuleKvDataFieldMissing,
+    #[error("Rust downcast failed.")]
+    ErrRustDowncastFailed,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -105,7 +113,11 @@ impl PartialEq for RvError {
             | (RvError::ErrMountNotMatch, RvError::ErrMountNotMatch)
             | (RvError::ErrCoreRouterNotHandling, RvError::ErrCoreRouterNotHandling)
             | (RvError::ErrRequestNotReady, RvError::ErrRequestNotReady)
+            | (RvError::ErrRequestNoData, RvError::ErrRequestNoData)
+            | (RvError::ErrRequestNoDataField, RvError::ErrRequestNoDataField)
+            | (RvError::ErrRequestInvalid, RvError::ErrRequestInvalid)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
+            | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
             | (RvError::ErrUnknown, RvError::ErrUnknown)
             => true,
             _ => false,
