@@ -57,8 +57,8 @@ impl Backend for LogicalBackend {
         }
 
         if let Some((path, captures)) = self.match_path(&req.path) {
-			if captures.len() != 0 && req.raw_data.is_some() {
-                let mut data = req.raw_data.as_ref().unwrap().clone();
+			if captures.len() != 0 && req.body.is_some() {
+                let mut data = req.body.as_ref().unwrap().clone();
                 captures.iter().for_each(|(key, value)| {
                     data.insert(key.to_string(), Value::String(value.to_string()));
                 });
@@ -68,7 +68,12 @@ impl Backend for LogicalBackend {
             req.match_path = Some(path.clone());
             for operation in &path.operations {
                 if operation.op == req.operation {
-                    return operation.handle_request(self, req);
+                    let resp = operation.handle_request(self, req)?;
+                    if resp.is_none() {
+                        return Ok(Some(Response::new()));
+                    }
+
+                    return Ok(resp);
                 }
             }
 

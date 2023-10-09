@@ -1,4 +1,5 @@
 use std::io;
+use std::sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -81,6 +82,10 @@ pub enum RvError {
         #[from]
         source: regex::Error
     },
+    #[error("RwLock was poisoned (reading)")]
+    ErrRwLockReadPoison,
+    #[error("RwLock was poisoned (writing)")]
+    ErrRwLockWritePoison,
     #[error(transparent)]
     ErrOther (#[from] anyhow::Error),
     #[error("Unknown error.")]
@@ -118,9 +123,23 @@ impl PartialEq for RvError {
             | (RvError::ErrRequestInvalid, RvError::ErrRequestInvalid)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
             | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
+            | (RvError::ErrRwLockReadPoison, RvError::ErrRwLockReadPoison)
+            | (RvError::ErrRwLockWritePoison, RvError::ErrRwLockWritePoison)
             | (RvError::ErrUnknown, RvError::ErrUnknown)
             => true,
             _ => false,
         }
+    }
+}
+
+impl<T> From<PoisonError<RwLockWriteGuard<'_, T>>> for RvError {
+    fn from(_: PoisonError<RwLockWriteGuard<'_, T>>) -> Self {
+        RvError::ErrRwLockWritePoison
+    }
+}
+
+impl<T> From<PoisonError<RwLockReadGuard<'_, T>>> for RvError {
+    fn from(_: PoisonError<RwLockReadGuard<'_, T>>) -> Self {
+        RvError::ErrRwLockReadPoison
     }
 }

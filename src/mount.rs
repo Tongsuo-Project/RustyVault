@@ -55,37 +55,80 @@ impl MountTable {
     }
 
     pub fn hash(&self) -> Result<Vec<u8>, RvError> {
-        //let mounts = self.entries.read().unwrap();
+        //let mounts = self.entries.read()?;
         Ok(Vec::new())
     }
 
     pub fn get(&self, path: &str) -> Result<Option<MountEntry>, RvError> {
-        let mounts = self.entries.read().unwrap();
+        let mounts = self.entries.read()?;
         Ok(mounts.get(path).cloned())
     }
 
     pub fn delete(&self, path: &str) -> bool {
-        let mut mounts = self.entries.write().unwrap();
-        mounts.remove(path).is_some()
+        match self.entries.write() {
+            Ok(mut mounts) => {
+                mounts.remove(path).is_some()
+            }
+            Err(_) => {
+                false
+            }
+        }
     }
 
     pub fn set_taint(&self, path: &str, value: bool) -> bool {
-        let mut mounts = self.entries.write().unwrap();
+        match self.entries.write() {
+            Ok(mut mounts) => {
+                if let Some(entry) = mounts.get_mut(path) {
+                    entry.tainted = value;
+                    return true;
+                }
+            }
+            Err(_) => {
+                return false;
+            }
+        }
+        /*
+        let mut mounts = self.entries.write()?;
         if let Some(entry) = mounts.get_mut(path) {
             entry.tainted = value;
             return true;
         }
+        */
         return false;
     }
 
-    pub fn load(&self, from: &str, storage: &dyn Storage) -> Result<(), RvError> {
-        let entry = storage.get(from)?;
+    pub fn set_default(&self) -> Result<(), RvError> {
+        let kv_entry = MountEntry {
+            tainted: false,
+            uuid: util::generate_uuid(),
+            path: "secret/".to_string(),
+            logical_type: "kv".to_string(),
+            description: "key/value secret storage".to_string(),
+        };
+        let sys_entry = MountEntry {
+            tainted: false,
+            uuid: util::generate_uuid(),
+            path: "sys/".to_string(),
+            logical_type: "system".to_string(),
+            description: "system endpoints used for control, policy and debugging".to_string(),
+        };
+
+        let mut table = self.entries.write()?;
+        table.insert(kv_entry.path.clone(), kv_entry);
+        table.insert(sys_entry.path.clone(), sys_entry);
+        Ok(())
+    }
+
+    pub fn load(&self, storage: &dyn Storage) -> Result<(), RvError> {
+        let entry = storage.get(CORE_MOUNT_CONFIG_PATH)?;
         if entry.is_none() {
-            return Err(RvError::ErrMountTableNotFound);
+            self.set_default()?;
+            self.persist(CORE_MOUNT_CONFIG_PATH, storage)?;
+            return Ok(());
         }
         let new_table: MountTable = serde_json::from_slice(entry.unwrap().value.as_slice())?;
-        let mut new_entries = new_table.entries.write().unwrap();
-        let mut entries = self.entries.write().unwrap();
+        let mut new_entries = new_table.entries.write()?;
+        let mut entries = self.entries.write()?;
         entries.clear();
         entries.extend(new_entries.drain());
         Ok(())
@@ -109,32 +152,36 @@ impl Core {
         }
 
         let mounts = self.mounts.as_ref().unwrap();
-        let mut table = mounts.entries.write().unwrap();
-        let mut entry = me.clone();
 
-        if !entry.path.ends_with("/") {
-            entry.path += "/";
+        {
+            let mut table = mounts.entries.write()?;
+            let mut entry = me.clone();
+
+            if !entry.path.ends_with("/") {
+                entry.path += "/";
+            }
+
+            if is_protect_mount(&entry.path) {
+                return Err(RvError::ErrMountPathProtected);
+            }
+
+            let match_mount_path = self.router.matching_mount(&entry.path)?;
+            if match_mount_path.len() != 0 {
+                return Err(RvError::ErrMountPathExist);
+            }
+
+            let backend_new_func = self.get_logical_backend(&me.logical_type)?;
+            let backend = backend_new_func(Arc::clone(self.self_ref.as_ref().unwrap()))?;
+
+            entry.uuid = util::generate_uuid();
+
+            let prefix = format!("{}{}/", LOGICAL_BARRIER_PREFIX, &entry.uuid);
+            let view = BarrierView::new(self.barrier.clone(), &prefix);
+
+            self.router.mount(Arc::new(backend), &entry.path, &entry.uuid, view)?;
+
+            table.insert(entry.path.clone(), entry);
         }
-
-        if is_protect_mount(&entry.path) {
-            return Err(RvError::ErrMountPathProtected);
-        }
-
-        if self.router.matching_mount(&entry.path).len() != 0 {
-            return Err(RvError::ErrMountPathExist);
-        }
-
-        let backend_new_func = self.get_logical_backend(&me.logical_type)?;
-        let backend = backend_new_func(Arc::clone(self.self_ref.as_ref().unwrap()))?;
-
-        entry.uuid = util::generate_uuid();
-
-        let prefix = format!("{}{}/", LOGICAL_BARRIER_PREFIX, &entry.uuid);
-        let view = BarrierView::new(self.barrier.clone(), &prefix);
-
-        self.router.mount(Arc::new(backend), &entry.path, &entry.uuid, view)?;
-
-        table.insert(entry.path.clone(), entry);
 
         mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
 
@@ -151,7 +198,7 @@ impl Core {
             return Err(RvError::ErrMountPathProtected);
         }
 
-        let match_mount = self.router.matching_mount(&path);
+        let match_mount = self.router.matching_mount(&path)?;
         if match_mount.len() == 0 || match_mount != path {
             return Err(RvError::ErrMountNotMatch);
         }
@@ -160,7 +207,7 @@ impl Core {
 
         self.router.unmount(&path)?;
 
-        let view = self.router.matching_view(&path);
+        let view = self.router.matching_view(&path)?;
         if view.is_some() {
             view.unwrap().clear()?;
         }
@@ -190,12 +237,13 @@ impl Core {
             return Err(RvError::ErrMountPathProtected);
         }
 
-        let match_mount = self.router.matching_mount(&src);
+        let match_mount = self.router.matching_mount(&src)?;
         if match_mount.len() == 0 || match_mount != src {
             return Err(RvError::ErrMountNotMatch);
         }
 
-        if self.router.matching_mount(&dst).len() != 0 {
+        let match_mount_dst = self.router.matching_mount(&dst)?;
+        if match_mount_dst.len() != 0 {
             return Err(RvError::ErrMountPathExist);
         }
 
@@ -204,7 +252,7 @@ impl Core {
         self.router.taint(&src)?;
 
         let mounts_ref = self.mounts.as_ref().unwrap();
-        let mut mounts = mounts_ref.entries.write().unwrap();
+        let mut mounts = mounts_ref.entries.write()?;
         if let Some(entry) = mounts.get_mut(&src) {
             entry.path = dst.clone();
             entry.tainted = false;
@@ -225,7 +273,7 @@ impl Core {
         }
 
         let mounts_ref = self.mounts.as_ref().unwrap();
-        let mounts = mounts_ref.entries.read().unwrap();
+        let mounts = mounts_ref.entries.read()?;
 
         for entry in mounts.values() {
             let mut barrier_path = format!("{}{}/", LOGICAL_BARRIER_PREFIX, &entry.uuid);

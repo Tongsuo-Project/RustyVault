@@ -69,18 +69,16 @@ impl KvBackend {
         }
 
         let data: Map<String, Value> = serde_json::from_slice(entry.unwrap().value.as_slice())?;
-        let mut resp = Response::new();
-        resp.data = Some(data);
 
-        Ok(Some(resp))
+        Ok(Some(Response::data_response(Some(data))))
     }
 
     pub fn handle_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        if req.data.is_none() {
+        if req.body.is_none() {
             return Err(RvError::ErrModuleKvDataFieldMissing);
         }
 
-        let data = serde_json::to_string(req.data.as_ref().unwrap())?;
+        let data = serde_json::to_string(req.body.as_ref().unwrap())?;
         let entry = StorageEntry {
             key: req.path.clone(),
             value: data.into_bytes(),
@@ -97,14 +95,7 @@ impl KvBackend {
 
     pub fn handle_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let keys = req.storage_list(&req.path)?;
-        let value = serde_json::to_value(&keys)?;
-
-        let mut data: Map<String, Value> = Map::new();
-        data.insert("keys".to_string(), value);
-
-        let mut resp = Response::new();
-        resp.data = Some(data);
-
+        let resp = Response::list_response(&keys);
         Ok(Some(resp))
     }
 }
@@ -124,7 +115,8 @@ impl Module for KvModule {
 
     fn init(&self, core: &Core) -> Result<(), RvError> {
         let kv_backend_new_func = |_c: Arc<RwLock<Box<Core>>>| -> Result<Box<dyn Backend>, RvError> {
-            let kv_backend = KvBackend::new_backend();
+            let mut kv_backend = KvBackend::new_backend();
+            kv_backend.init()?;
             Ok(Box::new(kv_backend))
         };
         core.add_logical_backend("kv", Arc::new(Box::new(kv_backend_new_func)))
