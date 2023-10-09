@@ -4,6 +4,7 @@ use rand::{Rng, thread_rng};
 use crate::mount::MountTable;
 use crate::router::Router;
 use crate::handler::Handler;
+use crate::storage::physical::Backend as PhysicalBackend;
 use crate::storage::barrier::SecurityBarrier;
 use crate::logical::Backend;
 use crate::logical::request::Request;
@@ -15,6 +16,7 @@ pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Box<Core>>>) -> Result<Box<dy
 
 pub struct Core {
     pub self_ref: Option<Arc<RwLock<Box<Core>>>>,
+    pub physical: Arc<Box<dyn PhysicalBackend>>,
     pub barrier: Arc<Box<dyn SecurityBarrier>>,
     pub mounts: Option<MountTable>,
     pub router: Arc<Router>,
@@ -24,13 +26,32 @@ pub struct Core {
 }
 
 impl Core {
+    pub fn inited(&self) -> Result<bool, RvError> {
+        self.barrier.inited()
+    }
+
     pub fn init(&mut self) -> Result<(), RvError> {
+        let inited = self.inited()?;
+        if inited {
+            return Err(RvError::ErrBarrierAlreadyInit);
+        }
+
+        if self.mounts.is_none() {
+            return Err(RvError::ErrMountTableNotFound);
+        }
+
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
         self.barrier.init(key.as_slice())?;
+        // Unseal the barrier
         self.barrier.unseal(key.as_slice())?;
-        //self.mounts.load("core/mounts", self.barrier.as_storage())?;
+        // Ensure the barrier is re-sealed
         self.module_manager.init(self)?;
+        // Perform initial setup
+        self.mounts.as_ref().unwrap().load(self.barrier.as_storage())?;
+        self.setup_mounts()?;
+        // Generate a new root token
+        // Prepare to re-seal
         Ok(())
     }
 
@@ -122,13 +143,13 @@ mod test {
         let mut conf: HashMap<String, String> = HashMap::new();
         conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
 
-        let backend = physical::new_backend("file", &conf).unwrap();
-
-        let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::new(backend));
+        let backend = Arc::new(physical::new_backend("file", &conf).unwrap());
+        let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
         let router = Arc::new(Router::new());
         let mounts = MountTable::new();
         let mut core = Core {
             self_ref: None,
+            physical: backend,
             barrier: Arc::new(Box::new(barrier)),
             mounts: Some(mounts),
             router: router.clone(),
@@ -151,14 +172,14 @@ mod test {
         let mut conf: HashMap<String, String> = HashMap::new();
         conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
 
-        let backend = physical::new_backend("file", &conf).unwrap();
-
-        let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::new(backend));
+        let backend = Arc::new(physical::new_backend("file", &conf).unwrap());
+        let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
         let router = Arc::new(Router::new());
         let mounts = MountTable::new();
 
         let mut core = Core {
             self_ref: None,
+            physical: backend,
             barrier: Arc::new(Box::new(barrier)),
             mounts: Some(mounts),
             router: router.clone(),

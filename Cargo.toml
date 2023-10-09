@@ -21,3 +21,7 @@ strum_macros = "0.25"
 radix_trie = "0.2.1"
 lazy_static = "1.4.0"
 regex = "1.9.5"
+
+[[test]]
+name = "test_default_logical"
+path = "tests/test_default_logical.rs"

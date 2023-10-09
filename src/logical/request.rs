@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use serde_json::Value;
+use serde_json::{Value, Map};
 use crate::logical::connection::Connection;
 use crate::logical::secret::Secret;
 use crate::storage::{Storage, StorageEntry};
@@ -14,8 +14,8 @@ pub struct Request {
     pub path: String,
     pub match_path: Option<Arc<Path>>,
     pub headers: Option<HashMap<String, String>>,
-    pub raw_data: Option<HashMap<String, Value>>,
-    pub data: Option<HashMap<String, Value>>,
+    pub body: Option<Map<String, Value>>,
+    pub data: Option<Map<String, Value>>,
     pub client_token: String,
     pub storage: Option<Arc<dyn Storage>>,
     pub connection: Option<Connection>,
@@ -31,7 +31,7 @@ impl Request {
             path: path.to_string(),
             match_path: None,
             headers: None,
-            raw_data: None,
+            body: None,
             data: None,
             client_token: "".to_string(),
             storage: None,

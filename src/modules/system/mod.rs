@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
-use serde_json::{json, to_string, from_value, Value, Map};
+use serde_json::{json, from_value, Value, Map};
 use crate::{new_path, new_path_internal, new_logical_backend, new_logical_backend_internal};
 use crate::logical::{Backend, LogicalBackend, Request, Response};
 use crate::logical::{Operation, Path, PathOperation, Field, FieldType};
@@ -244,16 +244,15 @@ impl SystemBackend {
     }
 
     pub fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        let core = self.core.read().unwrap();
+        let core = self.core.read()?;
         if core.mounts.is_none() {
             return Err(RvError::ErrMountTableNotReady);
         }
 
-        let mut resp = Response::new();
         let mut data: Map<String, Value> = Map::new();
 
         let mounts_ref = core.mounts.as_ref().unwrap();
-        let mounts = mounts_ref.entries.read().unwrap();
+        let mounts = mounts_ref.entries.read()?;
 
         for entry in mounts.values() {
             let info: Value = json!({
@@ -263,20 +262,24 @@ impl SystemBackend {
             data.insert(entry.path.clone(), info);
         }
 
-        resp.data = Some(data);
-        Ok(Some(resp))
+        Ok(Some(Response::data_response(Some(data))))
     }
 
     pub fn handle_mount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let path: String = to_string(&req.get_data("path")?)?;
-        let logical_type: String = to_string(&req.get_data("type")?)?;
-        let description: String = to_string(&req.get_data("description")?)?;
+        let path = req.get_data("path")?;
+        let logical_type = req.get_data("type")?;
+        let description = req.get_data("description")?;
+
+        let path = path.as_str().unwrap();
+        let logical_type = logical_type.as_str().unwrap();
+        let description = description.as_str().unwrap();
+
         if logical_type == "" {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let me = MountEntry::new(&path, &logical_type, &description);
-        let core = self.core.read().unwrap();
+        let me = MountEntry::new(path, logical_type, description);
+        let core = self.core.read()?;
         core.mount(&me)?;
         Ok(None)
     }
@@ -287,38 +290,41 @@ impl SystemBackend {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let core = self.core.read().unwrap();
+        let core = self.core.read()?;
         core.unmount(suffix.unwrap())?;
         Ok(None)
     }
 
     pub fn handle_remount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let from: String = to_string(&req.get_data("from")?)?;
-        let to: String = to_string(&req.get_data("to")?)?;
+        let from = req.get_data("from")?;
+        let to = req.get_data("to")?;
+
+        let from = from.as_str().unwrap();
+        let to = to.as_str().unwrap();
         if from.len() == 0 || to.len() == 0 {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let core = self.core.read().unwrap();
-        core.remount(&from, &to)?;
+        let core = self.core.read()?;
+        core.remount(from, to)?;
         Ok(None)
     }
 
     pub fn handle_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let _lease_id: String = to_string(&req.get_data("lease_id")?)?;
+        let _lease_id = req.get_data("lease_id")?;
         let _increment: i32 = from_value(req.get_data("increment")?)?;
         //TODO
         Ok(None)
     }
 
     pub fn handle_revoke(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let _lease_id: String = to_string(&req.get_data("lease_id")?)?;
+        let _lease_id = req.get_data("lease_id")?;
         //TODO
         Ok(None)
     }
 
     pub fn handle_revoke_prefix(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let _prefix: String = to_string(&req.get_data("prefix")?)?;
+        let _prefix = req.get_data("prefix")?;
         Ok(None)
     }
 
@@ -336,7 +342,7 @@ impl SystemBackend {
         }
 
         let me = MountEntry::new(&path, &logical_type, &description);
-        let core = self.core.read().unwrap();
+        let core = self.core.read()?;
         core.mount(&me)?;
         */
         Ok(None)
@@ -375,30 +381,35 @@ impl SystemBackend {
     }
 
     pub fn handle_raw_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let path: String = to_string(&req.get_data("path")?)?;
-        let core = self.core.read().unwrap();
+        let path = req.get_data("path")?;
+
+        let path = path.as_str().unwrap();
+
+        let core = self.core.read()?;
         let storage = core.barrier.as_storage();
-        let entry = storage.get(&path)?;
+        let entry = storage.get(path)?;
         if entry.is_none() {
             return Ok(None);
         }
 
         let data: Map<String, Value> = serde_json::from_slice(entry.unwrap().value.as_slice())?;
-        let mut resp = Response::new();
-        resp.data = Some(data);
 
-        Ok(None)
+        Ok(Some(Response::data_response(Some(data))))
     }
 
     pub fn handle_raw_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let path: String = to_string(&req.get_data("path")?)?;
-        let value: String = to_string(&req.get_data("value")?)?;
-        let core = self.core.read().unwrap();
+        let path = req.get_data("path")?;
+        let value = req.get_data("value")?;
+
+        let path = path.as_str().unwrap();
+        let value = value.as_str().unwrap();
+
+        let core = self.core.read()?;
         let storage = core.barrier.as_storage();
 
         let entry = StorageEntry {
-            key: path,
-            value: value.into_bytes(),
+            key: path.to_string(),
+            value: value.as_bytes().to_vec(),
         };
 
         storage.put(&entry)?;
@@ -407,11 +418,14 @@ impl SystemBackend {
     }
 
     pub fn handle_raw_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let path: String = to_string(&req.get_data("path")?)?;
-        let core = self.core.read().unwrap();
+        let path = req.get_data("path")?;
+
+        let path = path.as_str().unwrap();
+
+        let core = self.core.read()?;
         let storage = core.barrier.as_storage();
 
-        storage.delete(&path)?;
+        storage.delete(path)?;
 
         Ok(None)
     }
@@ -432,7 +446,8 @@ impl Module for SystemModule {
 
     fn init(&self, core: &Core) -> Result<(), RvError> {
         let sys_backend_new_func = |c: Arc<RwLock<Box<Core>>>| -> Result<Box<dyn Backend>, RvError> {
-            let sys_backend = SystemBackend::new_backend(c);
+            let mut sys_backend = SystemBackend::new_backend(c);
+            sys_backend.init()?;
             Ok(Box::new(sys_backend))
         };
         core.add_logical_backend("system", Arc::new(Box::new(sys_backend_new_func)))

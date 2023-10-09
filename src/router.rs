@@ -1,4 +1,4 @@
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, RwLock};
 use radix_trie::{Trie, TrieCommon};
 use crate::logical::Backend;
 use crate::logical::request::Request;
@@ -17,7 +17,7 @@ struct MountEntry {
 }
 
 pub struct Router {
-    root: Arc<Mutex<Trie<String, MountEntry>>>,
+    root: Arc<RwLock<Trie<String, MountEntry>>>,
 }
 
 impl MountEntry {
@@ -29,12 +29,12 @@ impl MountEntry {
 impl Router {
     pub fn new() -> Self {
         Self {
-            root: Arc::new(Mutex::new(Trie::new())),
+            root: Arc::new(RwLock::new(Trie::new())),
         }
     }
 
     pub fn mount(&self, backend: Arc<Box<dyn Backend>>, prefix: &str, salt: &str, view: BarrierView) -> Result<(), RvError> {
-        let mut root = self.root.lock().unwrap();
+        let mut root = self.root.write()?;
 
         // Check if this is a nested mount
         if let Some(_existing) = root.get_ancestor(prefix) {
@@ -58,13 +58,13 @@ impl Router {
     }
 
     pub fn unmount(&self, prefix: &str) -> Result<(), RvError> {
-        let mut root = self.root.lock().unwrap();
+        let mut root = self.root.write()?;
         root.remove(prefix);
         Ok(())
     }
 
     pub fn remount(&self, dst: &str, src: &str) -> Result<(), RvError> {
-        let mut root = self.root.lock().unwrap();
+        let mut root = self.root.write()?;
         if let Some(raw) = root.remove(src) {
             root.insert(dst.to_string(), raw);
             Ok(())
@@ -74,7 +74,7 @@ impl Router {
     }
 
     pub fn taint(&self, path: &str) -> Result<(), RvError> {
-        let mut root = self.root.lock().unwrap();
+        let mut root = self.root.write()?;
         if let Some(raw) = root.get_mut(path) {
             raw.tainted = true;
             Ok(())
@@ -84,7 +84,7 @@ impl Router {
     }
 
     pub fn untaint(&self, path: &str) -> Result<(), RvError> {
-        let mut root = self.root.lock().unwrap();
+        let mut root = self.root.write()?;
         if let Some(raw) = root.get_mut(path) {
             raw.tainted = false;
             Ok(())
@@ -93,31 +93,31 @@ impl Router {
         }
     }
 
-    pub fn matching_mount(&self, path: &str) -> String {
-        let root = self.root.lock().unwrap();
+    pub fn matching_mount(&self, path: &str) -> Result<String, RvError> {
+        let root = self.root.read()?;
         if let Some(entry) = root.get_ancestor(path) {
-            entry.key().unwrap().clone()
+            Ok(entry.key().unwrap().clone())
         } else {
-            "".to_string()
+            Ok("".to_string())
         }
     }
 
-    pub fn matching_view(&self, path: &str) -> Option<Arc<BarrierView>> {
-        let root = self.root.lock().unwrap();
+    pub fn matching_view(&self, path: &str) -> Result<Option<Arc<BarrierView>>, RvError> {
+        let root = self.root.read()?;
         if let Some(entry) = root.get_ancestor(path) {
             let me = entry.value().unwrap();
-            Some(me.view.clone())
+            Ok(Some(me.view.clone()))
         } else {
-            None
+            Ok(None)
         }
     }
 
-    pub fn is_login_path(&self, path: &str) -> bool {
-        let root = self.root.lock().unwrap();
+    pub fn is_login_path(&self, path: &str) -> Result<bool, RvError> {
+        let root = self.root.read()?;
 
         let entry = root.get_ancestor(path);
         if entry.is_none() {
-            return false;
+            return Ok(false);
         }
 
         let entry = entry.as_ref().unwrap();
@@ -127,23 +127,23 @@ impl Router {
 
         let login_entry = me.login_paths.get_ancestor(remain.as_str());
         if login_entry.is_none() {
-            return false;
+            return Ok(false);
         }
 
         let login_path_match = login_entry.as_ref().unwrap().key().unwrap();
         if *login_entry.as_ref().unwrap().value().unwrap() {
-            return remain.starts_with(login_path_match );
+            return Ok(remain.starts_with(login_path_match));
         }
 
-        return remain == *login_path_match
+        return Ok(remain == *login_path_match);
     }
 
-    pub fn is_root_path(&self, path: &str) -> bool {
-        let root = self.root.lock().unwrap();
+    pub fn is_root_path(&self, path: &str) -> Result<bool, RvError> {
+        let root = self.root.read()?;
 
         let entry = root.get_ancestor(path);
         if entry.is_none() {
-            return false;
+            return Ok(false);
         }
 
         let entry = entry.as_ref().unwrap();
@@ -153,15 +153,15 @@ impl Router {
 
         let root_entry = me.root_paths.get_ancestor(remain.as_str());
         if root_entry.is_none() {
-            return false;
+            return Ok(false);
         }
 
         let root_path_match = root_entry.as_ref().unwrap().key().unwrap();
         if *root_entry.as_ref().unwrap().value().unwrap() {
-            return remain.starts_with(root_path_match );
+            return Ok(remain.starts_with(root_path_match ));
         }
 
-        return remain == *root_path_match
+        return Ok(remain == *root_path_match);
     }
 }
 
@@ -171,51 +171,55 @@ impl Handler for Router {
             req.path.push('/');
         }
 
-        let root = self.root.lock().unwrap();
-
-        let entry = root.get_ancestor(req.path.as_str());
-        if entry.is_none() {
-            return Err(RvError::ErrRouterMountNotFound);
-        }
-
-        let entry = entry.as_ref().unwrap();
-        let mount = entry.key().unwrap().as_str();
-        let me = entry.value().unwrap();
-        if me.tainted {
-/*
-            match req.operation {
-                Operation::Revoke | Operation::Rollback => (),
-                _ => return Err(format!("no handler for route '{}'", req.path)),
-            }
-*/
-        }
-
+        let original = req.path.clone();
         let mut original_conn = None;
-        if !self.is_login_path(req.path.as_str()) {
+        let is_login_path = self.is_login_path(req.path.as_str())?;
+        if !is_login_path {
             original_conn = req.connection.take();
         }
+        let client_token = req.client_token.clone();
 
-        let original = req.path.clone();
-        req.path = req.path.replacen(mount, "", 1);
-        if req.path == "/" {
-            req.path = String::new();
-        }
+        let backend = {
+            let root = self.root.read()?;
+            let entry = root.get_ancestor(req.path.as_str());
+            if entry.is_none() {
+                return Err(RvError::ErrRouterMountNotFound);
+            }
 
-        //req.storage = Some(Arc::new(Box::new(me.view.as_storage())));
-        req.storage = Some(me.view.clone());
+            let entry = entry.as_ref().unwrap();
+            let mount = entry.key().unwrap().as_str();
+            let me = entry.value().unwrap();
+            if me.tainted {
+    /*
+                match req.operation {
+                    Operation::Revoke | Operation::Rollback => (),
+                    _ => return Err(format!("no handler for route '{}'", req.path)),
+                }
+    */
+            }
 
-        if !req.path.starts_with("auth/token/") {
-            req.client_token = me.salt_id(&req.client_token);
-        }
+            req.path = req.path.replacen(&mount, "", 1);
+            if req.path == "/" {
+                req.path = String::new();
+            }
 
-        let response = me.backend.handle_request(req)?;
+            req.storage = Some(me.view.clone());
+
+            if !req.path.starts_with("auth/token/") {
+                req.client_token = me.salt_id(&req.client_token);
+            }
+
+            me.backend.clone()
+        };
+
+        let response = backend.handle_request(req)?;
 
         req.path = original;
         req.connection = original_conn;
         req.storage = None;
-        req.client_token = req.client_token.clone();
+        req.client_token = client_token;
 
-        Ok(Some(response.unwrap()))
+        Ok(response)
     }
 }
 

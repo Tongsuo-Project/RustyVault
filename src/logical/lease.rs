@@ -1,5 +1,6 @@
 use std::time::{SystemTime, Duration};
 
+#[derive(Debug, Clone)]
 pub struct Lease {
     pub ttl: Duration,
     pub max_ttl: Duration,
