@@ -285,7 +285,7 @@ impl SystemBackend {
     }
 
     pub fn handle_unmount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let suffix = req.path.strip_prefix("mounts");
+        let suffix = req.path.strip_prefix("mounts/");
         if suffix.is_none() {
             return Err(RvError::ErrRequestInvalid);
         }
@@ -392,7 +392,9 @@ impl SystemBackend {
             return Ok(None);
         }
 
-        let data: Map<String, Value> = serde_json::from_slice(entry.unwrap().value.as_slice())?;
+        let data = json!({
+            "value": String::from_utf8_lossy(&entry.unwrap().value),
+        }).as_object().unwrap().clone();
 
         Ok(Some(Response::data_response(Some(data))))
     }

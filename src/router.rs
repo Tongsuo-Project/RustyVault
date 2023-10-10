@@ -1,8 +1,6 @@
 use std::sync::{Arc, RwLock};
 use radix_trie::{Trie, TrieCommon};
-use crate::logical::Backend;
-use crate::logical::request::Request;
-use crate::logical::response::Response;
+use crate::logical::{Operation, Backend, Request, Response};
 use crate::handler::Handler;
 use crate::storage::barrier_view::BarrierView;
 use crate::errors::RvError;
@@ -190,12 +188,10 @@ impl Handler for Router {
             let mount = entry.key().unwrap().as_str();
             let me = entry.value().unwrap();
             if me.tainted {
-    /*
                 match req.operation {
                     Operation::Revoke | Operation::Rollback => (),
-                    _ => return Err(format!("no handler for route '{}'", req.path)),
+                    _ => return Err(RvError::ErrRouterMountNotFound),
                 }
-    */
             }
 
             req.path = req.path.replacen(&mount, "", 1);

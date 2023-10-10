@@ -217,7 +217,7 @@ impl Core {
         Ok(())
     }
 
-    pub fn remount(&self, dst: &str, src: &str) -> Result<(), RvError> {
+    pub fn remount(&self, src: &str, dst: &str) -> Result<(), RvError> {
         if self.mounts.is_none() {
             return Err(RvError::ErrMountTableNotReady);
         }
@@ -237,32 +237,39 @@ impl Core {
             return Err(RvError::ErrMountPathProtected);
         }
 
-        let match_mount = self.router.matching_mount(&src)?;
-        if match_mount.len() == 0 || match_mount != src {
-            return Err(RvError::ErrMountNotMatch);
-        }
-
-        let match_mount_dst = self.router.matching_mount(&dst)?;
-        if match_mount_dst.len() != 0 {
-            return Err(RvError::ErrMountPathExist);
-        }
-
-        self.taint_mount_entry(&src)?;
-
-        self.router.taint(&src)?;
-
         let mounts_ref = self.mounts.as_ref().unwrap();
-        let mut mounts = mounts_ref.entries.write()?;
-        if let Some(entry) = mounts.get_mut(&src) {
-            entry.path = dst.clone();
-            entry.tainted = false;
+        {
+            let mut mounts = mounts_ref.entries.write()?;
+
+            let match_mount = self.router.matching_mount(&src)?;
+            if match_mount.len() == 0 || match_mount != src {
+                return Err(RvError::ErrMountNotMatch);
+            }
+
+            let match_mount_dst = self.router.matching_mount(&dst)?;
+            if match_mount_dst.len() != 0 {
+                return Err(RvError::ErrMountPathExist);
+            }
+
+            if let Some(src_entry) = mounts.get_mut(&src) {
+                src_entry.tainted = true;
+            }
+
+            self.router.taint(&src)?;
+
+            if let Some(entry) = mounts.remove(&src) {
+                let mut new_entry = entry.clone();
+                new_entry.path = dst.clone();
+                new_entry.tainted = false;
+                mounts.insert(new_entry.path.clone(), new_entry);
+            }
+
+            self.router.remount(&dst, &src)?;
+
+            self.router.untaint(&dst)?;
         }
 
         mounts_ref.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
-
-        self.router.remount(&dst, &src)?;
-
-        self.router.untaint(&dst)?;
 
         Ok(())
     }
