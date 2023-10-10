@@ -45,7 +45,7 @@ impl Request {
             return Err(RvError::ErrRequestNotReady);
         }
 
-        if self.data.is_none() {
+        if self.data.is_none() && self.body.is_none() {
             return Err(RvError::ErrRequestNoData);
         }
 
@@ -54,11 +54,19 @@ impl Request {
             return Err(RvError::ErrRequestNoDataField);
         }
 
-        if let Some(data) = self.data.as_ref().unwrap().get(key) {
-            Ok(data.clone())
-        } else {
-            field.unwrap().get_default()
+        if self.data.is_some() {
+            if let Some(data) = self.data.as_ref().unwrap().get(key) {
+                return Ok(data.clone())
+            }
         }
+
+        if self.body.is_some() {
+            if let Some(data) = self.body.as_ref().unwrap().get(key) {
+                return Ok(data.clone())
+            }
+        }
+
+        return field.unwrap().get_default();
     }
 
     pub fn storage_list(&self, prefix: &str) -> Result<Vec<String>, RvError> {

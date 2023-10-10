@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use regex::Regex;
 use std::collections::HashMap;
-use serde_json::Value;
+use serde_json::{Value, Map};
 use crate::errors::RvError;
 use super::request::Request;
 use super::response::Response;
@@ -24,7 +24,16 @@ impl Backend for LogicalBackend {
         }
 
         for path in &self.paths {
-            let re = Regex::new(&path.pattern)?;
+            let mut pattern = path.pattern.clone();
+            if !path.pattern.starts_with('^') {
+                pattern = format!("^{}", &pattern);
+            }
+
+            if !path.pattern.ends_with('$') {
+                pattern = format!("{}$", &pattern);
+            }
+
+            let re = Regex::new(&pattern)?;
             self.paths_re.push(re);
         }
 
@@ -57,8 +66,8 @@ impl Backend for LogicalBackend {
         }
 
         if let Some((path, captures)) = self.match_path(&req.path) {
-			if captures.len() != 0 && req.body.is_some() {
-                let mut data = req.body.as_ref().unwrap().clone();
+            if captures.len() != 0 {
+                let mut data = Map::new();
                 captures.iter().for_each(|(key, value)| {
                     data.insert(key.to_string(), Value::String(value.to_string()));
                 });
