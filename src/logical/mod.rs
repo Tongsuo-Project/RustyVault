@@ -38,7 +38,7 @@ pub enum Operation {
     Rollback,
 }
 
-pub trait Backend {
+pub trait Backend: Send + Sync {
     fn init(&mut self) -> Result<(), RvError>;
     fn setup(&self, key: &str) -> Result<(), RvError>;
     fn cleanup(&self) -> Result<(), RvError>;

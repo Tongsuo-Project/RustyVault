@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use serde_json::{json, from_value, Value, Map};
@@ -22,37 +21,37 @@ pub struct SystemModule {
 }
 
 pub struct SystemBackend {
-    pub core: Arc<RwLock<Box<Core>>>,
+    pub core: Arc<RwLock<Core>>,
 }
 
 impl SystemBackend {
-    pub fn new_backend(core: Arc<RwLock<Box<Core>>>) -> LogicalBackend {
-        let sys_backend = Rc::new(
+    pub fn new_backend(core: Arc<RwLock<Core>>) -> LogicalBackend {
+        let sys_backend = Arc::new(
             SystemBackend {
                 core: core,
             }
         );
 
-        let sys_backend_mount_table = Rc::clone(&sys_backend);
-        let sys_backend_mount_write = Rc::clone(&sys_backend);
-        let sys_backend_mount_delete = Rc::clone(&sys_backend);
-        let sys_backend_remount = Rc::clone(&sys_backend);
-        let sys_backend_renew = Rc::clone(&sys_backend);
-        let sys_backend_revoke = Rc::clone(&sys_backend);
-        let sys_backend_revoke_prefix = Rc::clone(&sys_backend);
-        let sys_backend_auth_table = Rc::clone(&sys_backend);
-        let sys_backend_auth_enable = Rc::clone(&sys_backend);
-        let sys_backend_auth_disable = Rc::clone(&sys_backend);
-        let sys_backend_policy_list = Rc::clone(&sys_backend);
-        let sys_backend_policy_read = Rc::clone(&sys_backend);
-        let sys_backend_policy_write = Rc::clone(&sys_backend);
-        let sys_backend_policy_delete = Rc::clone(&sys_backend);
-        let sys_backend_audit_table = Rc::clone(&sys_backend);
-        let sys_backend_audit_enable = Rc::clone(&sys_backend);
-        let sys_backend_audit_disable = Rc::clone(&sys_backend);
-        let sys_backend_raw_read = Rc::clone(&sys_backend);
-        let sys_backend_raw_write = Rc::clone(&sys_backend);
-        let sys_backend_raw_delete = Rc::clone(&sys_backend);
+        let sys_backend_mount_table = Arc::clone(&sys_backend);
+        let sys_backend_mount_write = Arc::clone(&sys_backend);
+        let sys_backend_mount_delete = Arc::clone(&sys_backend);
+        let sys_backend_remount = Arc::clone(&sys_backend);
+        let sys_backend_renew = Arc::clone(&sys_backend);
+        let sys_backend_revoke = Arc::clone(&sys_backend);
+        let sys_backend_revoke_prefix = Arc::clone(&sys_backend);
+        let sys_backend_auth_table = Arc::clone(&sys_backend);
+        let sys_backend_auth_enable = Arc::clone(&sys_backend);
+        let sys_backend_auth_disable = Arc::clone(&sys_backend);
+        let sys_backend_policy_list = Arc::clone(&sys_backend);
+        let sys_backend_policy_read = Arc::clone(&sys_backend);
+        let sys_backend_policy_write = Arc::clone(&sys_backend);
+        let sys_backend_policy_delete = Arc::clone(&sys_backend);
+        let sys_backend_audit_table = Arc::clone(&sys_backend);
+        let sys_backend_audit_enable = Arc::clone(&sys_backend);
+        let sys_backend_audit_disable = Arc::clone(&sys_backend);
+        let sys_backend_raw_read = Arc::clone(&sys_backend);
+        let sys_backend_raw_write = Arc::clone(&sys_backend);
+        let sys_backend_raw_delete = Arc::clone(&sys_backend);
 
         let backend = new_logical_backend!({
             paths: [
@@ -447,12 +446,12 @@ impl Module for SystemModule {
     }
 
     fn init(&self, core: &Core) -> Result<(), RvError> {
-        let sys_backend_new_func = |c: Arc<RwLock<Box<Core>>>| -> Result<Box<dyn Backend>, RvError> {
+        let sys_backend_new_func = |c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
             let mut sys_backend = SystemBackend::new_backend(c);
             sys_backend.init()?;
-            Ok(Box::new(sys_backend))
+            Ok(Arc::new(sys_backend))
         };
-        core.add_logical_backend("system", Arc::new(Box::new(sys_backend_new_func)))
+        core.add_logical_backend("system", Arc::new(sys_backend_new_func))
     }
 
     fn cleanup(&self, core: &Core) -> Result<(), RvError> {

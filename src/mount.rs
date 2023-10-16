@@ -178,7 +178,7 @@ impl Core {
             let prefix = format!("{}{}/", LOGICAL_BARRIER_PREFIX, &entry.uuid);
             let view = BarrierView::new(self.barrier.clone(), &prefix);
 
-            self.router.mount(Arc::new(backend), &entry.path, &entry.uuid, view)?;
+            self.router.mount(backend, &entry.path, &entry.uuid, view)?;
 
             table.insert(entry.path.clone(), entry);
         }
@@ -293,7 +293,7 @@ impl Core {
 
             let view = BarrierView::new(self.barrier.clone(), &barrier_path);
 
-            self.router.mount(Arc::new(backend), &entry.path, &entry.uuid, view)?;
+            self.router.mount(backend, &entry.path, &entry.uuid, view)?;
 
             if entry.tainted {
                 self.router.taint(&entry.path)?;
