@@ -2,7 +2,7 @@ use crate::errors::RvError;
 use crate::logical::request::Request;
 use crate::logical::response::Response;
 
-pub trait Handler {
+pub trait Handler: Send + Sync {
     fn pre_route(&self, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }

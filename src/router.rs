@@ -8,7 +8,7 @@ use crate::errors::RvError;
 struct MountEntry {
     tainted: bool,
     salt: String,
-    backend: Arc<Box<dyn Backend>>,
+    backend: Arc<dyn Backend>,
     view: Arc<BarrierView>,
     root_paths: Trie<String, bool>,
     login_paths: Trie<String, bool>,
@@ -31,7 +31,7 @@ impl Router {
         }
     }
 
-    pub fn mount(&self, backend: Arc<Box<dyn Backend>>, prefix: &str, salt: &str, view: BarrierView) -> Result<(), RvError> {
+    pub fn mount(&self, backend: Arc<dyn Backend>, prefix: &str, salt: &str, view: BarrierView) -> Result<(), RvError> {
         let mut root = self.root.write()?;
 
         // Check if this is a nested mount

@@ -22,7 +22,7 @@ pub enum FieldType {
 #[derive(Clone)]
 pub struct Field {
     pub field_type: FieldType,
-    pub default: Arc<dyn Any>,
+    pub default: Arc<dyn Any + Send + Sync>,
     pub description: String,
 }
 

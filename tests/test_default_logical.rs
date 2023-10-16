@@ -1,18 +1,16 @@
 use std::env;
 use std::fs;
-use std::sync::{Arc, Mutex, RwLock};
+use std::default::Default;
+use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use serde_json::{json, Value, Map};
 use go_defer::defer;
 use rusty_vault::storage::physical;
 use rusty_vault::storage::barrier_aes_gcm;
 use rusty_vault::core::Core;
-use rusty_vault::router::Router;
-use rusty_vault::mount::MountTable;
-use rusty_vault::module_manager::ModuleManager;
 use rusty_vault::logical::{Operation, Request};
 
-fn test_read_api(core: &Box<Core>, path: &str, is_ok: bool, expect: Option<Map<String, Value>>) {
+fn test_read_api(core: &Core, path: &str, is_ok: bool, expect: Option<Map<String, Value>>) {
     let mut req = Request::new(path);
     req.operation = Operation::Read;
     let resp = core.handle_request(&mut req);
@@ -30,7 +28,7 @@ fn test_read_api(core: &Box<Core>, path: &str, is_ok: bool, expect: Option<Map<S
     }
 }
 
-fn test_write_api(core: &Box<Core>, path: &str, is_ok: bool, data: Option<Map<String, Value>>) {
+fn test_write_api(core: &Core, path: &str, is_ok: bool, data: Option<Map<String, Value>>) {
     let mut req = Request::new(path);
     req.operation = Operation::Write;
     req.body = data;
@@ -38,13 +36,13 @@ fn test_write_api(core: &Box<Core>, path: &str, is_ok: bool, data: Option<Map<St
     assert_eq!(core.handle_request(&mut req).is_ok(), is_ok);
 }
 
-fn test_delete_api(core: &Box<Core>, path: &str, is_ok: bool) {
+fn test_delete_api(core: &Core, path: &str, is_ok: bool) {
     let mut req = Request::new(path);
     req.operation = Operation::Delete;
     assert_eq!(core.handle_request(&mut req).is_ok(), is_ok);
 }
 
-fn test_list_api(core: &Box<Core>, path: &str, is_ok: bool, keys_len: usize) {
+fn test_list_api(core: &Core, path: &str, is_ok: bool, keys_len: usize) {
     let mut req = Request::new(path);
     req.operation = Operation::List;
     let resp = core.handle_request(&mut req);
@@ -58,7 +56,7 @@ fn test_list_api(core: &Box<Core>, path: &str, is_ok: bool, keys_len: usize) {
     }
 }
 
-fn test_default_secret(core: Arc<RwLock<Box<Core>>>) {
+fn test_default_secret(core: Arc<RwLock<Core>>) {
     let core = core.read().unwrap();
 
     // create secret
@@ -77,7 +75,7 @@ fn test_default_secret(core: Arc<RwLock<Box<Core>>>) {
     test_list_api(&core, "secret/", true, 1);
 }
 
-fn test_kv_logical_backend(core: Arc<RwLock<Box<Core>>>) {
+fn test_kv_logical_backend(core: Arc<RwLock<Core>>) {
     let core = core.read().unwrap();
 
     // mount kv backend to path: kv/
@@ -144,7 +142,7 @@ fn test_kv_logical_backend(core: Arc<RwLock<Box<Core>>>) {
     test_read_api(&core, "vk/foo", false, None);
 }
 
-fn test_sys_mount_feature(core: Arc<RwLock<Box<Core>>>) {
+fn test_sys_mount_feature(core: Arc<RwLock<Core>>) {
     let core = core.read().unwrap();
 
     // test api: "mounts"
@@ -209,7 +207,7 @@ fn test_sys_mount_feature(core: Arc<RwLock<Box<Core>>>) {
     test_write_api(&core, "sys/remount", true, Some(remount_data));
 }
 
-fn test_sys_raw_api_feature(core: Arc<RwLock<Box<Core>>>) {
+fn test_sys_raw_api_feature(core: Arc<RwLock<Core>>) {
     let core = core.read().unwrap();
 
     // test raw read
@@ -246,7 +244,7 @@ fn test_sys_raw_api_feature(core: Arc<RwLock<Box<Core>>>) {
     test_read_api(&core, "sys/raw/test", true, None);
 }
 
-fn test_sys_logical_backend(core: Arc<RwLock<Box<Core>>>) {
+fn test_sys_logical_backend(core: Arc<RwLock<Core>>) {
     test_sys_mount_feature(Arc::clone(&core));
     test_sys_raw_api_feature(core);
 }
@@ -262,24 +260,15 @@ fn test_default_logical() {
     let mut conf: HashMap<String, String> = HashMap::new();
     conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
 
-    let backend = Arc::new(physical::new_backend("file", &conf).unwrap());
+    let backend = physical::new_backend("file", &conf).unwrap();
 
     let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
-    let router = Arc::new(Router::new());
-
-    let mounts = MountTable::new();
-
-    let c = Arc::new(RwLock::new(Box::new(Core {
-        self_ref: None,
+    let c = Arc::new(RwLock::new(Core {
         physical: backend,
-        barrier: Arc::new(Box::new(barrier)),
-        mounts: Some(mounts),
-        router: router.clone(),
-        handlers: vec![router],
-        logical_backends: Mutex::new(HashMap::new()),
-        module_manager: ModuleManager::new(),
-    })));
+        barrier: Arc::new(barrier),
+        ..Default::default()
+    }));
 
     {
         let mut core = c.write().unwrap();
