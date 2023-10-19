@@ -11,6 +11,7 @@ pub mod modules;
 pub mod module_manager;
 pub mod cli;
 pub mod http;
+pub mod shamir;
 
 /// Exit ok
 pub const EXIT_CODE_OK: sysexits::ExitCode = sysexits::ExitCode::Ok;

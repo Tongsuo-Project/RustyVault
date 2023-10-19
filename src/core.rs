@@ -2,8 +2,10 @@ use std::{
     sync::{Arc, Mutex, RwLock},
     collections::HashMap,
 };
-use rand::{Rng, thread_rng};
+use serde::{Serialize, Deserialize};
+use go_defer::defer;
 use crate::{
+    shamir::{ShamirSecret, SHAMIR_OVERHEAD},
     mount::MountTable,
     router::Router,
     handler::Handler,
@@ -14,7 +16,9 @@ use crate::{
     },
     storage::{
         physical,
-        physical::Backend as PhysicalBackend,
+        physical::{
+            Backend as PhysicalBackend,
+            BackendEntry as PhysicalBackendEntry},
         barrier::SecurityBarrier,
         barrier_aes_gcm,
     },
@@ -24,16 +28,41 @@ use crate::{
 
 pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Core>>) -> Result<Arc<dyn Backend>, RvError> + Send + Sync;
 
+pub const SEAL_CONFIG_PATH: &str = "core/seal-config";
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SealConfig {
+    pub secret_shares: u8,
+    pub secret_threshold: u8,
+}
+
+impl SealConfig {
+    pub fn validate(&self) -> Result<(), RvError> {
+        if self.secret_threshold > self.secret_shares {
+            return Err(RvError::ErrCoreSealConfigInvalid);
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InitResult {
+    pub secret_shares: Vec<Vec<u8>>,
+    pub root_token: String,
+}
+
 pub struct Core {
     pub self_ref: Option<Arc<RwLock<Core>>>,
     pub physical: Arc<dyn PhysicalBackend>,
     pub barrier: Arc<dyn SecurityBarrier>,
-    pub mounts: Option<MountTable>,
+    pub mounts: Arc<MountTable>,
     pub router: Arc<Router>,
     pub handlers: Vec<Arc<dyn Handler>>,
     pub logical_backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
     pub module_manager: ModuleManager,
     pub sealed: bool,
+    pub unseal_key_shares: Vec<Vec<u8>>,
 }
 
 impl Default for Core {
@@ -46,12 +75,13 @@ impl Default for Core {
             self_ref: None,
             physical: backend,
             barrier: Arc::new(barrier),
-            mounts: Some(MountTable::new()),
-            router: router.clone(),
+            mounts: Arc::new(MountTable::new()),
+            router: Arc::clone(&router),
             handlers: vec![router],
             logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
             sealed: true,
+            unseal_key_shares: Vec::new(),
         }
     }
 }
@@ -62,29 +92,70 @@ impl Core {
         self.barrier.inited()
     }
 
-    pub fn init(&mut self) -> Result<(), RvError> {
+    pub fn init(&mut self, seal_config: &SealConfig) -> Result<InitResult, RvError> {
         let inited = self.inited()?;
         if inited {
             return Err(RvError::ErrBarrierAlreadyInit);
         }
 
-        if self.mounts.is_none() {
-            return Err(RvError::ErrMountTableNotFound);
+        let _ = seal_config.validate()?;
+
+        // Encode the seal configuration
+        let serialized_seal_config = serde_json::to_string(seal_config)?;
+
+        // Store the seal configuration
+        let pe = PhysicalBackendEntry {
+            key: SEAL_CONFIG_PATH.to_string(),
+            value: serialized_seal_config.as_bytes().to_vec(),
+        };
+        self.physical.put(&pe)?;
+
+        let barrier = Arc::clone(&self.barrier);
+        // Generate a master key
+        let master_key = barrier.generate_key()?;
+
+        // Initialize the barrier
+        barrier.init(master_key.as_slice())?;
+
+        let mut init_result = InitResult {
+            secret_shares: Vec::new(),
+            root_token: String::new(),
+        };
+
+        if seal_config.secret_shares == 1 {
+            init_result.secret_shares.push(master_key.clone());
+        } else {
+            init_result.secret_shares = ShamirSecret::split(&master_key,
+                                                      seal_config.secret_shares,
+                                                      seal_config.secret_threshold)?;
         }
 
-        let mut key = vec![0u8; 32];
-        thread_rng().fill(key.as_mut_slice());
-        self.barrier.init(key.as_slice())?;
+        log::debug!("master_key: {}", hex::encode(&master_key));
+        log::debug!("seal config: {:?}", seal_config);
+        log::debug!("secret_shares:");
+        for key in init_result.secret_shares.iter() {
+            log::debug!("{}", hex::encode(&key));
+        }
+
         // Unseal the barrier
-        self.barrier.unseal(key.as_slice())?;
+        barrier.unseal(master_key.as_slice())?;
+
+        defer! (
+            let _ = barrier.seal();
+        );
+
         // Ensure the barrier is re-sealed
         self.module_manager.init(self)?;
+
         // Perform initial setup
-        self.mounts.as_ref().unwrap().load(self.barrier.as_storage())?;
-        self.setup_mounts()?;
-        // Generate a new root token
+        self.post_unseal()?;
+
+        // TODO: Generate a new root token
+
         // Prepare to re-seal
-        Ok(())
+        self.pre_seal()?;
+
+        Ok(init_result)
     }
 
     pub fn get_logical_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
@@ -111,13 +182,99 @@ impl Core {
         Ok(())
     }
 
-    pub fn unseal(&self, _key: &[u8]) -> Result<bool, RvError> {
-        //TODO
+    pub fn seal_config(&self) -> Result<SealConfig, RvError> {
+        let pe = self.physical.get(SEAL_CONFIG_PATH)?;
+
+        if pe.is_none() {
+            return Err(RvError::ErrCoreSealConfigNotFound);
+        }
+
+        let config: SealConfig = serde_json::from_slice(pe.unwrap().value.as_slice())?;
+        let _ = config.validate()?;
+        Ok(config)
+    }
+
+    pub fn sealed(&self) -> bool {
+        return self.sealed;
+    }
+
+    pub fn unseal_progress(&self) -> usize {
+        return self.unseal_key_shares.len();
+    }
+
+    pub fn unseal(&mut self, key: &[u8]) -> Result<bool, RvError> {
+        let barrier = Arc::clone(&self.barrier);
+        let sealed = barrier.sealed()?;
+        if !sealed {
+            return Err(RvError::ErrBarrierUnsealed);
+        }
+
+        let (min, mut max) = self.barrier.key_length_range();
+        max += SHAMIR_OVERHEAD;
+        if key.len() < min || key.len() > max {
+            return Err(RvError::ErrBarrierKeyInvalid);
+        }
+
+        let config = self.seal_config()?;
+        let k = key.clone();
+        if self.unseal_key_shares.iter().find(|&v| *v == k).is_some() {
+            return Ok(false);
+        }
+
+        self.unseal_key_shares.push(key.to_vec());
+        if self.unseal_key_shares.len() < config.secret_threshold as usize {
+            return Ok(false);
+        }
+
+        let master_key: Vec<u8>;
+        if config.secret_threshold == 1 {
+            master_key = self.unseal_key_shares[0].clone();
+            self.unseal_key_shares.clear();
+        } else {
+            if let Some(res) = ShamirSecret::combine(self.unseal_key_shares.clone()) {
+                master_key = res;
+                self.unseal_key_shares.clear();
+            } else {
+                //TODO
+                self.unseal_key_shares.clear();
+                return Err(RvError::ErrBarrierKeyInvalid);
+            }
+        }
+
+        log::debug!("unseal, recover master_key: {}", hex::encode(&master_key));
+        // Unseal the barrier
+        barrier.unseal(master_key.as_slice())?;
+
+        // Perform initial setup
+        self.post_unseal()?;
+
+        self.sealed = false;
+
         Ok(true)
     }
 
-    pub fn seal(&self, _token: &str) -> Result<(), RvError> {
-        //TODO
+    pub fn seal(&mut self, _token: &str) -> Result<(), RvError> {
+        let barrier = Arc::clone(&self.barrier);
+        let sealed = barrier.sealed()?;
+        if sealed {
+            return Err(RvError::ErrBarrierSealed);
+        }
+        self.pre_seal()?;
+        self.sealed = true;
+        barrier.seal()
+    }
+
+    pub fn post_unseal(&self) -> Result<(), RvError> {
+        // Perform initial setup
+        self.mounts.load(self.barrier.as_storage())?;
+
+        self.setup_mounts()?;
+
+        Ok(())
+    }
+
+    pub fn pre_seal(&mut self) -> Result<(), RvError> {
+        self.unload_mounts()?;
         Ok(())
     }
 
@@ -129,6 +286,10 @@ impl Core {
             if res.is_some() {
                 return Ok(res);
             }
+        }
+
+        if self.sealed {
+            return Err(RvError::ErrBarrierSealed);
         }
 
         for handler in &self.handlers {
@@ -193,19 +354,37 @@ mod test {
             self_ref: None,
             physical: backend,
             barrier: Arc::new(barrier),
-            mounts: Some(mounts),
+            mounts: Arc::new(mounts),
             router: router.clone(),
             handlers: vec![router],
             logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
             sealed: true,
+            unseal_key_shares: Vec::new(),
         }));
 
         {
             let mut c = core.write().unwrap();
             c.self_ref = Some(Arc::clone(&core));
 
-            assert!(c.init().is_ok());
+            let seal_config = SealConfig {
+                secret_shares: 10,
+                secret_threshold: 5,
+            };
+
+            let result = c.init(&seal_config);
+            assert!(result.is_ok());
+            let init_result = result.unwrap();
+
+            let mut unsealed = false;
+            for i in 0..seal_config.secret_threshold {
+                let key = &init_result.secret_shares[i as usize];
+                let unseal = c.unseal(key);
+                assert!(unseal.is_ok());
+                unsealed = unseal.unwrap();
+            }
+
+            assert!(unsealed);
         }
     }
 
@@ -233,7 +412,24 @@ mod test {
             let mut c = core.write().unwrap();
             c.self_ref = Some(Arc::clone(&core));
 
-            assert!(c.init().is_ok());
+            let seal_config = SealConfig {
+                secret_shares: 10,
+                secret_threshold: 5,
+            };
+
+            let result = c.init(&seal_config);
+            assert!(result.is_ok());
+            let init_result = result.unwrap();
+
+            let mut unsealed = false;
+            for i in 0..seal_config.secret_threshold {
+                let key = &init_result.secret_shares[i as usize];
+                let unseal = c.unseal(key);
+                assert!(unseal.is_ok());
+                unsealed = unseal.unwrap();
+            }
+
+            assert!(unsealed);
         }
     }
 }
