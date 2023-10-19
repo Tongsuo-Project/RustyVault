@@ -147,14 +147,8 @@ impl MountTable {
 
 impl Core {
     pub fn mount(&self, me: &MountEntry) -> Result<(), RvError> {
-        if self.mounts.is_none() {
-            return Err(RvError::ErrMountTableNotReady);
-        }
-
-        let mounts = self.mounts.as_ref().unwrap();
-
         {
-            let mut table = mounts.entries.write()?;
+            let mut table = self.mounts.entries.write()?;
             let mut entry = me.clone();
 
             if !entry.path.ends_with("/") {
@@ -183,7 +177,7 @@ impl Core {
             table.insert(entry.path.clone(), entry);
         }
 
-        mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
 
         Ok(())
     }
@@ -218,10 +212,6 @@ impl Core {
     }
 
     pub fn remount(&self, src: &str, dst: &str) -> Result<(), RvError> {
-        if self.mounts.is_none() {
-            return Err(RvError::ErrMountTableNotReady);
-        }
-
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
@@ -237,9 +227,8 @@ impl Core {
             return Err(RvError::ErrMountPathProtected);
         }
 
-        let mounts_ref = self.mounts.as_ref().unwrap();
         {
-            let mut mounts = mounts_ref.entries.write()?;
+            let mut mounts = self.mounts.entries.write()?;
 
             let match_mount = self.router.matching_mount(&src)?;
             if match_mount.len() == 0 || match_mount != src {
@@ -269,18 +258,13 @@ impl Core {
             self.router.untaint(&dst)?;
         }
 
-        mounts_ref.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
 
         Ok(())
     }
 
     pub fn setup_mounts(&self) -> Result<(), RvError> {
-        if self.mounts.is_none() {
-            return Err(RvError::ErrMountTableNotReady);
-        }
-
-        let mounts_ref = self.mounts.as_ref().unwrap();
-        let mounts = mounts_ref.entries.read()?;
+        let mounts = self.mounts.entries.read()?;
 
         for entry in mounts.values() {
             let mut barrier_path = format!("{}{}/", LOGICAL_BARRIER_PREFIX, &entry.uuid);
@@ -304,31 +288,24 @@ impl Core {
     }
 
     pub fn unload_mounts(&mut self) -> Result<(), RvError> {
-        self.mounts = None;
-        self.router = Arc::new(Router::new());
+        self.mounts = Arc::new(MountTable::new());
+        let router = Arc::new(Router::new());
+        //self.router = Arc::new(Router::new());
+        self.router = Arc::clone(&router);
+        self.handlers[0] = router;
         Ok(())
     }
 
     fn taint_mount_entry(&self, path: &str) -> Result<(), RvError> {
-        if self.mounts.is_none() {
-            return Err(RvError::ErrMountTableNotReady);
-        }
-
-        let mounts = self.mounts.as_ref().unwrap();
-        if mounts.set_taint(path, true) {
-            mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        if self.mounts.set_taint(path, true) {
+            self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
         }
         Ok(())
     }
 
     fn remove_mount_entry(&self, path: &str) -> Result<(), RvError> {
-        if self.mounts.is_none() {
-            return Err(RvError::ErrMountTableNotReady);
-        }
-
-        let mounts = self.mounts.as_ref().unwrap();
-        if mounts.delete(path) {
-            mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        if self.mounts.delete(path) {
+            self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
         }
         Ok(())
     }

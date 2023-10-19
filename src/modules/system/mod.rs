@@ -244,14 +244,9 @@ impl SystemBackend {
 
     pub fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         let core = self.core.read()?;
-        if core.mounts.is_none() {
-            return Err(RvError::ErrMountTableNotReady);
-        }
-
         let mut data: Map<String, Value> = Map::new();
 
-        let mounts_ref = core.mounts.as_ref().unwrap();
-        let mounts = mounts_ref.entries.read()?;
+        let mounts = core.mounts.entries.read()?;
 
         for entry in mounts.values() {
             let info: Value = json!({
