@@ -10,6 +10,10 @@ pub enum RvError {
     ErrCoreLogicalBackendNoExist,
     #[error("Core router not handling.")]
     ErrCoreRouterNotHandling,
+    #[error("Core seal config is invalid.")]
+    ErrCoreSealConfigInvalid,
+    #[error("Core seal config not found.")]
+    ErrCoreSealConfigNotFound,
     #[error("Physical configuration item is missing.")]
     ErrPhysicalConfigItemMissing,
     #[error("Physical type is invalid.")]
@@ -22,12 +26,16 @@ pub enum RvError {
     ErrBarrierKeySanityCheckFailed,
     #[error("Barrier has been initialized.")]
     ErrBarrierAlreadyInit,
-    #[error("Barrier key is invalide.")]
+    #[error("Barrier key is invalid.")]
     ErrBarrierKeyInvalid,
     #[error("Barrier is not initialized.")]
     ErrBarrierNotInit,
     #[error("Barrier has been sealed.")]
     ErrBarrierSealed,
+    #[error("Barrier has been unsealed.")]
+    ErrBarrierUnsealed,
+    #[error("Barrier unseal failed.")]
+    ErrBarrierUnsealFailed,
     #[error("Barrier epoch do not match.")]
     ErrBarrierEpochMismatch,
     #[error("Barrier version do not match.")]
@@ -62,6 +70,8 @@ pub enum RvError {
     ErrModuleKvDataFieldMissing,
     #[error("Rust downcast failed.")]
     ErrRustDowncastFailed,
+    #[error("Shamir share count invalid.")]
+    ErrShamirShareCountInvalid,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -82,6 +92,11 @@ pub enum RvError {
         #[from]
         source: regex::Error
     },
+    #[error("Some hex error happened, {:?}", .source)]
+    Hex {
+        #[from]
+        source: hex::FromHexError
+    },
     #[error("RwLock was poisoned (reading)")]
     ErrRwLockReadPoison,
     #[error("RwLock was poisoned (writing)")]
@@ -97,6 +112,8 @@ impl PartialEq for RvError {
         match (self, other) {
             (RvError::ErrCoreLogicalBackendExist, RvError::ErrCoreLogicalBackendExist)
             | (RvError::ErrCoreLogicalBackendNoExist, RvError::ErrCoreLogicalBackendNoExist)
+            | (RvError::ErrCoreSealConfigInvalid, RvError::ErrCoreSealConfigInvalid)
+            | (RvError::ErrCoreSealConfigNotFound, RvError::ErrCoreSealConfigNotFound)
             | (RvError::ErrPhysicalConfigItemMissing, RvError::ErrPhysicalConfigItemMissing)
             | (RvError::ErrPhysicalTypeInvalid, RvError::ErrPhysicalTypeInvalid)
             | (RvError::ErrPhysicalBackendPrefixInvalid, RvError::ErrPhysicalBackendPrefixInvalid)
@@ -106,6 +123,8 @@ impl PartialEq for RvError {
             | (RvError::ErrBarrierKeyInvalid, RvError::ErrBarrierKeyInvalid)
             | (RvError::ErrBarrierNotInit, RvError::ErrBarrierNotInit)
             | (RvError::ErrBarrierSealed, RvError::ErrBarrierSealed)
+            | (RvError::ErrBarrierUnsealed, RvError::ErrBarrierUnsealed)
+            | (RvError::ErrBarrierUnsealFailed, RvError::ErrBarrierUnsealFailed)
             | (RvError::ErrBarrierEpochMismatch, RvError::ErrBarrierEpochMismatch)
             | (RvError::ErrBarrierVersionMismatch, RvError::ErrBarrierVersionMismatch)
             | (RvError::ErrBarrierKeyGenerationFailed, RvError::ErrBarrierKeyGenerationFailed)
@@ -123,6 +142,7 @@ impl PartialEq for RvError {
             | (RvError::ErrRequestInvalid, RvError::ErrRequestInvalid)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
             | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
+            | (RvError::ErrShamirShareCountInvalid, RvError::ErrShamirShareCountInvalid)
             | (RvError::ErrRwLockReadPoison, RvError::ErrRwLockReadPoison)
             | (RvError::ErrRwLockWritePoison, RvError::ErrRwLockWritePoison)
             | (RvError::ErrUnknown, RvError::ErrUnknown)

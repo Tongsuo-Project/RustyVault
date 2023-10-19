@@ -10,13 +10,21 @@ pub struct Response {
     pub redirect: String
 }
 
-impl Response {
-    pub fn new() -> Self {
-        Self {
+impl Default for Response {
+    fn default() -> Self {
+        Response {
             headers: None,
             body: None,
             secret: None,
-            redirect: "".to_string(),
+            redirect: String::new(),
+        }
+    }
+}
+
+impl Response {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
         }
     }
 

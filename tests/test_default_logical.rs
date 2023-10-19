@@ -7,7 +7,7 @@ use serde_json::{json, Value, Map};
 use go_defer::defer;
 use rusty_vault::storage::physical;
 use rusty_vault::storage::barrier_aes_gcm;
-use rusty_vault::core::Core;
+use rusty_vault::core::{Core, SealConfig};
 use rusty_vault::logical::{Operation, Request};
 
 fn test_read_api(core: &Core, path: &str, is_ok: bool, expect: Option<Map<String, Value>>) {
@@ -88,6 +88,8 @@ fn test_kv_logical_backend(core: Arc<RwLock<Core>>) {
         "foo": "bar",
         "zip": "zap",
     }).as_object().unwrap().clone();
+
+    test_read_api(&core, "secret/foo", true, None);
 
     // create secret
     test_write_api(&core, "kv/secret", true, Some(kv_data.clone()));
@@ -274,7 +276,24 @@ fn test_default_logical() {
         let mut core = c.write().unwrap();
         core.self_ref = Some(Arc::clone(&c));
 
-        assert!(core.init().is_ok());
+        let seal_config = SealConfig {
+            secret_shares: 10,
+            secret_threshold: 5,
+        };
+
+        let result = core.init(&seal_config);
+        assert!(result.is_ok());
+        let init_result = result.unwrap();
+
+        let mut unsealed = false;
+        for i in 0..seal_config.secret_threshold {
+            let key = &init_result.secret_shares[i as usize];
+            let unseal = core.unseal(key);
+            assert!(unseal.is_ok());
+            unsealed = unseal.unwrap();
+        }
+
+        assert!(unsealed);
     }
 
     {

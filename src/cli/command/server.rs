@@ -18,7 +18,7 @@ use crate::{
 	errors::RvError,
 	EXIT_CODE_OK, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE,
 	storage::{physical, barrier_aes_gcm},
-	core::Core,
+	core::Core
 };
 
 pub fn main(config: &str) -> Result<(), RvError> {
@@ -90,9 +90,6 @@ pub fn main(config: &str) -> Result<(), RvError> {
     {
         let mut c = core.write().unwrap();
         c.self_ref = Some(Arc::clone(&core));
-
-        log::info!("start core init");
-        c.init()?;
     }
 
 	let mut http_server = HttpServer::new(move || {
