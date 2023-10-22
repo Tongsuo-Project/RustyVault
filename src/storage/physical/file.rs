@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use std::path::{PathBuf};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
+use serde_json::Value;
 use crate::errors::RvError;
 use super::{Backend, BackendEntry};
 
+#[derive(Debug)]
 pub struct FileBackend {
     path: PathBuf,
     lock: Arc<Mutex<i32>>,
@@ -105,11 +107,16 @@ impl Backend for FileBackend {
 }
 
 impl FileBackend {
-    pub fn new(conf: &HashMap<String, String>) -> Result<Self, RvError> {
+    pub fn new(conf: &HashMap<String, Value>) -> Result<Self, RvError> {
         match conf.get("path") {
             Some(path) => {
+                let path = path.as_str();
+                if path.is_none() {
+                    return Err(RvError::ErrPhysicalConfigItemMissing);
+                }
+
                 Ok(FileBackend {
-                    path: PathBuf::from(path),
+                    path: PathBuf::from(path.unwrap()),
                     lock: Arc::new(Mutex::new(0)),
                 })
             }
@@ -143,8 +150,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let backend = FileBackend::new(&conf);
 

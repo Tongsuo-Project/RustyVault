@@ -2,6 +2,7 @@ use sysexits::ExitCode;
 use clap::{Arg, ArgMatches, ArgAction, Command};
 
 pub mod command;
+pub mod config;
 
 /// Defines command line options
 pub fn define_command_line_options(mut app: Command) -> Command {
