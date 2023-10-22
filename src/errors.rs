@@ -4,6 +4,14 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RvError {
+    #[error("Config path is invalid.")]
+    ErrConfigPathInvalid,
+    #[error("Config load failed.")]
+    ErrConfigLoadFailed,
+    #[error("Config storage not found.")]
+    ErrConfigStorageNotFound,
+    #[error("Config listener not found.")]
+    ErrConfigListenerNotFound,
     #[error("Core logical backend already exists.")]
     ErrCoreLogicalBackendExist,
     #[error("Core logical backend does not exist.")]
@@ -97,6 +105,11 @@ pub enum RvError {
         #[from]
         source: hex::FromHexError
     },
+    #[error("Some hcl error happened, {:?}", .source)]
+    Hcl {
+        #[from]
+        source: hcl::Error
+    },
     #[error("RwLock was poisoned (reading)")]
     ErrRwLockReadPoison,
     #[error("RwLock was poisoned (writing)")]
@@ -145,6 +158,10 @@ impl PartialEq for RvError {
             | (RvError::ErrShamirShareCountInvalid, RvError::ErrShamirShareCountInvalid)
             | (RvError::ErrRwLockReadPoison, RvError::ErrRwLockReadPoison)
             | (RvError::ErrRwLockWritePoison, RvError::ErrRwLockWritePoison)
+            | (RvError::ErrConfigPathInvalid, RvError::ErrConfigPathInvalid)
+            | (RvError::ErrConfigLoadFailed, RvError::ErrConfigLoadFailed)
+            | (RvError::ErrConfigStorageNotFound, RvError::ErrConfigStorageNotFound)
+            | (RvError::ErrConfigListenerNotFound, RvError::ErrConfigListenerNotFound)
             | (RvError::ErrUnknown, RvError::ErrUnknown)
             => true,
             _ => false,
