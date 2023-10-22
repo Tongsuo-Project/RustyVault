@@ -174,27 +174,27 @@ mod test {
 
     #[test]
     fn test_logical_path() {
-		let path: Path = new_path!({
-			pattern: "/aa",
-			fields: {
-				"mytype": {
-					field_type: FieldType::Int,
-					description: "haha"
-				},
-				"mypath": {
-					field_type: FieldType::Str,
-					description: "hehe"
-				}
-			},
-			operations: [
-				{op: Operation::Read, handler: my_test_read_handler},
-				{op: Operation::Write, raw_handler: |_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> {
+        let path: Path = new_path!({
+            pattern: "/aa",
+            fields: {
+                "mytype": {
+                    field_type: FieldType::Int,
+                    description: "haha"
+                },
+                "mypath": {
+                    field_type: FieldType::Str,
+                    description: "hehe"
+                }
+            },
+            operations: [
+                {op: Operation::Read, handler: my_test_read_handler},
+                {op: Operation::Write, raw_handler: |_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> {
                         Err(RvError::ErrUnknown)
                     }
                 }
-			],
+            ],
             help: "testhelp"
-		});
+        });
 
         assert_eq!(&path.pattern, "/aa");
         assert_eq!(&path.help, "testhelp");
@@ -208,5 +208,5 @@ mod test {
         assert_eq!(path.operations[0].op, Operation::Read);
         assert_eq!(path.operations[1].op, Operation::Write);
         assert_eq!(path.operations.len(), 2);
-	}
+    }
 }
