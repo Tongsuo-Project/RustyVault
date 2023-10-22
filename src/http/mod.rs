@@ -1,11 +1,11 @@
 use std::{
     any::Any,
-	net::SocketAddr,
-	sync::{Arc, RwLock}
+    net::SocketAddr,
+    sync::{Arc, RwLock}
 };
 use actix_web::{
-	dev::Extensions,
-	rt::net::TcpStream,
+    dev::Extensions,
+    rt::net::TcpStream,
     http::{
         Method, StatusCode
     },
@@ -15,12 +15,12 @@ use serde::{Serialize};
 use serde_json::{json, Map, Value};
 use actix_tls::accept::openssl::TlsStream;
 use openssl::{
-	x509::{X509, X509Ref, X509VerifyResult},
-//	ssl::{SslAcceptor, SslVerifyMode, SslFiletype, SslMethod}
+    x509::{X509, X509Ref, X509VerifyResult},
+//    ssl::{SslAcceptor, SslVerifyMode, SslFiletype, SslMethod}
 };
 use crate::{
     logical,
-	core::Core,
+    core::Core,
     logical::{Operation, Request},
     errors::RvError
 };
@@ -156,15 +156,15 @@ pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
 }
 
 pub fn response_ok(body: Option<&Map<String, Value>>) -> HttpResponse {
-	if body.is_none() {
-		HttpResponse::NoContent().finish()
-	} else {
-		HttpResponse::Ok().json(body.as_ref().unwrap())
-	}
+    if body.is_none() {
+        HttpResponse::NoContent().finish()
+    } else {
+        HttpResponse::Ok().json(body.as_ref().unwrap())
+    }
 }
 
 pub fn response_json<T: Serialize>(status: StatusCode, body: T) -> HttpResponse {
-	HttpResponse::build(status).json(body)
+    HttpResponse::build(status).json(body)
 }
 
 pub fn response_json_ok<T: Serialize>(body: T) -> HttpResponse {
