@@ -303,6 +303,7 @@ mod test {
     use std::env;
     use std::fs;
     use std::collections::HashMap;
+    use serde_json::Value;
     use go_defer::defer;
     use super::*;
     use super::super::*;
@@ -315,8 +316,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let cipher = Cipher::aes_256_gcm();
         let ctx = CipherCtx::new();
@@ -353,8 +354,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let cipher = Cipher::aes_256_gcm();
         let ctx = CipherCtx::new();
@@ -393,8 +394,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let backend = physical::new_backend("file", &conf).unwrap();
 
@@ -440,8 +441,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let backend = physical::new_backend("file", &conf).unwrap();
 

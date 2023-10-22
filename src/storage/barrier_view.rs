@@ -110,6 +110,7 @@ mod test {
     use std::sync::Arc;
     use std::collections::HashMap;
     use rand::{Rng, thread_rng};
+    use serde_json::Value;
     use go_defer::defer;
     use super::*;
     use super::super::*;
@@ -122,8 +123,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
