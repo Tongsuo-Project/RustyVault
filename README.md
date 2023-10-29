@@ -1,13 +1,53 @@
 # RustyVault
 
-RustVault是一个用Rust语言开发的现代机密管理系统软件（Secret Management System），即覆盖了传统密钥管理系统（Key Management System，即KMS）的大部分功能，又提供了基于密码学原理且更加前沿的安全功能，为传统数据中心、云计算、云原生（如K8s）、Web3等领域所面临的数据安全风险挑战提供了一种安全、高效、可靠且合规的解决方案。
+## Overview
 
-RustyVault依赖于[铜锁密码学算法库](https://github.com/Tongsuo-Project/Tongsuo)所提供的软硬件密码学能力。
+RustyVault is a modern secret management system, written in Rust. RustyVault provides various features which support many scenarios including secure sotrage, cloud identity management, secret management, Kubernetes integration, PKI infrastructure, cryptographic computing, traditional key management, etc.
 
-## 主要功能
+RustyVault can be deployed in either cloud or physical environments. Depending on different requirements, RustyVault may run as standalone application with a set of RESTful APIs provided, and it can also be used as crate thus you can easily integrate it into your own Rust application.
 
-To be determined...
+The core cryptographic module which provides cryptography functionality to RustVault is the [Tongsuo](https://github.com/Tongsuo-Project/Tongsuo) project.
 
-## 架构设计
+The RustyVault is a subproject of [Tongsuo Project](https://github.com/Tongsuo-Project).
 
-见：[RustyVault设计文档](.\/design.md)
+## Feature
+
+* API
+  * RESTful API fully compatible with Hashicorp Vault
+* Authentication & Authorization
+  * AuthN based on certificate
+  * AuthN based on username/password
+  * Basic ACL
+* Secure Storage
+  * Local storage
+  * Remote storage
+* Configuration
+  * HCL compatible
+* PKI/CA infrastructure
+  * X.509 certificate signing: RSA/ECC/SM2
+  * X.509 certificate revocation: OCSP, CRL
+* Key management
+  * Symmetric key: create/rotate/store
+  * Public key: RSA/ECC/SM2
+* Cryptographic Algorithm
+  * Symmetric: AES, SM4
+  * Public Key:
+      * Signature: RSA/ECDSA/EdDSA/SM2
+      * Encryption: RSA/SM2
+  * Hash: SHA1/SHA2/SM3
+  * PRNG
+* Cryptographic Computing
+  * PHE: Paillier, EC-ElGamal
+  * ZKP: Bulletproofs
+* Hareware Support
+  * Cryptography acceleration hardware
+  * Cryptography key management hardware (HSM or so)
+    * TEE
+* Cluster & HA
+  * Active - Active
+* Log & Audit
+  * Log to file
+
+## Design
+
+Read the [design](.\/design.md) document.
