@@ -1,4 +1,5 @@
 use std::io;
+use std::sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -51,8 +52,16 @@ pub enum RvError {
     ErrLogicalPathUnsupported,
     #[error("Request is not ready.")]
     ErrRequestNotReady,
+    #[error("No data is available for the request.")]
+    ErrRequestNoData,
+    #[error("No data field is available for the request.")]
+    ErrRequestNoDataField,
+    #[error("Request is invalid.")]
+    ErrRequestInvalid,
     #[error("Module kv data field is missing.")]
     ErrModuleKvDataFieldMissing,
+    #[error("Rust downcast failed.")]
+    ErrRustDowncastFailed,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -73,6 +82,10 @@ pub enum RvError {
         #[from]
         source: regex::Error
     },
+    #[error("RwLock was poisoned (reading)")]
+    ErrRwLockReadPoison,
+    #[error("RwLock was poisoned (writing)")]
+    ErrRwLockWritePoison,
     #[error(transparent)]
     ErrOther (#[from] anyhow::Error),
     #[error("Unknown error.")]
@@ -105,10 +118,28 @@ impl PartialEq for RvError {
             | (RvError::ErrMountNotMatch, RvError::ErrMountNotMatch)
             | (RvError::ErrCoreRouterNotHandling, RvError::ErrCoreRouterNotHandling)
             | (RvError::ErrRequestNotReady, RvError::ErrRequestNotReady)
+            | (RvError::ErrRequestNoData, RvError::ErrRequestNoData)
+            | (RvError::ErrRequestNoDataField, RvError::ErrRequestNoDataField)
+            | (RvError::ErrRequestInvalid, RvError::ErrRequestInvalid)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
+            | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
+            | (RvError::ErrRwLockReadPoison, RvError::ErrRwLockReadPoison)
+            | (RvError::ErrRwLockWritePoison, RvError::ErrRwLockWritePoison)
             | (RvError::ErrUnknown, RvError::ErrUnknown)
             => true,
             _ => false,
         }
+    }
+}
+
+impl<T> From<PoisonError<RwLockWriteGuard<'_, T>>> for RvError {
+    fn from(_: PoisonError<RwLockWriteGuard<'_, T>>) -> Self {
+        RvError::ErrRwLockWritePoison
+    }
+}
+
+impl<T> From<PoisonError<RwLockReadGuard<'_, T>>> for RvError {
+    fn from(_: PoisonError<RwLockReadGuard<'_, T>>) -> Self {
+        RvError::ErrRwLockReadPoison
     }
 }
