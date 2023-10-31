@@ -43,7 +43,7 @@ impl Storage for BarrierView {
 
 impl BarrierView {
     pub fn new(barrier: Arc<Box<dyn SecurityBarrier>>, prefix: &str) -> Self {
-        BarrierView {
+        Self {
             barrier: barrier,
             prefix: prefix.to_string(),
         }
