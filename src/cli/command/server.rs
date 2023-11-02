@@ -52,9 +52,6 @@ pub fn main(config: &str) -> Result<(), RvError> {
 			.pid_file(pid_path.clone())
 			.chown_pid_file(true)
 			.working_directory(work_dir)
-			.user("jinjiu")
-			.group("staff")
-			.umask(0o777)
 			.stdout(log_file.try_clone().unwrap())
 			.stderr(log_file)
 			.privileged_action(|| log::info!("Start rusty_vault server daemon"));
@@ -108,7 +105,7 @@ pub fn main(config: &str) -> Result<(), RvError> {
     })
     .on_connect(http::request_on_connect_handler);
 
-	let addr = "127.0.0.1:8099";
+	let addr = "localhost:8099";
     log::info!("start listen, addr: {}", addr);
 	http_server = http_server.bind(addr).unwrap();
 

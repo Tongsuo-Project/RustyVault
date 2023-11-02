@@ -11,7 +11,7 @@ use crate::{
     http::{
         Connection,
         response_ok,
-        response_error,
+        //response_error,
     },
     errors::RvError,
 };
