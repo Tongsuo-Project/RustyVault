@@ -9,7 +9,7 @@ fn main() -> ExitCode {
         .help_expected(true)
         .disable_colored_help(false)
         .max_term_width(100)
-        .about("A self-controlled, secure, and high-performance open-source software for key management that is compatible with Vault.");
+        .about("A secure and high performance secret management software that is compatible with Hashicorp Vault.");
     app = cli::define_command_line_options(app);
     let mut app_cloned = app.clone();
 

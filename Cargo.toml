@@ -33,7 +33,7 @@ log = "0.4"
 env_logger = "0.10"
 
 [[bin]]
-name = "rusty_vault"
+name = "rvault"
 path = "bin/rusty_vault.rs"
 
 [[test]]
