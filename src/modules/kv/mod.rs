@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use serde_json::{Value, Map};
@@ -29,12 +28,12 @@ pub struct KvBackend;
 
 impl KvBackend {
     pub fn new_backend() -> LogicalBackend {
-        let kv_backend = Rc::new(KvBackend);
+        let kv_backend = Arc::new(KvBackend);
 
-        let kv_backend_r = Rc::clone(&kv_backend);
-        let kv_backend_w = Rc::clone(&kv_backend);
-        let kv_backend_d = Rc::clone(&kv_backend);
-        let kv_backend_l = Rc::clone(&kv_backend);
+        let kv_backend_r = Arc::clone(&kv_backend);
+        let kv_backend_w = Arc::clone(&kv_backend);
+        let kv_backend_d = Arc::clone(&kv_backend);
+        let kv_backend_l = Arc::clone(&kv_backend);
 
         let backend = new_logical_backend!({
             paths: [
@@ -114,12 +113,12 @@ impl Module for KvModule {
     }
 
     fn init(&self, core: &Core) -> Result<(), RvError> {
-        let kv_backend_new_func = |_c: Arc<RwLock<Box<Core>>>| -> Result<Box<dyn Backend>, RvError> {
+        let kv_backend_new_func = |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
             let mut kv_backend = KvBackend::new_backend();
             kv_backend.init()?;
-            Ok(Box::new(kv_backend))
+            Ok(Arc::new(kv_backend))
         };
-        core.add_logical_backend("kv", Arc::new(Box::new(kv_backend_new_func)))
+        core.add_logical_backend("kv", Arc::new(kv_backend_new_func))
     }
 
     fn cleanup(&self, core: &Core) -> Result<(), RvError> {

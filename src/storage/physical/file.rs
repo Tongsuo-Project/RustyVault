@@ -4,7 +4,7 @@ use std::path::{PathBuf};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use crate::errors::RvError;
-use super::{Backend, BackendEntry, Lock};
+use super::{Backend, BackendEntry};
 
 pub struct FileBackend {
     path: PathBuf,
@@ -100,17 +100,6 @@ impl Backend for FileBackend {
                 return Err(RvError::from(err));
             }
         }
-        Ok(())
-    }
-}
-
-impl Lock for FileBackend {
-    fn lock(&self) -> Result<(), RvError> {
-        let _lock = self.lock.lock().unwrap();
-        Ok(())
-    }
-
-    fn unlock(&self) -> Result<(), RvError> {
         Ok(())
     }
 }

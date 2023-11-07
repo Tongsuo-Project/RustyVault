@@ -3,7 +3,7 @@ use super::Storage;
 
 pub const BARRIER_INIT_PATH: &str = "barrier/init";
 
-pub trait SecurityBarrier: Storage {
+pub trait SecurityBarrier: Storage + Send + Sync {
     fn inited(&self) -> Result<bool, RvError>;
     fn init(&self, key: &[u8]) -> Result<(), RvError>;
     fn generate_key(&self) -> Result<Vec<u8>, RvError>;

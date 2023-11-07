@@ -209,7 +209,7 @@ mod test {
 
         let backend = physical::new_backend("file", &conf).unwrap();
 
-        let barrier = AESGCMBarrier::new(Arc::new(backend));
+        let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 
         let mut logical_backend = new_logical_backend!({
             paths: [

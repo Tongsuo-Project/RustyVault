@@ -1,19 +1,16 @@
+use std::sync::Arc;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use crate::errors::RvError;
 
-mod file;
+pub mod file;
+pub mod mock;
 
-pub trait Backend {
+pub trait Backend: Send + Sync {
     fn list(&self, prefix: &str) -> Result<Vec<String>, RvError>;
     fn get(&self, key: &str) -> Result<Option<BackendEntry>, RvError>;
     fn put(&self, entry: &BackendEntry) -> Result<(), RvError>;
     fn delete(&self, key: &str) -> Result<(), RvError>;
-}
-
-pub trait Lock {
-    fn lock(&self) -> Result<(), RvError>;
-    fn unlock(&self) -> Result<(), RvError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -23,11 +20,14 @@ pub struct BackendEntry {
     pub value: Vec<u8>,
 }
 
-pub fn new_backend(t: &str, conf: &HashMap<String, String>) -> Result<Box<dyn Backend>, RvError> {
+pub fn new_backend(t: &str, conf: &HashMap<String, String>) -> Result<Arc<dyn Backend>, RvError> {
     match t {
         "file" => {
             let backend = file::FileBackend::new(conf)?;
-            Ok(Box::new(backend))
+            Ok(Arc::new(backend))
+        }
+        "mock" => {
+            Ok(Arc::new(mock::MockBackend::new()))
         }
         _ => {
             Err(RvError::ErrPhysicalTypeInvalid)
