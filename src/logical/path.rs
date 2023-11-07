@@ -8,7 +8,7 @@ use super::Field;
 use super::Operation;
 use super::Backend;
 
-type PathOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError>;
+type PathOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
 #[derive(Debug, Clone)]
 pub struct Path {
@@ -21,7 +21,7 @@ pub struct Path {
 #[derive(Clone)]
 pub struct PathOperation {
     pub op: Operation,
-    pub handler: Arc<Box<PathOperationHandler>>,
+    pub handler: Arc<PathOperationHandler>,
 }
 
 impl fmt::Debug for PathOperation {
@@ -51,7 +51,7 @@ impl PathOperation {
     pub fn new() -> Self {
         Self {
             op: Operation::Read,
-            handler: Arc::new(Box::new(|_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> { Ok(None) })),
+            handler: Arc::new(|_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> { Ok(None) }),
         }
     }
 
@@ -119,9 +119,9 @@ macro_rules! new_path_internal {
         let mut path_op = PathOperation::new();
 
         path_op.op = $op;
-        path_op.handler = Arc::new(Box::new(move |backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
+        path_op.handler = Arc::new(move |backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
             $handler_obj$(.$handler_method)*(backend, req)
-        }));
+        });
 
         $object.operations.push(path_op);
 
@@ -131,7 +131,7 @@ macro_rules! new_path_internal {
         let mut path_op = PathOperation::new();
 
         path_op.op = $op;
-        path_op.handler = Arc::new(Box::new($handler));
+        path_op.handler = Arc::new($handler);
 
         $object.operations.push(path_op);
 

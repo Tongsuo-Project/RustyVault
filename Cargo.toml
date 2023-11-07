@@ -21,6 +21,20 @@ strum_macros = "0.25"
 radix_trie = "0.2.1"
 lazy_static = "1.4.0"
 regex = "1.9.5"
+clap = { version = "4.4", features = ["wrap_help", "suggestions"] }
+sysexits = { version = "0.7", features = ["std"] }
+build-time = "0.1"
+hcl-rs = "0.16"
+daemonize = "0.5"
+actix-web = { version = "4.4", features = ["openssl"] }
+actix-tls = "3.1"
+actix-rt = "2.9"
+log = "0.4"
+env_logger = "0.10"
+
+[[bin]]
+name = "rvault"
+path = "bin/rusty_vault.rs"
 
 [[test]]
 name = "test_default_logical"

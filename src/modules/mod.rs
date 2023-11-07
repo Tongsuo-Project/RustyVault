@@ -4,7 +4,7 @@ use crate::errors::RvError;
 pub mod kv;
 pub mod system;
 
-pub trait Module {
+pub trait Module: Send + Sync {
     fn name(&self) -> String;
     fn init(&self, _core: &Core) -> Result<(), RvError> {
         Ok(())

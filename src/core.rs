@@ -1,29 +1,61 @@
-use std::sync::{Arc, Mutex, RwLock};
-use std::collections::HashMap;
+use std::{
+    sync::{Arc, Mutex, RwLock},
+    collections::HashMap,
+};
 use rand::{Rng, thread_rng};
-use crate::mount::MountTable;
-use crate::router::Router;
-use crate::handler::Handler;
-use crate::storage::physical::Backend as PhysicalBackend;
-use crate::storage::barrier::SecurityBarrier;
-use crate::logical::Backend;
-use crate::logical::request::Request;
-use crate::logical::response::Response;
-use crate::module_manager::ModuleManager;
-use crate::errors::RvError;
+use crate::{
+    mount::MountTable,
+    router::Router,
+    handler::Handler,
+    logical::{
+        Backend,
+        Request,
+        Response,
+    },
+    storage::{
+        physical,
+        physical::Backend as PhysicalBackend,
+        barrier::SecurityBarrier,
+        barrier_aes_gcm,
+    },
+    module_manager::ModuleManager,
+    errors::RvError,
+};
 
-pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Box<Core>>>) -> Result<Box<dyn Backend>, RvError>;
+pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Core>>) -> Result<Arc<dyn Backend>, RvError> + Send + Sync;
 
 pub struct Core {
-    pub self_ref: Option<Arc<RwLock<Box<Core>>>>,
-    pub physical: Arc<Box<dyn PhysicalBackend>>,
-    pub barrier: Arc<Box<dyn SecurityBarrier>>,
+    pub self_ref: Option<Arc<RwLock<Core>>>,
+    pub physical: Arc<dyn PhysicalBackend>,
+    pub barrier: Arc<dyn SecurityBarrier>,
     pub mounts: Option<MountTable>,
     pub router: Arc<Router>,
     pub handlers: Vec<Arc<dyn Handler>>,
-    pub logical_backends: Mutex<HashMap<String, Arc<Box<LogicalBackendNewFunc>>>>,
+    pub logical_backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
     pub module_manager: ModuleManager,
+    pub sealed: bool,
 }
+
+impl Default for Core {
+    fn default() -> Self {
+        let backend: Arc<dyn PhysicalBackend> = Arc::new(physical::mock::MockBackend::new());
+        let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+        let router = Arc::new(Router::new());
+
+        Core {
+            self_ref: None,
+            physical: backend,
+            barrier: Arc::new(barrier),
+            mounts: Some(MountTable::new()),
+            router: router.clone(),
+            handlers: vec![router],
+            logical_backends: Mutex::new(HashMap::new()),
+            module_manager: ModuleManager::new(),
+            sealed: true,
+        }
+    }
+}
+
 
 impl Core {
     pub fn inited(&self) -> Result<bool, RvError> {
@@ -55,7 +87,7 @@ impl Core {
         Ok(())
     }
 
-    pub fn get_logical_backend(&self, logical_type: &str) -> Result<Arc<Box<LogicalBackendNewFunc>>, RvError> {
+    pub fn get_logical_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
         let logical_backends = self.logical_backends.lock().unwrap();
         if let Some(backend) = logical_backends.get(logical_type) {
             Ok(backend.clone())
@@ -64,7 +96,7 @@ impl Core {
         }
     }
 
-    pub fn add_logical_backend(&self, logical_type: &str, backend: Arc<Box<LogicalBackendNewFunc>>) -> Result<(), RvError> {
+    pub fn add_logical_backend(&self, logical_type: &str, backend: Arc<LogicalBackendNewFunc>) -> Result<(), RvError> {
         let mut logical_backends = self.logical_backends.lock().unwrap();
         if logical_backends.contains_key(logical_type) {
             return Err(RvError::ErrCoreLogicalBackendExist);
@@ -76,6 +108,16 @@ impl Core {
     pub fn remove_logical_backend(&self, logical_type: &str) -> Result<(), RvError> {
         let mut logical_backends = self.logical_backends.lock().unwrap();
         logical_backends.remove(logical_type);
+        Ok(())
+    }
+
+    pub fn unseal(&self, _key: &[u8]) -> Result<bool, RvError> {
+        //TODO
+        Ok(true)
+    }
+
+    pub fn seal(&self, _token: &str) -> Result<(), RvError> {
+        //TODO
         Ok(())
     }
 
@@ -143,22 +185,28 @@ mod test {
         let mut conf: HashMap<String, String> = HashMap::new();
         conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
 
-        let backend = Arc::new(physical::new_backend("file", &conf).unwrap());
+        let backend = physical::new_backend("file", &conf).unwrap();
         let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
         let router = Arc::new(Router::new());
         let mounts = MountTable::new();
-        let mut core = Core {
+        let core = Arc::new(RwLock::new(Core {
             self_ref: None,
             physical: backend,
-            barrier: Arc::new(Box::new(barrier)),
+            barrier: Arc::new(barrier),
             mounts: Some(mounts),
             router: router.clone(),
             handlers: vec![router],
             logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
-        };
+            sealed: true,
+        }));
 
-        assert!(core.init().is_ok());
+        {
+            let mut c = core.write().unwrap();
+            c.self_ref = Some(Arc::clone(&core));
+
+            assert!(c.init().is_ok());
+        }
     }
 
     #[test]
@@ -172,22 +220,20 @@ mod test {
         let mut conf: HashMap<String, String> = HashMap::new();
         conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
 
-        let backend = Arc::new(physical::new_backend("file", &conf).unwrap());
+        let backend = physical::new_backend("file", &conf).unwrap();
         let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-        let router = Arc::new(Router::new());
-        let mounts = MountTable::new();
 
-        let mut core = Core {
-            self_ref: None,
+        let core = Arc::new(RwLock::new(Core {
             physical: backend,
-            barrier: Arc::new(Box::new(barrier)),
-            mounts: Some(mounts),
-            router: router.clone(),
-            handlers: vec![router],
-            logical_backends: Mutex::new(HashMap::new()),
-            module_manager: ModuleManager::new(),
-        };
+            barrier: Arc::new(barrier),
+            ..Default::default()
+        }));
 
-        assert!(core.init().is_ok());
+        {
+            let mut c = core.write().unwrap();
+            c.self_ref = Some(Arc::clone(&core));
+
+            assert!(c.init().is_ok());
+        }
     }
 }

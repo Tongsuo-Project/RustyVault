@@ -3,7 +3,7 @@ use crate::errors::RvError;
 use super::{Storage, StorageEntry, barrier::SecurityBarrier};
 
 pub struct BarrierView {
-    barrier: Arc<Box<dyn SecurityBarrier>>,
+    barrier: Arc<dyn SecurityBarrier>,
     prefix: String,
 }
 
@@ -42,7 +42,7 @@ impl Storage for BarrierView {
 }
 
 impl BarrierView {
-    pub fn new(barrier: Arc<Box<dyn SecurityBarrier>>, prefix: &str) -> Self {
+    pub fn new(barrier: Arc<dyn SecurityBarrier>, prefix: &str) -> Self {
         Self {
             barrier: barrier,
             prefix: prefix.to_string(),
@@ -130,12 +130,13 @@ mod test {
 
         let backend = physical::new_backend("file", &conf);
         assert!(backend.is_ok());
-        let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(Arc::new(backend.unwrap()));
+        let backend = backend.unwrap();
+        let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
         let init = aes_gcm_view.init(key.as_slice());
         assert!(init.is_ok());
 
-        let view = barrier_view::BarrierView::new(Arc::new(Box::new(aes_gcm_view)), "test");
+        let view = barrier_view::BarrierView::new(Arc::new(aes_gcm_view), "test");
         assert_eq!(view.expand_key("foo"), "testfoo");
         assert!(view.sanity_check("foo").is_ok());
         assert!(view.sanity_check("../foo").is_err());
