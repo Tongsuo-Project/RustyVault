@@ -1,0 +1,18 @@
+edition = "2021"
+
+# We are going to enable these after switching to nightly tool chain
+#comment_width = 100
+#binop_separator = "Front"
+#format_strings = true
+#max_width = 100
+#merge_derives = true
+#imports_granularity = "Crate"
+#newline_style = "Unix"
+#merge_imports = true
+#normalize_comments = true
+#normalize_doc_attributes = true
+#reorder_imports = true
+#report_fixme = "Always"
+#report_todo = "Always"
+#trailing_comma = "Vertical"
+#use_field_init_shorthand = true
