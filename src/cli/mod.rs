@@ -2,6 +2,7 @@ use sysexits::ExitCode;
 use clap::{Arg, ArgMatches, ArgAction, Command};
 
 pub mod command;
+pub mod config;
 
 /// Defines command line options
 pub fn define_command_line_options(mut app: Command) -> Command {
@@ -22,16 +23,16 @@ pub fn define_command_line_options(mut app: Command) -> Command {
                 .about("Print seal and HA status")
         ]);
 
-	app
+    app
 }
 
 #[inline]
 pub fn run(matches: &ArgMatches) -> ExitCode {
-	match matches.subcommand() {
+    match matches.subcommand() {
         Some(("server", server_matches)) => command::server::execute(&server_matches),
         Some(("status", status_matches)) => command::status::execute(&status_matches),
         _ => {
-			crate::EXIT_CODE_INSUFFICIENT_PARAMS
+            crate::EXIT_CODE_INSUFFICIENT_PARAMS
         }
-	}
+    }
 }
