@@ -163,8 +163,11 @@ impl SecurityBarrier for AESGCMBarrier {
 
         self.init_cipher(key)?;
 
-        let value = self.decrypt(entry.unwrap().value.as_slice())?;
-        let barrier_init: BarrierInit = serde_json::from_slice(value.as_slice())?;
+        let value = self.decrypt(entry.unwrap().value.as_slice());
+        if value.is_err() {
+            return Err(RvError::ErrBarrierUnsealFailed);
+        }
+        let barrier_init: BarrierInit = serde_json::from_slice(value.unwrap().as_slice())?;
 
         self.init_cipher(barrier_init.key.as_slice())?;
 

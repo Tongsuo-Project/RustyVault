@@ -22,21 +22,30 @@ pub struct Request {
     pub secret: Option<Secret>,
 }
 
-impl Request {
-    pub fn new(path: &str) -> Self {
-        Self {
-            id: "".to_string(),
-            name: "".to_string(),
+impl Default for Request {
+    fn default() -> Self {
+        Request {
+            id: String::new(),
+            name: String::new(),
             operation: Operation::Read,
-            path: path.to_string(),
+            path: String::new(),
             match_path: None,
             headers: None,
             body: None,
             data: None,
-            client_token: "".to_string(),
+            client_token: String::new(),
             storage: None,
             connection: None,
             secret: None,
+        }
+    }
+}
+
+impl Request {
+    pub fn new(path: &str) -> Self {
+        Self {
+            path: path.to_string(),
+            ..Default::default()
         }
     }
 
