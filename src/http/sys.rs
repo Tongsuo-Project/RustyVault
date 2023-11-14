@@ -2,24 +2,80 @@ use std::{
 	sync::{Arc, RwLock}
 };
 use actix_web::{
+    http::{StatusCode},
 	web, HttpRequest, HttpResponse
 };
 use serde::{Serialize, Deserialize};
 use serde_json::{json};
 use crate::{
-	core::Core,
+	core::{Core, SealConfig},
+    logical::{Operation, Request},
     http::{
-        Connection,
+        //Connection,
+        handle_request,
+        response_error,
         response_ok,
-        //response_error,
+        response_json_ok,
     },
     errors::RvError,
 };
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct InitRequest {
-    secret_shares: u32,
-    secret_threshold: u32,
+    secret_shares: u8,
+    secret_threshold: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InitResponse {
+    pub keys: Vec<String>,
+    pub root_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct UnsealRequest {
+    key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SealStatusResponse {
+    pub sealed: bool,
+    pub t: u8,
+    pub n: u8,
+    pub progress: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MountRequest {
+    #[serde(rename="type")]
+    logical_type: String,
+    #[serde(default)]
+    description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RemountRequest {
+    from: String,
+    to: String,
+}
+
+fn response_seal_status(
+    core: web::Data<Arc<RwLock<Core>>>
+) -> Result<HttpResponse, RvError> {
+    let core = core.read()?;
+
+    let progress = core.unseal_progress();
+    let sealed = core.sealed();
+    let seal_config = core.seal_config()?;
+
+    let resp = SealStatusResponse {
+        sealed: sealed,
+        t: seal_config.secret_shares,
+        n: seal_config.secret_threshold,
+        progress: progress,
+    };
+
+    Ok(response_json_ok(resp))
 }
 
 async fn sys_init_get_request_handler(
@@ -37,77 +93,119 @@ async fn sys_init_get_request_handler(
 async fn sys_init_put_request_handler(
     _req: HttpRequest,
     body: web::Bytes,
-    _core: web::Data<Arc<RwLock<Core>>>
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    // TODO
     let payload = serde_json::from_slice::<InitRequest>(&body)?;
-    let resp = Some(json!({
-        "secret_shares": payload.secret_shares,
-        "secret_threshold": payload.secret_threshold,
-    }).as_object().unwrap().clone());
+    let seal_config = SealConfig {
+        secret_shares: payload.secret_shares,
+        secret_threshold: payload.secret_threshold,
+    };
 
-    Ok(response_ok(Some(resp.as_ref().unwrap())))
+    let mut core = core.write()?;
+    let result = core.init(&seal_config)?;
+
+    let resp = InitResponse {
+        keys: result.secret_shares.iter().map(|key| hex::encode(key)).collect(),
+        root_token: result.root_token,
+    };
+
+    Ok(response_json_ok(resp))
 }
 
 async fn sys_seal_status_request_handler(
     _req: HttpRequest,
-    _core: web::Data<Arc<RwLock<Core>>>
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    // TODO
-    Ok(HttpResponse::Ok().body("sys seal status\n"))
+    response_seal_status(core)
 }
 
 async fn sys_seal_request_handler(
-    req: HttpRequest,
-    _body: web::Bytes,
-    _core: web::Data<Arc<RwLock<Core>>>
+    _req: HttpRequest,
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    // TODO
-    let _conn = req.conn_data::<Connection>().unwrap();
-    Ok(HttpResponse::Ok().body("sys seal\n"))
+    let mut core = core.write()?;
+    core.seal("")?;
+    Ok(response_ok(None))
 }
 
 async fn sys_unseal_request_handler(
     _req: HttpRequest,
-    _body: web::Bytes,
-    _core: web::Data<Arc<RwLock<Core>>>
+    body: web::Bytes,
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
     // TODO
-    Ok(HttpResponse::Ok().body("sys unseal\n"))
+    let payload = serde_json::from_slice::<UnsealRequest>(&body)?;
+    let key = hex::decode(payload.key)?;
+
+    {
+        let mut core = core.write()?;
+        let _result = core.unseal(&key)?;
+    }
+
+    response_seal_status(core)
 }
 
 async fn sys_list_mounts_request_handler(
     _req: HttpRequest,
-    _core: web::Data<Arc<RwLock<Core>>>
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    // TODO
-    Ok(HttpResponse::Ok().body("sys list mounts\n"))
+    let mut r = Request::new("sys/mounts");
+    r.operation = Operation::Read;
+
+    handle_request(core, &mut r)
 }
 
 async fn sys_mount_request_handler(
     _req: HttpRequest,
-    _core: web::Data<Arc<RwLock<Core>>>
+    path: web::Path<String>,
+    body: web::Bytes,
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    // TODO
-    Ok(HttpResponse::Ok().body("sys mount\n"))
+    let _test = serde_json::from_slice::<MountRequest>(&body)?;
+    let payload = serde_json::from_slice(&body)?;
+    let mount_path = path.into_inner();
+    if mount_path.len() == 0 {
+        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    }
+
+    let mut r = Request::default();
+    r.path = "sys/mounts/".to_owned() + mount_path.as_str();
+    r.operation = Operation::Write;
+    r.body = Some(payload);
+
+    handle_request(core, &mut r)
 }
 
 async fn sys_unmount_request_handler(
     _req: HttpRequest,
-    _body: web::Bytes,
-    _core: web::Data<Arc<RwLock<Core>>>
+    path: web::Path<String>,
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    // TODO
-    Ok(HttpResponse::Ok().body("sys unmount\n"))
+    let mount_path = path.into_inner();
+    if mount_path.len() == 0 {
+        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    }
+
+    let mut r = Request::default();
+    r.path = "sys/mounts/".to_owned() + mount_path.as_str();
+    r.operation = Operation::Delete;
+
+    handle_request(core, &mut r)
 }
 
 async fn sys_remount_request_handler(
     _req: HttpRequest,
-    _body: web::Bytes,
-    _core: web::Data<Arc<RwLock<Core>>>
+    body: web::Bytes,
+    core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    // TODO
-    Ok(HttpResponse::Ok().body("sys remount\n"))
+    let _test = serde_json::from_slice::<RemountRequest>(&body)?;
+    let payload = serde_json::from_slice(&body)?;
+
+    let mut r = Request::new("sys/remount");
+    r.operation = Operation::Write;
+    r.body = Some(payload);
+
+    handle_request(core, &mut r)
 }
 
 pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
@@ -125,8 +223,8 @@ pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
             .service(web::resource("/mounts")
                          .route(web::get().to(sys_list_mounts_request_handler)))
             .service(web::resource("/mounts/{path:.*}")
-                         .route(web::get().to(sys_mount_request_handler))
-                         .route(web::post().to(sys_unmount_request_handler))
+                         .route(web::get().to(sys_list_mounts_request_handler))
+                         .route(web::post().to(sys_mount_request_handler))
                          .route(web::delete().to(sys_unmount_request_handler)))
             .service(web::resource("/remount")
                          .route(web::post().to(sys_remount_request_handler))
