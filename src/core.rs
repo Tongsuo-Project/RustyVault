@@ -329,6 +329,7 @@ mod test {
     use std::fs;
     use std::sync::Arc;
     use std::collections::HashMap;
+    use serde_json::Value;
     use go_defer::defer;
     use crate::storage::physical;
     use crate::storage::barrier_aes_gcm;
@@ -342,8 +343,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let backend = physical::new_backend("file", &conf).unwrap();
         let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
@@ -395,8 +396,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let backend = physical::new_backend("file", &conf).unwrap();
         let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));

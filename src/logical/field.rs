@@ -35,7 +35,7 @@ impl Field {
         }
     }
 
-	pub fn get_default(&self) -> Result<Value, RvError> {
+    pub fn get_default(&self) -> Result<Value, RvError> {
         match &self.field_type {
             FieldType::Str => self.cast_value::<String>(),
             FieldType::Int => self.cast_value::<i32>(),

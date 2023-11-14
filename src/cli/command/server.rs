@@ -1,83 +1,109 @@
 use std::{
-	env,
-	fs,
+    env,
+    fs,
     default::Default,
-	fs::OpenOptions,
-	path::Path,
-	collections::HashMap,
-	sync::{Arc, RwLock}
+    fs::OpenOptions,
+    path::Path,
+    sync::{Arc, RwLock}
 };
 use daemonize::Daemonize;
 use clap::{ArgMatches};
 use sysexits::ExitCode;
 use actix_web::{
-	middleware, web, App, HttpResponse, HttpServer
+    middleware, web, App, HttpResponse, HttpServer
 };
 use crate::{
     http,
-	errors::RvError,
-	EXIT_CODE_OK, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE,
-	storage::{physical, barrier_aes_gcm},
-	core::Core
+    errors::RvError,
+    EXIT_CODE_OK, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE,
+    cli::config,
+    storage::{physical, barrier_aes_gcm},
+    core::Core
 };
 
-pub fn main(config: &str) -> Result<(), RvError> {
-	env::set_var("RUST_LOG", "debug");
-	env_logger::init();
+pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";
 
-	let work_dir = "/tmp/rusty_vault/";
+pub fn main(config_path: &str) -> Result<(), RvError> {
+    let config = config::load_config(config_path)?;
 
-    log::info!("config: {}, work_dir: {}", config, work_dir);
+    if config.storage.len() != 1 {
+        return Err(RvError::ErrConfigStorageNotFound);
+    }
 
-	if !Path::new(work_dir).exists() {
+    if config.listener.len() != 1 {
+        return Err(RvError::ErrConfigListenerNotFound);
+    }
+
+    let (_, storage) = config.storage.iter().next().unwrap();
+    let (_, listener) = config.listener.iter().next().unwrap();
+
+    env::set_var("RUST_LOG", config.log_level.as_str());
+    env_logger::init();
+
+    let mut work_dir = WORK_DIR_PATH_DEFAULT.to_string();
+    if !config.work_dir.is_empty() {
+        work_dir = config.work_dir.clone();
+    }
+
+    if !Path::new(work_dir.as_str()).exists() {
         log::info!("create work_dir: {}", work_dir);
-		fs::create_dir_all(work_dir)?;
-	}
+        fs::create_dir_all(work_dir.as_str())?;
+    }
 
-	let dev = true;
+    log::info!("config_path: {}, work_dir_path: {}", config_path, work_dir.as_str());
 
-	if !dev {
-		// start daemon
-		let log_path = format!("{}/info.log", work_dir);
-		let pid_path = format!("{}/rusty_vault.pid", work_dir);
+    if config.daemon {
+        // start daemon
+        let log_path = format!("{}/rusty_vault.log", work_dir);
+        let mut pid_path = config.pid_file.clone();
+        if !config.pid_file.starts_with("/") {
+            pid_path = work_dir.clone() + pid_path.as_str();
+        }
 
-		let log_file = OpenOptions::new()
-			.read(true)
-			.write(true)
-			.create(true)
-			.open(log_path)
-			.unwrap();
+        let mut user = "onbody".to_owned();
+        if !config.daemon_user.is_empty() {
+            user = config.daemon_user.clone();
+        }
 
-		let daemonize = Daemonize::new()
-			.pid_file(pid_path.clone())
-			.chown_pid_file(true)
-			.working_directory(work_dir)
-			.stdout(log_file.try_clone().unwrap())
-			.stderr(log_file)
-			.privileged_action(|| log::info!("Start rusty_vault server daemon"));
+        let mut group = "onbody".to_owned();
+        if !config.daemon_group.is_empty() {
+            group = config.daemon_group.clone();
+        }
 
-		match daemonize.start() {
-			Ok(_) => {
-				let pid = std::fs::read_to_string(pid_path).unwrap();
-				log::info!("The rusty_vault server daemon process started successfully, pid is {}", pid);
-			}
-			Err(e) => log::error!("Error, {}", e),
-		}
-	}
+        let log_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(log_path)
+            .unwrap();
 
-	let server = actix_rt::System::new();
+        log::debug!("run user: {}, group: {}", user, group);
 
-    let data_dir = work_dir.to_owned() + "rusty_vault_data";
-    log::info!("data_dir: {}", data_dir);
-	if !Path::new(&data_dir).exists() {
-        log::info!("create data_dir: {}", &data_dir);
-		fs::create_dir_all(&data_dir)?;
-	}
+        let daemonize = Daemonize::new()
+            .working_directory(work_dir.as_str())
+            .user(user.as_str())
+            .group(group.as_str())
+            .umask(0o027)
+            .stdout(log_file.try_clone().unwrap())
+            .stderr(log_file)
+            .pid_file(pid_path.clone())
+            .chown_pid_file(true)
+            .privileged_action(|| log::info!("Start rusty_vault server daemon"));
 
-    let mut conf: HashMap<String, String> = HashMap::new();
-    conf.insert("path".to_string(), data_dir.to_string());
+        match daemonize.start() {
+            Ok(_) => {
+                let pid = std::fs::read_to_string(pid_path)?;
+                log::info!("The rusty_vault server daemon process started successfully, pid is {}", pid);
+            }
+            Err(e) => log::error!("Error, {}", e),
+        }
+    }
 
-    let backend = physical::new_backend("file", &conf).unwrap();
+
+    let server = actix_rt::System::new();
+
+    let backend = physical::new_backend(storage.stype.as_str(), &storage.config).unwrap();
 
     let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
@@ -92,7 +118,7 @@ pub fn main(config: &str) -> Result<(), RvError> {
         c.self_ref = Some(Arc::clone(&core));
     }
 
-	let mut http_server = HttpServer::new(move || {
+    let mut http_server = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
             .app_data(web::Data::new(Arc::clone(&core)))
@@ -102,14 +128,14 @@ pub fn main(config: &str) -> Result<(), RvError> {
     })
     .on_connect(http::request_on_connect_handler);
 
-	let addr = "localhost:8099";
+    let addr = listener.address.clone();
     log::info!("start listen, addr: {}", addr);
-	http_server = http_server.bind(addr).unwrap();
+    http_server = http_server.bind(addr)?;
 
-	log::info!("rusty_vault server starts, waiting for request...");
+    log::info!("rusty_vault server starts, waiting for request...");
 
-	server.block_on(async { http_server.run().await })?;
-	let _ = server.run();
+    server.block_on(async { http_server.run().await })?;
+    let _ = server.run();
 
     Ok(())
 }
@@ -117,7 +143,13 @@ pub fn main(config: &str) -> Result<(), RvError> {
 #[inline]
 pub fn execute(matches: &ArgMatches) -> ExitCode {
     if let Some(config_path) = matches.get_one::<String>("config") {
-        return (main(&config_path).is_ok()).then(|| EXIT_CODE_OK).unwrap_or(EXIT_CODE_LOAD_CONFIG_FAILURE);
+        return match main(&config_path) {
+            Ok(_) => EXIT_CODE_OK,
+            Err(e) => {
+                println!("server error: {:?}", e);
+                EXIT_CODE_LOAD_CONFIG_FAILURE
+            }
+        }
     }
 
     return EXIT_CODE_INSUFFICIENT_PARAMS;

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
+use serde_json::{Value};
 use crate::errors::RvError;
 
 pub mod file;
@@ -20,7 +21,7 @@ pub struct BackendEntry {
     pub value: Vec<u8>,
 }
 
-pub fn new_backend(t: &str, conf: &HashMap<String, String>) -> Result<Arc<dyn Backend>, RvError> {
+pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Backend>, RvError> {
     match t {
         "file" => {
             let backend = file::FileBackend::new(conf)?;
@@ -51,8 +52,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
-        let mut conf: HashMap<String, String> = HashMap::new();
-        conf.insert("path".to_string(), dir.to_string_lossy().into_owned());
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
         let backend = new_backend("file", &conf);
         assert!(backend.is_ok());
