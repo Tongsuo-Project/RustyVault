@@ -2,9 +2,11 @@ use std::{
     sync::{Arc, Mutex, RwLock},
     collections::HashMap,
 };
+use as_any::{Downcast};
 use serde::{Serialize, Deserialize};
 use go_defer::defer;
 use crate::{
+    cli::config::Config,
     shamir::{ShamirSecret, SHAMIR_OVERHEAD},
     mount::MountTable,
     router::Router,
@@ -20,9 +22,11 @@ use crate::{
             Backend as PhysicalBackend,
             BackendEntry as PhysicalBackendEntry},
         barrier::SecurityBarrier,
+        barrier_view::BarrierView,
         barrier_aes_gcm,
     },
     module_manager::ModuleManager,
+    modules::auth::AuthModule,
     errors::RvError,
 };
 
@@ -56,9 +60,10 @@ pub struct Core {
     pub self_ref: Option<Arc<RwLock<Core>>>,
     pub physical: Arc<dyn PhysicalBackend>,
     pub barrier: Arc<dyn SecurityBarrier>,
+    pub system_view: Option<Arc<BarrierView>>,
     pub mounts: Arc<MountTable>,
     pub router: Arc<Router>,
-    pub handlers: Vec<Arc<dyn Handler>>,
+    pub handlers: RwLock<Vec<Arc<dyn Handler>>>,
     pub logical_backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
     pub module_manager: ModuleManager,
     pub sealed: bool,
@@ -75,9 +80,10 @@ impl Default for Core {
             self_ref: None,
             physical: backend,
             barrier: Arc::new(barrier),
+            system_view: None,
             mounts: Arc::new(MountTable::new()),
             router: Arc::clone(&router),
-            handlers: vec![router],
+            handlers: RwLock::new(vec![router]),
             logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
             sealed: true,
@@ -88,6 +94,17 @@ impl Default for Core {
 
 
 impl Core {
+    pub fn config(&mut self, core: Arc<RwLock<Core>>, _config: Option<Config>) -> Result<(), RvError> {
+        self.module_manager.set_default_modules(Arc::clone(&core))?;
+        self.self_ref = Some(Arc::clone(&core));
+
+        let auth_module = AuthModule::new(self);
+
+        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(auth_module))))?;
+
+        Ok(())
+    }
+
     pub fn inited(&self) -> Result<bool, RvError> {
         self.barrier.inited()
     }
@@ -141,16 +158,25 @@ impl Core {
         barrier.unseal(master_key.as_slice())?;
 
         defer! (
+            // Ensure the barrier is re-sealed
             let _ = barrier.seal();
         );
-
-        // Ensure the barrier is re-sealed
-        self.module_manager.init(self)?;
 
         // Perform initial setup
         self.post_unseal()?;
 
-        // TODO: Generate a new root token
+        // Generate a new root token
+        if let Some(module) = self.module_manager.get_module("auth") {
+            let auth_mod = module.read()?;
+            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
+                let te = auth_module.token_store.root_token()?;
+                init_result.root_token = te.id;
+            } else {
+                log::error!("downcast auth module failed!");
+            }
+        } else {
+            log::error!("get auth module failed!");
+        }
 
         // Prepare to re-seal
         self.pre_seal()?;
@@ -176,9 +202,25 @@ impl Core {
         Ok(())
     }
 
-    pub fn remove_logical_backend(&self, logical_type: &str) -> Result<(), RvError> {
+    pub fn delete_logical_backend(&self, logical_type: &str) -> Result<(), RvError> {
         let mut logical_backends = self.logical_backends.lock().unwrap();
         logical_backends.remove(logical_type);
+        Ok(())
+    }
+
+    pub fn add_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
+        let mut handlers = self.handlers.write()?;
+        if let Some(_) = handlers.iter().find(|h| h.name() == handler.name()) {
+            return Err(RvError::ErrCoreHandlerExist);
+        }
+
+        handlers.push(handler);
+        Ok(())
+    }
+
+    pub fn delete_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
+        let mut handlers = self.handlers.write()?;
+        handlers.retain(|h| h.name() != handler.name());
         Ok(())
     }
 
@@ -263,36 +305,36 @@ impl Core {
         barrier.seal()
     }
 
-    pub fn post_unseal(&self) -> Result<(), RvError> {
+    fn post_unseal(&mut self) -> Result<(), RvError> {
+        self.module_manager.setup(self)?;
+
         // Perform initial setup
-        self.mounts.load(self.barrier.as_storage())?;
+        self.mounts.load_or_default(self.barrier.as_storage())?;
 
         self.setup_mounts()?;
+
+        self.module_manager.init(self)?;
 
         Ok(())
     }
 
-    pub fn pre_seal(&mut self) -> Result<(), RvError> {
+    fn pre_seal(&mut self) -> Result<(), RvError> {
+        self.module_manager.cleanup(self)?;
         self.unload_mounts()?;
         Ok(())
     }
 
     pub fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut resp = None;
-
-        for handler in &self.handlers {
-            let res = handler.pre_route(req)?;
-            if res.is_some() {
-                return Ok(res);
-            }
-        }
+        let mut err: Option<RvError> = None;
+        let handlers = self.handlers.read()?;
 
         if self.sealed {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        for handler in &self.handlers {
-            match handler.route(req) {
+        for handler in handlers.iter() {
+            match handler.pre_route(req) {
                 Ok(res) => {
                     if res.is_some() {
                         resp = res;
@@ -300,23 +342,63 @@ impl Core {
                     }
                 }
                 Err(error) => {
-                    if error != RvError::ErrRouterMountNotFound {
-                        return Err(error);
+                    if error != RvError::ErrHandlerDefault {
+                        err = Some(error);
+                        break;
                     }
                 }
             }
         }
 
-        if resp.is_none() {
-            return Err(RvError::ErrCoreRouterNotHandling);
+        if resp.is_none() && err.is_none() {
+            for handler in handlers.iter() {
+                match handler.route(req) {
+                    Ok(res) => {
+                        if res.is_some() {
+                            resp = res;
+                            break;
+                        }
+                    }
+                    Err(error) => {
+                        if error != RvError::ErrHandlerDefault {
+                            err = Some(error);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if err.is_none() {
+                for handler in handlers.iter() {
+                    match handler.post_route(req, &mut resp) {
+                        Ok(_) => {
+                        }
+                        Err(error) => {
+                            if error != RvError::ErrHandlerDefault {
+                                err = Some(error);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        for handler in &self.handlers {
-            handler.post_route(req, resp.as_mut().unwrap())?;
+        for handler in handlers.iter() {
+            match handler.log(req, &resp) {
+                Ok(_) => {
+                }
+                Err(error) => {
+                    if error != RvError::ErrHandlerDefault {
+                        err = Some(error);
+                        break;
+                    }
+                }
+            }
         }
 
-        for handler in &self.handlers {
-            handler.log(req, resp.as_ref().unwrap())?;
+        if err.is_some() {
+            return Err(err.unwrap());
         }
 
         Ok(resp)
@@ -354,9 +436,10 @@ mod test {
             self_ref: None,
             physical: backend,
             barrier: Arc::new(barrier),
+            system_view: None,
             mounts: Arc::new(mounts),
             router: router.clone(),
-            handlers: vec![router],
+            handlers: RwLock::new(vec![router]),
             logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
             sealed: true,
@@ -365,7 +448,7 @@ mod test {
 
         {
             let mut c = core.write().unwrap();
-            c.self_ref = Some(Arc::clone(&core));
+            assert!(c.config(Arc::clone(&core), None).is_ok());
 
             let seal_config = SealConfig {
                 secret_shares: 10,
@@ -410,7 +493,7 @@ mod test {
 
         {
             let mut c = core.write().unwrap();
-            c.self_ref = Some(Arc::clone(&core));
+            assert!(c.config(Arc::clone(&core), None).is_ok());
 
             let seal_config = SealConfig {
                 secret_shares: 10,

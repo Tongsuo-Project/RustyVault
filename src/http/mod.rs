@@ -7,9 +7,9 @@ use actix_web::{
     dev::Extensions,
     rt::net::TcpStream,
     http::{
-        Method, StatusCode
+        StatusCode
     },
-    web, HttpRequest, HttpResponse, ResponseError
+    web, HttpResponse, ResponseError
 };
 use serde::{Serialize};
 use serde_json::{json, Map, Value};
@@ -19,13 +19,13 @@ use openssl::{
 //    ssl::{SslAcceptor, SslVerifyMode, SslFiletype, SslMethod}
 };
 use crate::{
-    logical,
     core::Core,
-    logical::{Operation, Request},
+    logical::{Request},
     errors::RvError
 };
 
 pub mod sys;
+pub mod logical;
 
 #[derive(Debug, Clone)]
 pub struct TlsClientInfo {
@@ -92,50 +92,9 @@ pub fn request_on_connect_handler(conn: &dyn Any, ext: &mut Extensions) {
     }
 }
 
-async fn logical_request_handler(
-    req: HttpRequest,
-    body: web::Bytes,
-    method: Method,
-    path: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>
-) -> Result<HttpResponse, RvError> {
-    let conn = req.conn_data::<Connection>().unwrap();
-    log::debug!("logical request, connection info: {:?}, method: {:?}, path: {:?}", conn, method, path);
-
-    let mut r = Request::default();
-    r.path = path.into_inner();
-
-    match method {
-        Method::GET => {
-            r.operation = Operation::Read;
-        },
-        Method::POST | Method::PUT => {
-            r.operation = Operation::Write;
-            if body.len() > 0 {
-                let payload = serde_json::from_slice(&body)?;
-                r.body = Some(payload);
-            }
-        },
-        Method::DELETE => {
-            r.operation = Operation::Delete;
-        },
-        other => {
-            if other.as_str() != "LIST" {
-                return Ok(response_error(StatusCode::METHOD_NOT_ALLOWED, ""));
-            }
-            r.operation = Operation::List;
-        }
-    }
-
-    handle_request(core, &mut r)
-}
-
 pub fn init_service(cfg: &mut web::ServiceConfig) {
     sys::init_sys_service(cfg);
-    cfg.service(
-        web::scope("/v1")
-            .route("/{path:.*}", web::route().to(logical_request_handler))
-    );
+    logical::init_logical_service(cfg);
 }
 
 impl ResponseError for RvError {
@@ -173,18 +132,18 @@ pub fn response_json_ok<T: Serialize>(body: T) -> HttpResponse {
 
 pub fn handle_request(
     core: web::Data<Arc<RwLock<Core>>>,
-    req: &mut logical::Request
+    req: &mut Request
 ) -> Result<HttpResponse, RvError> {
     let core = core.read()?;
     let resp = core.handle_request(req)?;
     if resp.is_none() {
         Ok(response_ok(None))
     } else {
-        let resp_body = resp.unwrap().body;
-        if resp_body.is_none() {
+        let data = resp.unwrap().data;
+        if data.is_none() {
             Ok(response_ok(None))
         } else {
-            Ok(response_ok(resp_body.as_ref()))
+            Ok(response_ok(data.as_ref()))
         }
     }
 }

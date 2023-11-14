@@ -34,11 +34,14 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
         return Err(RvError::ErrConfigListenerNotFound);
     }
 
+    env::set_var("RUST_LOG", config.log_level.as_str());
+    env_logger::init();
+
     let (_, storage) = config.storage.iter().next().unwrap();
     let (_, listener) = config.listener.iter().next().unwrap();
 
-    env::set_var("RUST_LOG", config.log_level.as_str());
-    env_logger::init();
+    let addr = listener.address.clone();
+    log::info!("start listen, addr: {}", addr);
 
     let mut work_dir = WORK_DIR_PATH_DEFAULT.to_string();
     if !config.work_dir.is_empty() {
@@ -73,6 +76,7 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
         let log_file = OpenOptions::new()
             .read(true)
             .write(true)
+            .append(true)
             .create(true)
             .truncate(false)
             .open(log_path)
@@ -114,22 +118,19 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
     }));
 
     {
-        let mut c = core.write().unwrap();
-        c.self_ref = Some(Arc::clone(&core));
+        let mut c = core.write()?;
+        c.config(Arc::clone(&core), Some(config))?;
     }
 
     let mut http_server = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
             .app_data(web::Data::new(Arc::clone(&core)))
-            .app_data(web::Data::new(Arc::clone(&core)))
             .configure(http::init_service)
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
     .on_connect(http::request_on_connect_handler);
 
-    let addr = listener.address.clone();
-    log::info!("start listen, addr: {}", addr);
     http_server = http_server.bind(addr)?;
 
     log::info!("rusty_vault server starts, waiting for request...");
