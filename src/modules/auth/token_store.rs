@@ -354,6 +354,7 @@ impl TokenStoreInner {
             return Err(RvError::ErrRequestClientTokenMissing);
         }
 
+        log::debug!("check token: {}", token);
         let te = self.lookup(token)?;
         if te.is_none() {
             return Err(RvError::ErrPermissionDenied);

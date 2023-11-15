@@ -9,7 +9,10 @@ use actix_web::{
     http::{
         StatusCode
     },
-    web, HttpResponse, ResponseError
+    cookie::{
+        Cookie,
+    },
+    web, HttpRequest, HttpResponse, ResponseError
 };
 use serde::{Serialize};
 use serde_json::{json, Map, Value};
@@ -26,6 +29,8 @@ use crate::{
 
 pub mod sys;
 pub mod logical;
+
+pub const AUTH_COOKIE_NAME: &str = "token";
 
 #[derive(Debug, Clone)]
 pub struct TlsClientInfo {
@@ -105,6 +110,14 @@ impl ResponseError for RvError {
     }
 }
 
+pub fn request_auth(req: &HttpRequest) -> Request {
+    let mut r = Request::default();
+    if let Some(token) = req.cookie(AUTH_COOKIE_NAME) {
+        r.client_token = token.value().to_string();
+    }
+    r
+}
+
 pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
     if msg.len() == 0 {
         HttpResponse::build(status).finish()
@@ -114,20 +127,32 @@ pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
     }
 }
 
-pub fn response_ok(body: Option<&Map<String, Value>>) -> HttpResponse {
+pub fn response_ok(cookie: Option<Cookie>, body: Option<&Map<String, Value>>) -> HttpResponse {
     if body.is_none() {
-        HttpResponse::NoContent().finish()
+        let mut resp = HttpResponse::NoContent();
+        if cookie.is_some() {
+            resp.cookie(cookie.unwrap());
+        }
+        resp.finish()
     } else {
-        HttpResponse::Ok().json(body.as_ref().unwrap())
+        let mut resp = HttpResponse::Ok();
+        if cookie.is_some() {
+            resp.cookie(cookie.unwrap());
+        }
+        resp.json(body.as_ref().unwrap())
     }
 }
 
-pub fn response_json<T: Serialize>(status: StatusCode, body: T) -> HttpResponse {
-    HttpResponse::build(status).json(body)
+pub fn response_json<T: Serialize>(status: StatusCode, cookie: Option<Cookie>, body: T) -> HttpResponse {
+    let mut resp = HttpResponse::build(status);
+    if cookie.is_some() {
+        resp.cookie(cookie.unwrap());
+    }
+    resp.json(body)
 }
 
-pub fn response_json_ok<T: Serialize>(body: T) -> HttpResponse {
-    response_json(StatusCode::OK, body)
+pub fn response_json_ok<T: Serialize>(cookie: Option<Cookie>, body: T) -> HttpResponse {
+    response_json(StatusCode::OK, cookie, body)
 }
 
 pub fn handle_request(
@@ -137,13 +162,13 @@ pub fn handle_request(
     let core = core.read()?;
     let resp = core.handle_request(req)?;
     if resp.is_none() {
-        Ok(response_ok(None))
+        Ok(response_ok(None, None))
     } else {
         let data = resp.unwrap().data;
         if data.is_none() {
-            Ok(response_ok(None))
+            Ok(response_ok(None, None))
         } else {
-            Ok(response_ok(data.as_ref()))
+            Ok(response_ok(None, data.as_ref()))
         }
     }
 }
