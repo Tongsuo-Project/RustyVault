@@ -9,10 +9,11 @@ use serde::{Serialize, Deserialize};
 use serde_json::{json};
 use crate::{
     core::{Core, SealConfig},
-    logical::{Operation, Request},
+    logical::{Operation},
     http::{
         //Connection,
         handle_request,
+        request_auth,
         response_error,
         response_ok,
         response_json_ok,
@@ -75,7 +76,7 @@ fn response_seal_status(
         progress: progress,
     };
 
-    Ok(response_json_ok(resp))
+    Ok(response_json_ok(None, resp))
 }
 
 async fn sys_init_get_request_handler(
@@ -85,7 +86,7 @@ async fn sys_init_get_request_handler(
     //let conn = req.conn_data::<Connection>().unwrap();
     let core = core.read()?;
     let inited = core.inited()?;
-    Ok(response_ok(Some(json!({
+    Ok(response_ok(None, Some(json!({
         "initialized": inited
     }).as_object().unwrap())))
 }
@@ -109,7 +110,7 @@ async fn sys_init_put_request_handler(
         root_token: result.root_token,
     };
 
-    Ok(response_json_ok(resp))
+    Ok(response_json_ok(None, resp))
 }
 
 async fn sys_seal_status_request_handler(
@@ -125,7 +126,7 @@ async fn sys_seal_request_handler(
 ) -> Result<HttpResponse, RvError> {
     let mut core = core.write()?;
     core.seal("")?;
-    Ok(response_ok(None))
+    Ok(response_ok(None, None))
 }
 
 async fn sys_unseal_request_handler(
@@ -146,17 +147,18 @@ async fn sys_unseal_request_handler(
 }
 
 async fn sys_list_mounts_request_handler(
-    _req: HttpRequest,
+    req: HttpRequest,
     core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
-    let mut r = Request::new("sys/mounts");
+    let mut r = request_auth(&req);
+    r.path = "sys/mounts".to_string();
     r.operation = Operation::Read;
 
     handle_request(core, &mut r)
 }
 
 async fn sys_mount_request_handler(
-    _req: HttpRequest,
+    req: HttpRequest,
     path: web::Path<String>,
     body: web::Bytes,
     core: web::Data<Arc<RwLock<Core>>>
@@ -168,7 +170,7 @@ async fn sys_mount_request_handler(
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 
-    let mut r = Request::default();
+    let mut r = request_auth(&req);
     r.path = "sys/mounts/".to_owned() + mount_path.as_str();
     r.operation = Operation::Write;
     r.body = Some(payload);
@@ -177,7 +179,7 @@ async fn sys_mount_request_handler(
 }
 
 async fn sys_unmount_request_handler(
-    _req: HttpRequest,
+    req: HttpRequest,
     path: web::Path<String>,
     core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
@@ -186,7 +188,7 @@ async fn sys_unmount_request_handler(
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 
-    let mut r = Request::default();
+    let mut r = request_auth(&req);
     r.path = "sys/mounts/".to_owned() + mount_path.as_str();
     r.operation = Operation::Delete;
 
@@ -194,14 +196,14 @@ async fn sys_unmount_request_handler(
 }
 
 async fn sys_remount_request_handler(
-    _req: HttpRequest,
+    req: HttpRequest,
     body: web::Bytes,
     core: web::Data<Arc<RwLock<Core>>>
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<RemountRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
 
-    let mut r = Request::new("sys/remount");
+    let mut r = request_auth(&req);
     r.operation = Operation::Write;
     r.body = Some(payload);
 

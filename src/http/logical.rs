@@ -1,26 +1,34 @@
 use std::{
     sync::{Arc, RwLock},
     collections::HashMap,
+    time::Duration,
 };
 use actix_web::{
     http::{
         Method, StatusCode
     },
+    cookie::{
+        Cookie,
+        time::{OffsetDateTime}
+    },
     web, HttpRequest, HttpResponse
 };
 use serde::{Serialize, Deserialize};
 use serde_json::{Value};
+use humantime::parse_duration;
 use crate::{
     core::{Core},
-    logical::{Operation, Request, Response},
+    logical::{Operation, Response},
     http::{
         Connection,
+        request_auth,
         response_error,
         response_ok,
         response_json_ok,
     },
     errors::RvError,
 };
+use super::AUTH_COOKIE_NAME;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Auth {
@@ -62,8 +70,18 @@ async fn logical_request_handler(
     let conn = req.conn_data::<Connection>().unwrap();
     log::debug!("logical request, connection info: {:?}, method: {:?}, path: {:?}", conn, method, path);
 
-    let mut r = Request::default();
-    r.path = path.into_inner();
+    let mut r = request_auth(&req);
+    let path = path.into_inner();
+    r.path = path.clone();
+
+    let mut v1_path = "";
+    if let Some(p) = path.as_str().strip_prefix("/v1/") {
+        v1_path = p;
+    }
+
+    if v1_path == "" {
+        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    }
 
     match method {
         Method::GET => {
@@ -90,21 +108,44 @@ async fn logical_request_handler(
     let core = core.read()?;
     let resp = core.handle_request(&mut r)?;
 
-    println!("resp: {:?}", resp);
     if r.operation == Operation::Read && resp.is_none() {
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 
-    response_logical(&resp.unwrap())
+    response_logical(&resp.unwrap(), &v1_path)
 }
 
-fn response_logical(resp: &Response) -> Result<HttpResponse, RvError> {
+fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError> {
     let mut logical_resp = LogicalResponse::default();
+    let mut cookie: Option<Cookie> = None;
 
     if let Some(ref secret) = &resp.secret {
         logical_resp.lease_id = secret.lease_id.clone();
         logical_resp.renewable = secret.lease.renewable ;
         logical_resp.lease_duration = secret.lease.ttl.as_secs();
+    }
+
+    if let Some(ref auth) = &resp.auth {
+        let mut expire_duration = parse_duration("365d")?;
+        if logical_resp.lease_duration != 0 {
+            expire_duration = Duration::from_secs(logical_resp.lease_duration);
+        }
+
+        if !path.starts_with("auth/token/") {
+            let expire_time = OffsetDateTime::now_utc() + expire_duration;
+            cookie = Some(Cookie::build(AUTH_COOKIE_NAME, &auth.client_token)
+                .path("/")
+                .expires(expire_time)
+                .finish());
+        }
+
+        logical_resp.auth = Some(Auth {
+            client_token: auth.client_token.clone(),
+            policies: auth.policies.clone(),
+            metadata: auth.metadata.clone(),
+            lease_duration: auth.ttl.as_secs(),
+            renewable: auth.renewable(),
+        });
     }
 
     if let Some(ref data) = &resp.data {
@@ -113,10 +154,10 @@ fn response_logical(resp: &Response) -> Result<HttpResponse, RvError> {
                             .map(|(key, value)| (key.clone(), value.clone()))
                             .collect();
 
-        return Ok(response_json_ok(logical_resp));
+        return Ok(response_json_ok(cookie, logical_resp));
     }
 
-    return Ok(response_ok(None));
+    return Ok(response_ok(cookie, None));
 }
 
 pub fn init_logical_service(cfg: &mut web::ServiceConfig) {

@@ -246,6 +246,12 @@ impl Core {
 
     pub fn unseal(&mut self, key: &[u8]) -> Result<bool, RvError> {
         let barrier = Arc::clone(&self.barrier);
+
+        let inited = barrier.inited()?;
+        if !inited {
+            return Err(RvError::ErrBarrierNotInit);
+        }
+
         let sealed = barrier.sealed()?;
         if !sealed {
             return Err(RvError::ErrBarrierUnsealed);
@@ -296,6 +302,12 @@ impl Core {
 
     pub fn seal(&mut self, _token: &str) -> Result<(), RvError> {
         let barrier = Arc::clone(&self.barrier);
+
+        let inited = barrier.inited()?;
+        if !inited {
+            return Err(RvError::ErrBarrierNotInit);
+        }
+
         let sealed = barrier.sealed()?;
         if sealed {
             return Err(RvError::ErrBarrierSealed);
