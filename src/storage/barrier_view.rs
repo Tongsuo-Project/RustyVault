@@ -49,6 +49,13 @@ impl BarrierView {
         }
     }
 
+    pub fn new_sub_view(&self, prefix: &str) -> Self {
+        Self {
+            barrier: Arc::clone(&self.barrier),
+            prefix: self.expand_key(prefix),
+        }
+    }
+
     pub fn get_keys(&self) -> Result<Vec<String>, RvError> {
         let mut paths = vec!["".to_string()];
         let mut keys = Vec::new();

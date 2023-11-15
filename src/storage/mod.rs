@@ -19,3 +19,12 @@ pub struct StorageEntry {
     pub key: String,
     pub value: Vec<u8>,
 }
+
+impl Default for StorageEntry {
+    fn default() -> Self {
+        Self {
+            key: String::new(),
+            value: Vec::new(),
+        }
+    }
+}

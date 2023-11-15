@@ -11,7 +11,7 @@ struct MountEntry {
     backend: Arc<dyn Backend>,
     view: Arc<BarrierView>,
     root_paths: Trie<String, bool>,
-    login_paths: Trie<String, bool>,
+    unauth_paths: Trie<String, bool>,
 }
 
 pub struct Router {
@@ -39,7 +39,7 @@ impl Router {
             return Err(RvError::ErrRouterMountConflict);
         }
 
-        let login_paths = backend.get_login_paths().unwrap_or(Arc::new(Vec::new()));
+        let unauth_paths = backend.get_unauth_paths().unwrap_or(Arc::new(Vec::new()));
         let root_paths = backend.get_root_paths().unwrap_or(Arc::new(Vec::new()));
 
         let me = MountEntry {
@@ -48,7 +48,7 @@ impl Router {
             salt: salt.to_string(),
             view: Arc::new(view),
             root_paths: new_radix_from_paths(root_paths.as_ref()),
-            login_paths: new_radix_from_paths(login_paths.as_ref()),
+            unauth_paths: new_radix_from_paths(unauth_paths.as_ref()),
         };
 
         root.insert(prefix.to_string(), me);
@@ -110,7 +110,7 @@ impl Router {
         }
     }
 
-    pub fn is_login_path(&self, path: &str) -> Result<bool, RvError> {
+    pub fn is_unauth_path(&self, path: &str) -> Result<bool, RvError> {
         let root = self.root.read()?;
 
         let entry = root.get_ancestor(path);
@@ -123,17 +123,17 @@ impl Router {
         let me = entry.value().unwrap();
         let remain = path.replacen(mount, "", 1);
 
-        let login_entry = me.login_paths.get_ancestor(remain.as_str());
-        if login_entry.is_none() {
+        let unauth_entry = me.unauth_paths.get_ancestor(remain.as_str());
+        if unauth_entry.is_none() {
             return Ok(false);
         }
 
-        let login_path_match = login_entry.as_ref().unwrap().key().unwrap();
-        if *login_entry.as_ref().unwrap().value().unwrap() {
-            return Ok(remain.starts_with(login_path_match));
+        let unauth_path_match = unauth_entry.as_ref().unwrap().key().unwrap();
+        if *unauth_entry.as_ref().unwrap().value().unwrap() {
+            return Ok(remain.starts_with(unauth_path_match));
         }
 
-        return Ok(remain == *login_path_match);
+        return Ok(remain == *unauth_path_match);
     }
 
     pub fn is_root_path(&self, path: &str) -> Result<bool, RvError> {
@@ -161,9 +161,17 @@ impl Router {
 
         return Ok(remain == *root_path_match);
     }
+
+    pub fn as_handler(&self) -> &dyn Handler {
+        self
+    }
 }
 
 impl Handler for Router {
+    fn name(&self) -> String {
+        "core_router".to_string()
+    }
+
     fn route(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         if !req.path.contains('/') {
             req.path.push('/');
@@ -171,8 +179,8 @@ impl Handler for Router {
 
         let original = req.path.clone();
         let mut original_conn = None;
-        let is_login_path = self.is_login_path(req.path.as_str())?;
-        if !is_login_path {
+        let is_unauth_path = self.is_unauth_path(req.path.as_str())?;
+        if !is_unauth_path {
             original_conn = req.connection.take();
         }
         let client_token = req.client_token.clone();

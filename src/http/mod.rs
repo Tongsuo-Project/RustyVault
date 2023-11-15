@@ -7,7 +7,10 @@ use actix_web::{
     dev::Extensions,
     rt::net::TcpStream,
     http::{
-        Method, StatusCode
+        StatusCode
+    },
+    cookie::{
+        Cookie,
     },
     web, HttpRequest, HttpResponse, ResponseError
 };
@@ -19,13 +22,15 @@ use openssl::{
 //    ssl::{SslAcceptor, SslVerifyMode, SslFiletype, SslMethod}
 };
 use crate::{
-    logical,
     core::Core,
-    logical::{Operation, Request},
+    logical::{Request},
     errors::RvError
 };
 
 pub mod sys;
+pub mod logical;
+
+pub const AUTH_COOKIE_NAME: &str = "token";
 
 #[derive(Debug, Clone)]
 pub struct TlsClientInfo {
@@ -92,50 +97,9 @@ pub fn request_on_connect_handler(conn: &dyn Any, ext: &mut Extensions) {
     }
 }
 
-async fn logical_request_handler(
-    req: HttpRequest,
-    body: web::Bytes,
-    method: Method,
-    path: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>
-) -> Result<HttpResponse, RvError> {
-    let conn = req.conn_data::<Connection>().unwrap();
-    log::debug!("logical request, connection info: {:?}, method: {:?}, path: {:?}", conn, method, path);
-
-    let mut r = Request::default();
-    r.path = path.into_inner();
-
-    match method {
-        Method::GET => {
-            r.operation = Operation::Read;
-        },
-        Method::POST | Method::PUT => {
-            r.operation = Operation::Write;
-            if body.len() > 0 {
-                let payload = serde_json::from_slice(&body)?;
-                r.body = Some(payload);
-            }
-        },
-        Method::DELETE => {
-            r.operation = Operation::Delete;
-        },
-        other => {
-            if other.as_str() != "LIST" {
-                return Ok(response_error(StatusCode::METHOD_NOT_ALLOWED, ""));
-            }
-            r.operation = Operation::List;
-        }
-    }
-
-    handle_request(core, &mut r)
-}
-
 pub fn init_service(cfg: &mut web::ServiceConfig) {
     sys::init_sys_service(cfg);
-    cfg.service(
-        web::scope("/v1")
-            .route("/{path:.*}", web::route().to(logical_request_handler))
-    );
+    logical::init_logical_service(cfg);
 }
 
 impl ResponseError for RvError {
@@ -144,6 +108,14 @@ impl ResponseError for RvError {
         let err_json = json!({ "error": self.to_string() });
         HttpResponse::InternalServerError().json(err_json)
     }
+}
+
+pub fn request_auth(req: &HttpRequest) -> Request {
+    let mut r = Request::default();
+    if let Some(token) = req.cookie(AUTH_COOKIE_NAME) {
+        r.client_token = token.value().to_string();
+    }
+    r
 }
 
 pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
@@ -155,36 +127,48 @@ pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
     }
 }
 
-pub fn response_ok(body: Option<&Map<String, Value>>) -> HttpResponse {
+pub fn response_ok(cookie: Option<Cookie>, body: Option<&Map<String, Value>>) -> HttpResponse {
     if body.is_none() {
-        HttpResponse::NoContent().finish()
+        let mut resp = HttpResponse::NoContent();
+        if cookie.is_some() {
+            resp.cookie(cookie.unwrap());
+        }
+        resp.finish()
     } else {
-        HttpResponse::Ok().json(body.as_ref().unwrap())
+        let mut resp = HttpResponse::Ok();
+        if cookie.is_some() {
+            resp.cookie(cookie.unwrap());
+        }
+        resp.json(body.as_ref().unwrap())
     }
 }
 
-pub fn response_json<T: Serialize>(status: StatusCode, body: T) -> HttpResponse {
-    HttpResponse::build(status).json(body)
+pub fn response_json<T: Serialize>(status: StatusCode, cookie: Option<Cookie>, body: T) -> HttpResponse {
+    let mut resp = HttpResponse::build(status);
+    if cookie.is_some() {
+        resp.cookie(cookie.unwrap());
+    }
+    resp.json(body)
 }
 
-pub fn response_json_ok<T: Serialize>(body: T) -> HttpResponse {
-    response_json(StatusCode::OK, body)
+pub fn response_json_ok<T: Serialize>(cookie: Option<Cookie>, body: T) -> HttpResponse {
+    response_json(StatusCode::OK, cookie, body)
 }
 
 pub fn handle_request(
     core: web::Data<Arc<RwLock<Core>>>,
-    req: &mut logical::Request
+    req: &mut Request
 ) -> Result<HttpResponse, RvError> {
     let core = core.read()?;
     let resp = core.handle_request(req)?;
     if resp.is_none() {
-        Ok(response_ok(None))
+        Ok(response_ok(None, None))
     } else {
-        let resp_body = resp.unwrap().body;
-        if resp_body.is_none() {
-            Ok(response_ok(None))
+        let data = resp.unwrap().data;
+        if data.is_none() {
+            Ok(response_ok(None, None))
         } else {
-            Ok(response_ok(resp_body.as_ref()))
+            Ok(response_ok(None, data.as_ref()))
         }
     }
 }

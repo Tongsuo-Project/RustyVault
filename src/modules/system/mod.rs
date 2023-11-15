@@ -428,7 +428,7 @@ impl SystemBackend {
 }
 
 impl SystemModule {
-    pub fn new() -> Self {
+    pub fn new(_core: Arc<RwLock<Core>>) -> Self {
         Self {
             name: "system".to_string(),
         }
@@ -440,7 +440,7 @@ impl Module for SystemModule {
         return self.name.clone();
     }
 
-    fn init(&self, core: &Core) -> Result<(), RvError> {
+    fn setup(&mut self, core: &Core) -> Result<(), RvError> {
         let sys_backend_new_func = |c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
             let mut sys_backend = SystemBackend::new_backend(c);
             sys_backend.init()?;
@@ -449,7 +449,7 @@ impl Module for SystemModule {
         core.add_logical_backend("system", Arc::new(sys_backend_new_func))
     }
 
-    fn cleanup(&self, core: &Core) -> Result<(), RvError> {
-        core.remove_logical_backend("system")
+    fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
+        core.delete_logical_backend("system")
     }
 }
