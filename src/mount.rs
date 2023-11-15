@@ -19,6 +19,23 @@ lazy_static! {
         "auth/",
         "sys/",
     ];
+
+    static ref DEFAULT_CORE_MOUNTS: Vec<MountEntry> = vec![
+        MountEntry {
+            tainted: false,
+            uuid: util::generate_uuid(),
+            path: "secret/".to_string(),
+            logical_type: "kv".to_string(),
+            description: "key/value secret storage".to_string(),
+        },
+        MountEntry {
+            tainted: false,
+            uuid: util::generate_uuid(),
+            path: "sys/".to_string(),
+            logical_type: "system".to_string(),
+            description: "system endpoints used for control, policy and debugging".to_string(),
+        }
+    ];
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -87,45 +104,34 @@ impl MountTable {
                 return false;
             }
         }
-        /*
-        let mut mounts = self.entries.write()?;
-        if let Some(entry) = mounts.get_mut(path) {
-            entry.tainted = value;
-            return true;
-        }
-        */
         return false;
     }
 
-    pub fn set_default(&self) -> Result<(), RvError> {
-        let kv_entry = MountEntry {
-            tainted: false,
-            uuid: util::generate_uuid(),
-            path: "secret/".to_string(),
-            logical_type: "kv".to_string(),
-            description: "key/value secret storage".to_string(),
-        };
-        let sys_entry = MountEntry {
-            tainted: false,
-            uuid: util::generate_uuid(),
-            path: "sys/".to_string(),
-            logical_type: "system".to_string(),
-            description: "system endpoints used for control, policy and debugging".to_string(),
-        };
-
+    pub fn set_default(&self, mounts: Vec<MountEntry>) -> Result<(), RvError> {
         let mut table = self.entries.write()?;
-        table.insert(kv_entry.path.clone(), kv_entry);
-        table.insert(sys_entry.path.clone(), sys_entry);
+        for mount in mounts {
+            table.insert(mount.path.clone(), mount);
+        }
         Ok(())
     }
 
-    pub fn load(&self, storage: &dyn Storage) -> Result<(), RvError> {
+    pub fn load_or_default(&self, storage: &dyn Storage) -> Result<(), RvError> {
         let entry = storage.get(CORE_MOUNT_CONFIG_PATH)?;
         if entry.is_none() {
-            self.set_default()?;
+            self.set_default(DEFAULT_CORE_MOUNTS.to_vec())?;
             self.persist(CORE_MOUNT_CONFIG_PATH, storage)?;
             return Ok(());
         }
+
+        self.load(storage, CORE_MOUNT_CONFIG_PATH)
+    }
+
+    pub fn load(&self, storage: &dyn Storage, path: &str) -> Result<(), RvError> {
+        let entry = storage.get(path)?;
+        if entry.is_none() {
+            return Err(RvError::ErrConfigLoadFailed);
+        }
+
         let new_table: MountTable = serde_json::from_slice(entry.unwrap().value.as_slice())?;
         let mut new_entries = new_table.entries.write()?;
         let mut entries = self.entries.write()?;
@@ -197,11 +203,14 @@ impl Core {
             return Err(RvError::ErrMountNotMatch);
         }
 
+        let view = self.router.matching_view(&path)?;
+
         self.taint_mount_entry(&path)?;
+
+        self.router.taint(&path)?;
 
         self.router.unmount(&path)?;
 
-        let view = self.router.matching_view(&path)?;
         if view.is_some() {
             view.unwrap().clear()?;
         }
@@ -263,7 +272,7 @@ impl Core {
         Ok(())
     }
 
-    pub fn setup_mounts(&self) -> Result<(), RvError> {
+    pub fn setup_mounts(&mut self) -> Result<(), RvError> {
         let mounts = self.mounts.entries.read()?;
 
         for entry in mounts.values() {
@@ -279,6 +288,10 @@ impl Core {
 
             self.router.mount(backend, &entry.path, &entry.uuid, view)?;
 
+            if entry.logical_type.as_str() == "system" {
+                self.system_view = Some(Arc::new(BarrierView::new(self.barrier.clone(), &barrier_path)));
+            }
+
             if entry.tainted {
                 self.router.taint(&entry.path)?;
             }
@@ -288,11 +301,12 @@ impl Core {
     }
 
     pub fn unload_mounts(&mut self) -> Result<(), RvError> {
-        self.mounts = Arc::new(MountTable::new());
         let router = Arc::new(Router::new());
-        //self.router = Arc::new(Router::new());
         self.router = Arc::clone(&router);
-        self.handlers[0] = router;
+        let mut handlers = self.handlers.write()?;
+        handlers[0] = router;
+        self.mounts = Arc::new(MountTable::new());
+        self.system_view = None;
         Ok(())
     }
 

@@ -1,22 +1,36 @@
 use std::time::{SystemTime, Duration};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lease {
+    #[serde(rename="lease")]
     pub ttl: Duration,
     pub max_ttl: Duration,
     pub renewable: bool,
+    #[serde(skip)]
     pub increment: Duration,
-    pub issue_time: SystemTime,
+    //pub issue_time: SystemTime,
+    #[serde(skip)]
+    pub issue_time: Option<SystemTime>,
 }
 
-impl Lease {
-    pub fn new() -> Self {
+impl Default for Lease {
+    fn default() -> Self {
         Self {
             ttl: Duration::new(0, 0),
             max_ttl: Duration::new(0, 0),
             renewable: true,
             increment: Duration::new(0, 0),
-            issue_time: SystemTime::now(),
+            //issue_time: SystemTime::now(),
+            issue_time: Some(SystemTime::now()),
+        }
+    }
+}
+
+impl Lease {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
         }
     }
 
@@ -24,11 +38,20 @@ impl Lease {
         self.ttl
     }
 
+    pub fn renewable(&self) -> bool {
+        return self.renewable;
+    }
+
     pub fn enabled(&self) -> bool {
         self.ttl.as_secs() > 0
     }
 
     pub fn expiration_time(&self) -> SystemTime {
-        self.issue_time + self.max_ttl
+        //self.issue_time + self.max_ttl
+        if self.issue_time.is_some() {
+            self.issue_time.unwrap() + self.ttl
+        } else {
+            SystemTime::now() + self.ttl
+        }
     }
 }

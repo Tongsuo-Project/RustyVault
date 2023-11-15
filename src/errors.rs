@@ -12,12 +12,16 @@ pub enum RvError {
     ErrConfigStorageNotFound,
     #[error("Config listener not found.")]
     ErrConfigListenerNotFound,
+    #[error("Core is not initialized.")]
+    ErrCoreNotInit,
     #[error("Core logical backend already exists.")]
     ErrCoreLogicalBackendExist,
     #[error("Core logical backend does not exist.")]
     ErrCoreLogicalBackendNoExist,
     #[error("Core router not handling.")]
     ErrCoreRouterNotHandling,
+    #[error("Core handler already exists.")]
+    ErrCoreHandlerExist,
     #[error("Core seal config is invalid.")]
     ErrCoreSealConfigInvalid,
     #[error("Core seal config not found.")]
@@ -54,6 +58,8 @@ pub enum RvError {
     ErrRouterMountConflict,
     #[error("Router mount not found.")]
     ErrRouterMountNotFound,
+    #[error("Mount path is failed, cannot mount.")]
+    ErrMountFailed,
     #[error("Mount path is protected, cannot mount.")]
     ErrMountPathProtected,
     #[error("Mount path already exists.")]
@@ -66,6 +72,8 @@ pub enum RvError {
     ErrMountNotMatch,
     #[error("Logical backend path not supported.")]
     ErrLogicalPathUnsupported,
+    #[error("Logical backend operation not supported.")]
+    ErrLogicalOperationUnsupported,
     #[error("Request is not ready.")]
     ErrRequestNotReady,
     #[error("No data is available for the request.")]
@@ -74,12 +82,30 @@ pub enum RvError {
     ErrRequestNoDataField,
     #[error("Request is invalid.")]
     ErrRequestInvalid,
+    #[error("Request client token is missing.")]
+    ErrRequestClientTokenMissing,
+    #[error("Handler is default.")]
+    ErrHandlerDefault,
     #[error("Module kv data field is missing.")]
     ErrModuleKvDataFieldMissing,
     #[error("Rust downcast failed.")]
     ErrRustDowncastFailed,
     #[error("Shamir share count invalid.")]
     ErrShamirShareCountInvalid,
+    #[error("Module conflict.")]
+    ErrModuleConflict,
+    #[error("Module is not init.")]
+    ErrModuleNotInit,
+    #[error("Auth token is not found.")]
+    ErrAuthTokenNotFound,
+    #[error("Auth token id is invalid.")]
+    ErrAuthTokenIdInvalid,
+    #[error("Lease is not found.")]
+    ErrLeaseNotFound,
+    #[error("Lease is not renewable.")]
+    ErrLeaseNotRenewable,
+    #[error("Permission denied.")]
+    ErrPermissionDenied,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -110,6 +136,21 @@ pub enum RvError {
         #[from]
         source: hcl::Error
     },
+    #[error("Some humantime error happened, {:?}", .source)]
+    Humantime {
+        #[from]
+        source: humantime::DurationError
+    },
+    #[error("Some system_time error happened, {:?}", .source)]
+    SystemTimeError {
+        #[from]
+        source: std::time::SystemTimeError
+    },
+    #[error("Some delay_timer error happened, {:?}", .source)]
+    TaskError {
+        #[from]
+        source: delay_timer::error::TaskError
+    },
     #[error("RwLock was poisoned (reading)")]
     ErrRwLockReadPoison,
     #[error("RwLock was poisoned (writing)")]
@@ -124,9 +165,12 @@ impl PartialEq for RvError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (RvError::ErrCoreLogicalBackendExist, RvError::ErrCoreLogicalBackendExist)
+            | (RvError::ErrCoreNotInit, RvError::ErrCoreNotInit)
             | (RvError::ErrCoreLogicalBackendNoExist, RvError::ErrCoreLogicalBackendNoExist)
             | (RvError::ErrCoreSealConfigInvalid, RvError::ErrCoreSealConfigInvalid)
             | (RvError::ErrCoreSealConfigNotFound, RvError::ErrCoreSealConfigNotFound)
+            | (RvError::ErrCoreRouterNotHandling, RvError::ErrCoreRouterNotHandling)
+            | (RvError::ErrCoreHandlerExist, RvError::ErrCoreHandlerExist)
             | (RvError::ErrPhysicalConfigItemMissing, RvError::ErrPhysicalConfigItemMissing)
             | (RvError::ErrPhysicalTypeInvalid, RvError::ErrPhysicalTypeInvalid)
             | (RvError::ErrPhysicalBackendPrefixInvalid, RvError::ErrPhysicalBackendPrefixInvalid)
@@ -143,16 +187,20 @@ impl PartialEq for RvError {
             | (RvError::ErrBarrierKeyGenerationFailed, RvError::ErrBarrierKeyGenerationFailed)
             | (RvError::ErrRouterMountConflict, RvError::ErrRouterMountConflict)
             | (RvError::ErrRouterMountNotFound, RvError::ErrRouterMountNotFound)
+            | (RvError::ErrMountFailed, RvError::ErrMountFailed)
             | (RvError::ErrMountPathProtected, RvError::ErrMountPathProtected)
             | (RvError::ErrMountPathExist, RvError::ErrMountPathExist)
             | (RvError::ErrMountTableNotFound, RvError::ErrMountTableNotFound)
             | (RvError::ErrMountTableNotReady, RvError::ErrMountTableNotReady)
             | (RvError::ErrMountNotMatch, RvError::ErrMountNotMatch)
-            | (RvError::ErrCoreRouterNotHandling, RvError::ErrCoreRouterNotHandling)
+            | (RvError::ErrLogicalPathUnsupported, RvError::ErrLogicalPathUnsupported)
+            | (RvError::ErrLogicalOperationUnsupported, RvError::ErrLogicalOperationUnsupported)
             | (RvError::ErrRequestNotReady, RvError::ErrRequestNotReady)
             | (RvError::ErrRequestNoData, RvError::ErrRequestNoData)
             | (RvError::ErrRequestNoDataField, RvError::ErrRequestNoDataField)
             | (RvError::ErrRequestInvalid, RvError::ErrRequestInvalid)
+            | (RvError::ErrRequestClientTokenMissing, RvError::ErrRequestClientTokenMissing)
+            | (RvError::ErrHandlerDefault, RvError::ErrHandlerDefault)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
             | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
             | (RvError::ErrShamirShareCountInvalid, RvError::ErrShamirShareCountInvalid)
@@ -162,6 +210,13 @@ impl PartialEq for RvError {
             | (RvError::ErrConfigLoadFailed, RvError::ErrConfigLoadFailed)
             | (RvError::ErrConfigStorageNotFound, RvError::ErrConfigStorageNotFound)
             | (RvError::ErrConfigListenerNotFound, RvError::ErrConfigListenerNotFound)
+            | (RvError::ErrModuleConflict, RvError::ErrModuleConflict)
+            | (RvError::ErrModuleNotInit, RvError::ErrModuleNotInit)
+            | (RvError::ErrAuthTokenNotFound, RvError::ErrAuthTokenNotFound)
+            | (RvError::ErrAuthTokenIdInvalid, RvError::ErrAuthTokenIdInvalid)
+            | (RvError::ErrLeaseNotFound, RvError::ErrLeaseNotFound)
+            | (RvError::ErrLeaseNotRenewable, RvError::ErrLeaseNotRenewable)
+            | (RvError::ErrPermissionDenied, RvError::ErrPermissionDenied)
             | (RvError::ErrUnknown, RvError::ErrUnknown)
             => true,
             _ => false,

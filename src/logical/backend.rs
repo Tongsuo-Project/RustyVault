@@ -6,15 +6,17 @@ use crate::errors::RvError;
 use super::request::Request;
 use super::response::Response;
 use super::path::Path;
+use super::secret::Secret;
 use super::{Backend, Operation};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LogicalBackend {
     pub paths: Vec<Arc<Path>>,
     pub paths_re: Vec<Regex>,
     pub root_paths: Arc<Vec<String>>,
-    pub login_paths: Arc<Vec<String>>,
+    pub unauth_paths: Arc<Vec<String>>,
     pub help: String,
+    pub secrets: Vec<Arc<Secret>>,
 }
 
 impl Backend for LogicalBackend {
@@ -48,8 +50,8 @@ impl Backend for LogicalBackend {
         Ok(())
     }
 
-    fn get_login_paths(&self) -> Option<Arc<Vec<String>>> {
-        Some(self.login_paths.clone())
+    fn get_unauth_paths(&self) -> Option<Arc<Vec<String>>> {
+        Some(self.unauth_paths.clone())
     }
 
     fn get_root_paths(&self) -> Option<Arc<Vec<String>>> {
@@ -77,19 +79,27 @@ impl Backend for LogicalBackend {
             req.match_path = Some(path.clone());
             for operation in &path.operations {
                 if operation.op == req.operation {
+                    return operation.handle_request(self, req);
+                    /*
                     let resp = operation.handle_request(self, req)?;
                     if resp.is_none() {
                         return Ok(Some(Response::new()));
                     }
 
                     return Ok(resp);
+                    */
                 }
             }
 
-            return Ok(None);
+            //return Ok(None);
+            return Err(RvError::ErrLogicalOperationUnsupported);
         }
 
         Err(RvError::ErrLogicalPathUnsupported)
+    }
+
+    fn secret(&self, key: &str) -> Option<&Arc<Secret>> {
+        self.secrets.iter().find(|s| s.secret_type == key)
     }
 }
 
@@ -99,8 +109,9 @@ impl LogicalBackend {
             paths: Vec::new(),
             paths_re: Vec::new(),
             root_paths: Arc::new(Vec::new()),
-            login_paths: Arc::new(Vec::new()),
+            unauth_paths: Arc::new(Vec::new()),
             help: String::new(),
+            secrets: Vec::new(),
         }
     }
 
@@ -142,14 +153,19 @@ macro_rules! new_logical_backend_internal {
             $object.paths.push(Arc::new(new_path!($path)));
         )*
     };
-    (@object $object:ident login_paths: [$($login:expr),*]) => {
-        $object.login_paths = Arc::new(vec![$($login.to_string()),*]);
+    (@object $object:ident unauth_paths: [$($unauth:expr),*]) => {
+        $object.unauth_paths = Arc::new(vec![$($unauth.to_string()),*]);
     };
     (@object $object:ident root_paths: [$($root:expr),*]) => {
         $object.root_paths = Arc::new(vec![$($root.to_string()),*]);
     };
     (@object $object:ident help: $help:expr) => {
         $object.help = $help.to_string();
+    };
+    (@object $object:ident secrets: [$($secrets:tt),* $(,)?]) => {
+        $(
+            $object.secrets.push(Arc::new(new_secret!($secrets)));
+        )*
     };
     (@object $object:ident () $($key:ident: $value:tt),*) => {
         $(
@@ -171,9 +187,10 @@ mod test {
     use std::fs;
     use std::sync::Arc;
     use std::collections::HashMap;
+    use std::time::Duration;
     use go_defer::defer;
     use super::*;
-    use crate::{new_path, new_path_internal};
+    use crate::{new_path, new_path_internal, new_secret, new_secret_internal};
     use crate::storage::physical;
     use crate::storage::barrier_aes_gcm::AESGCMBarrier;
     use crate::logical::{Field, FieldType, PathOperation};
@@ -194,6 +211,14 @@ mod test {
         let bb = cap.get("bb");
         assert!(bb.is_some());
         assert_eq!(bb.unwrap(), "bb/cc");
+    }
+
+    pub fn renew_noop_handler(_backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+        Ok(None)
+    }
+
+    pub fn revoke_noop_handler(_backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+        Ok(None)
     }
 
     #[test]
@@ -257,7 +282,18 @@ mod test {
                     ]
                 }
             ],
-            login_paths: ["/login"],
+            secrets: [{
+                secret_type: "kv",
+                default_duration: 60,
+                renew_handler: renew_noop_handler,
+                revoke_handler: revoke_noop_handler,
+            }, {
+                secret_type: "test",
+                default_duration: 120,
+                renew_handler: renew_noop_handler,
+                revoke_handler: revoke_noop_handler,
+            }],
+            unauth_paths: ["/login"],
             root_paths: ["/"],
             help: "help content"
         });
@@ -290,8 +326,8 @@ mod test {
         assert!((logical_backend.paths[1].operations[0].handler)(&logical_backend, &mut req).is_ok());
         assert!((logical_backend.paths[1].operations[0].handler)(&logical_backend, &mut req).unwrap().is_none());
 
-        assert_eq!(logical_backend.login_paths.len(), 1);
-        assert_eq!(&logical_backend.login_paths[0], "/login");
+        assert_eq!(logical_backend.unauth_paths.len(), 1);
+        assert_eq!(&logical_backend.unauth_paths[0], "/login");
         assert_eq!(logical_backend.root_paths.len(), 1);
         assert_eq!(&logical_backend.root_paths[0], "/");
         assert_eq!(&logical_backend.help, "help content");
@@ -310,16 +346,23 @@ mod test {
         req.storage = Some(Arc::new(barrier));
         assert!(logical_backend.handle_request(&mut req).is_ok());
 
-        let login_paths = logical_backend.get_login_paths();
-        assert!(login_paths.is_some());
-        let login_paths = login_paths.as_ref().unwrap();
-        assert_eq!(login_paths.len(), 1);
-        assert_eq!(&login_paths[0], "/login");
+        let unauth_paths = logical_backend.get_unauth_paths();
+        assert!(unauth_paths.is_some());
+        let unauth_paths = unauth_paths.as_ref().unwrap();
+        assert_eq!(unauth_paths.len(), 1);
+        assert_eq!(&unauth_paths[0], "/login");
 
         let root_paths = logical_backend.get_root_paths();
         assert!(root_paths.is_some());
         let root_paths = root_paths.as_ref().unwrap();
         assert_eq!(root_paths.len(), 1);
         assert_eq!(&root_paths[0], "/");
+
+        assert_eq!(logical_backend.secrets.len(), 2);
+        assert!(logical_backend.secret("kv").is_some());
+        assert!(logical_backend.secret("test").is_some());
+        assert!(logical_backend.secret("test_no").is_none());
+        assert!(logical_backend.secret("kv").unwrap().renew(&logical_backend, &mut req).is_ok());
+        assert!(logical_backend.secret("kv").unwrap().revoke(&logical_backend, &mut req).is_ok());
     }
 }

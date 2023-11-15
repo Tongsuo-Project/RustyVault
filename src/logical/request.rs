@@ -1,11 +1,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use serde_json::{Value, Map};
-use crate::logical::connection::Connection;
-use crate::logical::secret::Secret;
-use crate::storage::{Storage, StorageEntry};
+use crate::{
+    logical::{
+        connection::Connection,
+        secret::SecretData,
+        auth::Auth,
+    },
+    storage::{Storage, StorageEntry},
+    errors::RvError,
+};
 use super::{Path, Operation};
-use crate::errors::RvError;
 
 pub struct Request {
     pub id: String,
@@ -19,7 +24,8 @@ pub struct Request {
     pub client_token: String,
     pub storage: Option<Arc<dyn Storage>>,
     pub connection: Option<Connection>,
-    pub secret: Option<Secret>,
+    pub secret: Option<SecretData>,
+    pub auth: Option<Auth>,
 }
 
 impl Default for Request {
@@ -37,6 +43,7 @@ impl Default for Request {
             storage: None,
             connection: None,
             secret: None,
+            auth: None,
         }
     }
 }
@@ -45,6 +52,42 @@ impl Request {
     pub fn new(path: &str) -> Self {
         Self {
             path: path.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_revoke_request(path: &str,
+                              secret: Option<SecretData>,
+                              data: Option<Map<String, Value>>) -> Self {
+        Self {
+            operation: Operation::Revoke,
+            path: path.to_string(),
+            secret: secret,
+            data: data,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_renew_request(path: &str,
+                             secret: Option<SecretData>,
+                             data: Option<Map<String, Value>>) -> Self {
+        Self {
+            operation: Operation::Renew,
+            path: path.to_string(),
+            secret: secret,
+            data: data,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_renew_auth_request(path: &str,
+                                  auth: Option<Auth>,
+                                  data: Option<Map<String, Value>>) -> Self {
+        Self {
+            operation: Operation::Renew,
+            path: path.to_string(),
+            auth: auth,
+            data: data,
             ..Default::default()
         }
     }
