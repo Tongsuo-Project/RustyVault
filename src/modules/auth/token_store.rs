@@ -6,7 +6,7 @@ use std::{
 };
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde_json::Value;
+use serde_json::{json, Value};
 use serde::{Serialize, Deserialize};
 use humantime::parse_duration;
 use crate::{
@@ -44,11 +44,13 @@ lazy_static! {
 
 #[derive(Serialize, Deserialize)]
 struct TokenReqData {
+    #[serde(default)]
     id: String,
     #[serde(default)]
     policies: Vec<String>,
     #[serde(default)]
     meta: HashMap<String, String>,
+    #[serde(default)]
     no_parent: bool,
     #[serde(default)]
     lease: String,
@@ -205,7 +207,7 @@ impl TokenStore {
                         }
                     },
                     operations: [
-                        {op: Operation::Read, handler: ts_inner_arc3.handle_lookup}
+                        {op: Operation::Read, handler: ts_inner_arc3.handle_lookup_self}
                     ],
                     help: "This endpoint will lookup a token and its properties."
                 },
@@ -575,7 +577,20 @@ impl TokenStoreInner {
         Ok(None)
     }
 
+    pub fn handle_lookup_self(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        if let Some(data) = req.data.as_mut() {
+            data.insert("token".to_string(), Value::String(req.client_token.clone()));
+        } else {
+            req.data = Some(json!({
+                "token": req.client_token.clone(),
+            }).as_object().unwrap().clone());
+        }
+
+        self.handle_lookup(backend, req)
+    }
+
     pub fn handle_lookup(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        log::debug!("lookup token");
         let id = req.get_data("token")?;
         let mut id = id.as_str().unwrap();
         if id == "" {
@@ -665,8 +680,30 @@ impl Handler for TokenStore {
 
         let resp = resp.as_mut().unwrap();
 
-        if !is_unauth_path && resp.secret.is_some() {
-            self.expiration.register_secret(req, resp)?;
+        if !is_unauth_path && resp.secret.is_some() && !req.path.starts_with("/sys/renew") {
+            let mut register_lease = true;
+            let me = self.router.matching_mount_entry(&req.path)?;
+            if me.is_none() {
+                register_lease = false;
+            }
+
+            let mount_entry = me.as_ref().unwrap().read()?;
+
+            if let Some(ref options) = mount_entry.options {
+                if let Some(leased_passthrough) = options.get("leased_passthrough") {
+                    if leased_passthrough != "true" {
+                        register_lease = false;
+                    }
+                } else {
+                    register_lease = false;
+                }
+            } else {
+                register_lease = false;
+            }
+
+            if register_lease {
+                self.expiration.register_secret(req, resp)?;
+            }
         }
 
         if let Some(auth) = resp.auth.as_mut() {

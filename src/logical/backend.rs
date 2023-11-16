@@ -80,18 +80,9 @@ impl Backend for LogicalBackend {
             for operation in &path.operations {
                 if operation.op == req.operation {
                     return operation.handle_request(self, req);
-                    /*
-                    let resp = operation.handle_request(self, req)?;
-                    if resp.is_none() {
-                        return Ok(Some(Response::new()));
-                    }
-
-                    return Ok(resp);
-                    */
                 }
             }
 
-            //return Ok(None);
             return Err(RvError::ErrLogicalOperationUnsupported);
         }
 

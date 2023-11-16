@@ -45,9 +45,10 @@ struct LeaseEntry {
 }
 
 pub struct ExpirationTask {
-    pub task_id_map: HashMap<String, u64>,
-    pub task_timer: DelayTimer,
     pub last_task_id: u64,
+    pub task_id_map: HashMap<String, u64>,
+    pub task_id_remove_pending: Vec<u64>,
+    pub task_timer: DelayTimer,
 }
 
 pub struct ExpirationManagerInner {
@@ -65,9 +66,10 @@ pub struct ExpirationManager {
 impl Default for ExpirationTask {
     fn default() -> Self {
         Self {
-            task_id_map: HashMap::new(),
-            task_timer: DelayTimerBuilder::default().build(),
             last_task_id: 0,
+            task_id_map: HashMap::new(),
+            task_id_remove_pending: Vec::new(),
+            task_timer: DelayTimerBuilder::default().build(),
         }
     }
 }
@@ -121,34 +123,39 @@ impl LeaseEntry {
 
 impl ExpirationTask {
     fn add_task<F: Fn() -> U + 'static + Send, U: std::future::Future + 'static + Send>(
-        &mut self, lease_id: &str, delay_secs: u64, routine: F
+        &mut self, lease_id: &str, ttl: u64, routine: F
     ) -> Result<(), RvError> {
+        self.clean_finish_task()?;
+
         self.last_task_id += 1;
         let mut task_builder = TaskBuilder::default();
 
         let task = task_builder
             .set_task_id(self.last_task_id)
-            .set_frequency_once_by_seconds(delay_secs)
+            .set_frequency_once_by_seconds(ttl)
             .spawn_async_routine(routine)?;
 
         self.task_timer.add_task(task)?;
         self.task_id_map.insert(lease_id.to_string(), self.last_task_id);
 
+        log::debug!("add task, lease_id: {}, task_id: {}, ttl: {}", lease_id, self.last_task_id, ttl);
+
         Ok(())
     }
 
     fn update_task<F: Fn() -> U + 'static + Send, U: std::future::Future + 'static + Send>(
-        &mut self, lease_id: &str, delay_secs: u64, routine: F
+        &mut self, lease_id: &str, ttl: u64, routine: F
     ) -> Result<(), RvError> {
         let task_id = self.task_id_map.get(lease_id);
-        if task_id.is_none() && delay_secs > 0 {
-            return self.add_task(lease_id, delay_secs, routine);
+        log::debug!("update task, lease_id: {}, ttl: {}", lease_id, ttl);
+        if task_id.is_none() && ttl > 0 {
+            return self.add_task(lease_id, ttl, routine);
         }
 
         if task_id.is_some() {
             self.remove_task(lease_id)?;
-            if delay_secs > 0 {
-                return self.add_task(lease_id, delay_secs, routine);
+            if ttl > 0 {
+                return self.add_task(lease_id, ttl, routine);
             }
         }
 
@@ -156,10 +163,27 @@ impl ExpirationTask {
     }
 
     fn remove_task(&mut self, lease_id: &str) -> Result<(), RvError> {
+		log::debug!("remove task, lease_id: {}", lease_id);
         if let Some(task_id) = self.task_id_map.remove(lease_id) {
-            self.task_timer.remove_task(task_id)?;
+            self.task_id_remove_pending.push(task_id);
         }
         Ok(())
+    }
+
+    fn clean_finish_task(&mut self) -> Result<(), RvError> {
+        for task_id in self.task_id_remove_pending.iter() {
+			log::debug!("clean finish task, task_id: {}", *task_id);
+            self.task_timer.remove_task(*task_id)?;
+        }
+        self.task_id_remove_pending.clear();
+        Ok(())
+    }
+}
+
+impl Drop for ExpirationTask {
+    fn drop(&mut self) {
+		log::debug!("expiration task timer stopping!");
+		let _ = self.task_timer.stop_delay_timer();
     }
 }
 
@@ -567,7 +591,7 @@ impl ExpirationManagerInner {
         let mut req = Request::new_revoke_request(&le.path, secret, data);
         let ret = self.router.as_ref().unwrap().as_handler().route(&mut req);
         if ret.is_err() {
-            log::error!("failed to revoke entry: {}", ret.unwrap_err());
+            log::error!("failed to revoke entry: {:?}, err: {}", le, ret.unwrap_err());
         }
 
         Ok(())
@@ -636,6 +660,8 @@ impl ExpirationManagerInner {
         }
 
         let le = le.unwrap();
+
+        log::debug!("revoke lease_id: {}", &le.lease_id);
 
         self.revoke_entry(&le)?;
         self.delete_entry(lease_id)?;

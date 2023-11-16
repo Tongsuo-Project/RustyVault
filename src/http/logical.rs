@@ -71,17 +71,7 @@ async fn logical_request_handler(
     log::debug!("logical request, connection info: {:?}, method: {:?}, path: {:?}", conn, method, path);
 
     let mut r = request_auth(&req);
-    let path = path.into_inner();
-    r.path = path.clone();
-
-    let mut v1_path = "";
-    if let Some(p) = path.as_str().strip_prefix("/v1/") {
-        v1_path = p;
-    }
-
-    if v1_path == "" {
-        return Ok(response_error(StatusCode::NOT_FOUND, ""));
-    }
+    r.path = path.into_inner().clone();
 
     match method {
         Method::GET => {
@@ -112,17 +102,23 @@ async fn logical_request_handler(
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 
-    response_logical(&resp.unwrap(), &v1_path)
+    if resp.is_none() {
+        return Ok(response_ok(None, None));
+    }
+
+    response_logical(&resp.unwrap(), &r.path)
 }
 
 fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError> {
     let mut logical_resp = LogicalResponse::default();
     let mut cookie: Option<Cookie> = None;
+    let mut no_content = true;
 
     if let Some(ref secret) = &resp.secret {
         logical_resp.lease_id = secret.lease_id.clone();
         logical_resp.renewable = secret.lease.renewable ;
         logical_resp.lease_duration = secret.lease.ttl.as_secs();
+        no_content = false;
     }
 
     if let Some(ref auth) = &resp.auth {
@@ -146,6 +142,8 @@ fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError
             lease_duration: auth.ttl.as_secs(),
             renewable: auth.renewable(),
         });
+
+        no_content = false;
     }
 
     if let Some(ref data) = &resp.data {
@@ -154,10 +152,14 @@ fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError
                             .map(|(key, value)| (key.clone(), value.clone()))
                             .collect();
 
-        return Ok(response_json_ok(cookie, logical_resp));
+        no_content = false;
     }
 
-    return Ok(response_ok(cookie, None));
+    if no_content {
+        return Ok(response_ok(cookie, None));
+    } else {
+        return Ok(response_json_ok(cookie, logical_resp));
+    }
 }
 
 pub fn init_logical_service(cfg: &mut web::ServiceConfig) {

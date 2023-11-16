@@ -1,14 +1,24 @@
-use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
+use std::{
+    sync::{Arc, RwLock},
+    ops::Deref,
+    collections::HashMap,
+};
+use as_any::{Downcast};
 use serde_json::{json, from_value, Value, Map};
-use crate::{new_path, new_path_internal, new_logical_backend, new_logical_backend_internal};
-use crate::logical::{Backend, LogicalBackend, Request, Response};
-use crate::logical::{Operation, Path, PathOperation, Field, FieldType};
-use crate::storage::{StorageEntry};
-use crate::modules::Module;
-use crate::mount::MountEntry;
-use crate::core::Core;
-use crate::errors::RvError;
+use crate::{
+    new_path, new_path_internal, new_logical_backend, new_logical_backend_internal,
+    logical::{
+        Backend, LogicalBackend, Request, Response,
+        Operation, Path, PathOperation, Field, FieldType,
+    },
+    storage::{StorageEntry},
+    modules::{
+        Module, auth::AuthModule,
+    },
+    mount::MountEntry,
+    core::Core,
+    errors::RvError,
+};
 
 static SYSTEM_BACKEND_HELP: &str = r#"
 The system backend is built-in to RustyVault and cannot be remounted or
@@ -18,40 +28,55 @@ as well as perform core operations.
 
 pub struct SystemModule {
     pub name: String,
+    pub backend: Arc<SystemBackend>,
 }
 
-pub struct SystemBackend {
+pub struct SystemBackendInner {
     pub core: Arc<RwLock<Core>>,
 }
 
-impl SystemBackend {
-    pub fn new_backend(core: Arc<RwLock<Core>>) -> LogicalBackend {
-        let sys_backend = Arc::new(
-            SystemBackend {
-                core: core,
-            }
-        );
+pub struct SystemBackend {
+    pub inner: Arc<SystemBackendInner>,
+}
 
-        let sys_backend_mount_table = Arc::clone(&sys_backend);
-        let sys_backend_mount_write = Arc::clone(&sys_backend);
-        let sys_backend_mount_delete = Arc::clone(&sys_backend);
-        let sys_backend_remount = Arc::clone(&sys_backend);
-        let sys_backend_renew = Arc::clone(&sys_backend);
-        let sys_backend_revoke = Arc::clone(&sys_backend);
-        let sys_backend_revoke_prefix = Arc::clone(&sys_backend);
-        let sys_backend_auth_table = Arc::clone(&sys_backend);
-        let sys_backend_auth_enable = Arc::clone(&sys_backend);
-        let sys_backend_auth_disable = Arc::clone(&sys_backend);
-        let sys_backend_policy_list = Arc::clone(&sys_backend);
-        let sys_backend_policy_read = Arc::clone(&sys_backend);
-        let sys_backend_policy_write = Arc::clone(&sys_backend);
-        let sys_backend_policy_delete = Arc::clone(&sys_backend);
-        let sys_backend_audit_table = Arc::clone(&sys_backend);
-        let sys_backend_audit_enable = Arc::clone(&sys_backend);
-        let sys_backend_audit_disable = Arc::clone(&sys_backend);
-        let sys_backend_raw_read = Arc::clone(&sys_backend);
-        let sys_backend_raw_write = Arc::clone(&sys_backend);
-        let sys_backend_raw_delete = Arc::clone(&sys_backend);
+impl Deref for SystemBackend {
+    type Target = SystemBackendInner;
+
+    fn deref(&self) -> &SystemBackendInner {
+        &self.inner
+    }
+}
+
+impl SystemBackend {
+    pub fn new(core: Arc<RwLock<Core>>) -> Self {
+        Self {
+            inner: Arc::new(SystemBackendInner {
+                core: core,
+            })
+        }
+    }
+
+    pub fn new_backend(&self) -> LogicalBackend {
+        let sys_backend_mount_table = Arc::clone(&self.inner);
+        let sys_backend_mount_write = Arc::clone(&self.inner);
+        let sys_backend_mount_delete = Arc::clone(&self.inner);
+        let sys_backend_remount = Arc::clone(&self.inner);
+        let sys_backend_renew = Arc::clone(&self.inner);
+        let sys_backend_revoke = Arc::clone(&self.inner);
+        let sys_backend_revoke_prefix = Arc::clone(&self.inner);
+        let sys_backend_auth_table = Arc::clone(&self.inner);
+        let sys_backend_auth_enable = Arc::clone(&self.inner);
+        let sys_backend_auth_disable = Arc::clone(&self.inner);
+        let sys_backend_policy_list = Arc::clone(&self.inner);
+        let sys_backend_policy_read = Arc::clone(&self.inner);
+        let sys_backend_policy_write = Arc::clone(&self.inner);
+        let sys_backend_policy_delete = Arc::clone(&self.inner);
+        let sys_backend_audit_table = Arc::clone(&self.inner);
+        let sys_backend_audit_enable = Arc::clone(&self.inner);
+        let sys_backend_audit_disable = Arc::clone(&self.inner);
+        let sys_backend_raw_read = Arc::clone(&self.inner);
+        let sys_backend_raw_write = Arc::clone(&self.inner);
+        let sys_backend_raw_delete = Arc::clone(&self.inner);
 
         let backend = new_logical_backend!({
             paths: [
@@ -241,14 +266,17 @@ impl SystemBackend {
 
         backend
     }
+}
 
+impl SystemBackendInner {
     pub fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         let core = self.core.read()?;
         let mut data: Map<String, Value> = Map::new();
 
         let mounts = core.mounts.entries.read()?;
 
-        for entry in mounts.values() {
+        for mount_entry in mounts.values() {
+            let entry = mount_entry.read()?;
             let info: Value = json!({
                 "type": entry.logical_type.clone(),
                 "description": entry.description.clone(),
@@ -279,13 +307,13 @@ impl SystemBackend {
     }
 
     pub fn handle_unmount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let suffix = req.path.strip_prefix("mounts/");
-        if suffix.is_none() {
+        let suffix = req.path.trim_start_matches("mounts/");
+        if suffix.len() == 0 {
             return Err(RvError::ErrRequestInvalid);
         }
 
         let core = self.core.read()?;
-        core.unmount(suffix.unwrap())?;
+        core.unmount(&suffix)?;
         Ok(None)
     }
 
@@ -323,27 +351,86 @@ impl SystemBackend {
     }
 
     pub fn handle_auth_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
+        let core = self.core.read()?;
+        let mut data: Map<String, Value> = Map::new();
+
+        if let Some(module) = core.module_manager.get_module("auth") {
+            let auth_mod = module.read()?;
+            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
+                let router_store = auth_module.router_store.read()?;
+                let mounts = router_store.mounts.entries.read()?;
+
+                for mount_entry in mounts.values() {
+                    let entry = mount_entry.read()?;
+                    let info: Value = json!({
+                        "type": entry.logical_type.clone(),
+                        "description": entry.description.clone(),
+                    });
+                    data.insert(entry.path.clone(), info);
+                }
+
+                return Ok(Some(Response::data_response(Some(data))));
+            } else {
+                log::error!("downcast auth module failed!");
+            }
+        } else {
+            log::error!("get auth module failed!");
+        }
+
+        Err(RvError::ErrAuthModuleDisabled)
     }
 
-    pub fn handle_auth_enable(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        /*
-        let path: String = to_string(&req.get_data("path")?)?;
-        let logical_type: String = to_string(&req.get_data("type")?)?;
-        let description: String = to_string(&req.get_data("description")?)?;
+    pub fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let path = req.get_data("path")?;
+        let logical_type = req.get_data("type")?;
+        let description = req.get_data("description")?;
+
+        let path = path.as_str().unwrap();
+        let logical_type = logical_type.as_str().unwrap();
+        let description = description.as_str().unwrap();
+
         if logical_type == "" {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let me = MountEntry::new(&path, &logical_type, &description);
+        let me = MountEntry::new(path, logical_type, description);
+
         let core = self.core.read()?;
-        core.mount(&me)?;
-        */
-        Ok(None)
+        if let Some(module) = core.module_manager.get_module("auth") {
+            let auth_mod = module.read()?;
+            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
+                auth_module.enable_auth(&me)?;
+                return Ok(None);
+            } else {
+                log::error!("downcast auth module failed!");
+            }
+        } else {
+            log::error!("get auth module failed!");
+        }
+
+        Err(RvError::ErrAuthModuleDisabled)
     }
 
-    pub fn handle_auth_disable(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
+    pub fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let suffix = req.path.trim_start_matches("auth/");
+        if suffix.len() == 0 {
+            return Err(RvError::ErrRequestInvalid);
+        }
+
+        let core = self.core.read()?;
+        if let Some(module) = core.module_manager.get_module("auth") {
+            let auth_mod = module.read()?;
+            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
+                auth_module.disable_auth(&suffix)?;
+                return Ok(None);
+            } else {
+                log::error!("downcast auth module failed!");
+            }
+        } else {
+            log::error!("get auth module failed!");
+        }
+
+        Err(RvError::ErrAuthModuleDisabled)
     }
 
     pub fn handle_policy_list(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -428,9 +515,10 @@ impl SystemBackend {
 }
 
 impl SystemModule {
-    pub fn new(_core: Arc<RwLock<Core>>) -> Self {
+    pub fn new(core: Arc<RwLock<Core>>) -> Self {
         Self {
             name: "system".to_string(),
+            backend: Arc::new(SystemBackend::new(core)),
         }
     }
 }
@@ -441,8 +529,9 @@ impl Module for SystemModule {
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {
-        let sys_backend_new_func = |c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
-            let mut sys_backend = SystemBackend::new_backend(c);
+        let sys = Arc::clone(&self.backend);
+        let sys_backend_new_func = move |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
+            let mut sys_backend = sys.new_backend();
             sys_backend.init()?;
             Ok(Arc::new(sys_backend))
         };

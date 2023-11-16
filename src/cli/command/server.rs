@@ -41,7 +41,6 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
     let (_, listener) = config.listener.iter().next().unwrap();
 
     let addr = listener.address.clone();
-    log::info!("start listen, addr: {}", addr);
 
     let mut work_dir = WORK_DIR_PATH_DEFAULT.to_string();
     if !config.work_dir.is_empty() {
@@ -52,8 +51,6 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
         log::info!("create work_dir: {}", work_dir);
         fs::create_dir_all(work_dir.as_str())?;
     }
-
-    log::info!("config_path: {}, work_dir_path: {}", config_path, work_dir.as_str());
 
     if config.daemon {
         // start daemon
@@ -82,8 +79,6 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
             .open(log_path)
             .unwrap();
 
-        log::debug!("run user: {}, group: {}", user, group);
-
         let daemonize = Daemonize::new()
             .working_directory(work_dir.as_str())
             .user(user.as_str())
@@ -99,11 +94,13 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
             Ok(_) => {
                 let pid = std::fs::read_to_string(pid_path)?;
                 log::info!("The rusty_vault server daemon process started successfully, pid is {}", pid);
+                log::debug!("run user: {}, group: {}", user, group);
             }
             Err(e) => log::error!("Error, {}", e),
         }
     }
 
+    log::debug!("config_path: {}, work_dir_path: {}", config_path, work_dir.as_str());
 
     let server = actix_rt::System::new();
 
@@ -130,6 +127,8 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
     .on_connect(http::request_on_connect_handler);
+
+    log::info!("start listen, addr: {}", addr);
 
     http_server = http_server.bind(addr)?;
 

@@ -96,6 +96,8 @@ pub enum RvError {
     ErrModuleConflict,
     #[error("Module is not init.")]
     ErrModuleNotInit,
+    #[error("Auth module is disabled.")]
+    ErrAuthModuleDisabled,
     #[error("Auth token is not found.")]
     ErrAuthTokenNotFound,
     #[error("Auth token id is invalid.")]
@@ -212,6 +214,7 @@ impl PartialEq for RvError {
             | (RvError::ErrConfigListenerNotFound, RvError::ErrConfigListenerNotFound)
             | (RvError::ErrModuleConflict, RvError::ErrModuleConflict)
             | (RvError::ErrModuleNotInit, RvError::ErrModuleNotInit)
+            | (RvError::ErrAuthModuleDisabled, RvError::ErrAuthModuleDisabled)
             | (RvError::ErrAuthTokenNotFound, RvError::ErrAuthTokenNotFound)
             | (RvError::ErrAuthTokenIdInvalid, RvError::ErrAuthTokenIdInvalid)
             | (RvError::ErrLeaseNotFound, RvError::ErrLeaseNotFound)
