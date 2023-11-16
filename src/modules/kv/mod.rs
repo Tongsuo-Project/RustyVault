@@ -1,9 +1,11 @@
 use std::{
+    ops::Deref,
     sync::{Arc, RwLock},
     time::{Duration},
     collections::HashMap,
 };
 use serde_json::{Value, Map};
+use humantime::parse_duration;
 use crate::{
     new_path, new_path_internal,
     new_secret, new_secret_internal,
@@ -33,20 +35,41 @@ const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(3600 as u64);
 
 pub struct KvModule {
     pub name: String,
+    pub backend: Arc<KvBackend>,
 }
 
-pub struct KvBackend;
+pub struct KvBackendInner {
+    pub core: Arc<RwLock<Core>>,
+}
+
+pub struct KvBackend {
+    pub inner: Arc<KvBackendInner>,
+}
+
+impl Deref for KvBackend {
+    type Target = KvBackendInner;
+
+    fn deref(&self) -> &KvBackendInner {
+        &self.inner
+    }
+}
 
 impl KvBackend {
-    pub fn new_backend() -> LogicalBackend {
-        let kv_backend = Arc::new(KvBackend);
+    pub fn new(core: Arc<RwLock<Core>>) -> Self {
+        Self {
+            inner: Arc::new(KvBackendInner {
+                core: core,
+            })
+        }
+    }
 
-        let kv_backend_r = Arc::clone(&kv_backend);
-        let kv_backend_w = Arc::clone(&kv_backend);
-        let kv_backend_d = Arc::clone(&kv_backend);
-        let kv_backend_l = Arc::clone(&kv_backend);
-        let kv_backend_rn = Arc::clone(&kv_backend);
-        let kv_backend_rv = Arc::clone(&kv_backend);
+    pub fn new_backend(&self) -> LogicalBackend {
+        let kv_backend_read = Arc::clone(&self.inner);
+        let kv_backend_write = Arc::clone(&self.inner);
+        let kv_backend_delete = Arc::clone(&self.inner);
+        let kv_backend_list = Arc::clone(&self.inner);
+        let kv_backend_renew = Arc::clone(&self.inner);
+        let kv_backend_revoke = Arc::clone(&self.inner);
 
         let backend = new_logical_backend!({
             paths: [
@@ -60,25 +83,27 @@ impl KvBackend {
                         }
                     },
                     operations: [
-                        {op: Operation::Read, handler: kv_backend_r.handle_read},
-                        {op: Operation::Write, handler: kv_backend_w.handle_write},
-                        {op: Operation::Delete, handler: kv_backend_d.handle_delete},
-                        {op: Operation::List, handler: kv_backend_l.handle_list}
+                        {op: Operation::Read, handler: kv_backend_read.handle_read},
+                        {op: Operation::Write, handler: kv_backend_write.handle_write},
+                        {op: Operation::Delete, handler: kv_backend_delete.handle_delete},
+                        {op: Operation::List, handler: kv_backend_list.handle_list}
                     ],
                     help: "Pass-through secret storage to the physical backend, allowing you to read/write arbitrary data into secret storage."
                 }
             ],
             secrets: [{
                 secret_type: "kv",
-                renew_handler: kv_backend_rn.handle_read,
-                revoke_handler: kv_backend_rv.handle_noop,
+                renew_handler: kv_backend_renew.handle_read,
+                revoke_handler: kv_backend_revoke.handle_noop,
             }],
             help: KV_BACKEND_HELP
         });
 
         backend
     }
+}
 
+impl KvBackendInner {
     pub fn handle_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let entry = req.storage_get(&req.path)?;
         if entry.is_none() {
@@ -87,18 +112,31 @@ impl KvBackend {
 
         let mut ttl_duration: Option<Duration> = None;
         let data: Map<String, Value> = serde_json::from_slice(entry.unwrap().value.as_slice())?;
-        let ttl = data.get("ttl");
-        if ttl.is_some() {
-            if let Some(ttl_i64) = ttl.unwrap().as_i64() {
+        if let Some(ttl) = data.get("ttl") {
+            if let Some(ttl_i64) = ttl.as_i64() {
                 ttl_duration = Some(Duration::from_secs(ttl_i64 as u64));
+            } else if let Some(ttl_str) = ttl.as_str() {
+                if let Ok(ttl_dur) = parse_duration(ttl_str) {
+                    ttl_duration = Some(ttl_dur);
+                }
+            }
+        } else {
+            if let Some(lease) = data.get("lease") {
+                if let Some(lease_i64) = lease.as_i64() {
+                    ttl_duration = Some(Duration::from_secs(lease_i64 as u64));
+                } else if let Some(lease_str) = lease.as_str() {
+                    if let Ok(lease_dur) = parse_duration(lease_str) {
+                        ttl_duration = Some(lease_dur);
+                    }
+                }
             }
         }
 
         let mut resp = backend.secret("kv").unwrap().response(Some(data), None);
         let secret = resp.secret.as_mut().unwrap();
         secret.lease.renewable = false;
-        if ttl_duration.is_some() {
-            secret.lease.ttl = ttl_duration.unwrap();
+        if let Some(ttl) = ttl_duration {
+            secret.lease.ttl = ttl;
             secret.lease.renewable = true;
         } else {
             secret.lease.ttl = DEFAULT_LEASE_TTL;
@@ -139,9 +177,10 @@ impl KvBackend {
 }
 
 impl KvModule {
-    pub fn new(_core: Arc<RwLock<Core>>) -> Self {
+    pub fn new(core: Arc<RwLock<Core>>) -> Self {
         Self {
             name: "kv".to_string(),
+            backend: Arc::new(KvBackend::new(core)),
         }
     }
 }
@@ -152,8 +191,9 @@ impl Module for KvModule {
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {
-        let kv_backend_new_func = |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
-            let mut kv_backend = KvBackend::new_backend();
+        let kv = Arc::clone(&self.backend);
+        let kv_backend_new_func = move |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
+            let mut kv_backend = kv.new_backend();
             kv_backend.init()?;
             Ok(Arc::new(kv_backend))
         };
