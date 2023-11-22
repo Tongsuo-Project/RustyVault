@@ -118,7 +118,13 @@ impl Request {
             }
         }
 
-        return field.unwrap().get_default();
+        let field = field.unwrap();
+
+        if field.required {
+            return Err(RvError::ErrRequestFieldNotFound);
+        }
+
+        return field.get_default();
     }
 
     pub fn storage_list(&self, prefix: &str) -> Result<Vec<String>, RvError> {

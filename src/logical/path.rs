@@ -79,12 +79,16 @@ macro_rules! new_path_internal {
     (@object $object:ident field_type: $field_type:expr) => {
         $object.field_type = $field_type;
     };
+    (@object $object:ident required: $required:expr) => {
+        $object.required = $required;
+    };
     (@object $object:ident default: $default:expr) => {
         if $object.field_type == FieldType::Str {
             $object.default = Arc::new($default.to_string());
         } else {
             $object.default = Arc::new($default);
         }
+        $object.required = false;
     };
     (@object $object:ident description: $description:expr) => {
         $object.description = $description.to_string();

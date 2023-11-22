@@ -6,7 +6,7 @@ pub mod mount;
 pub mod core;
 pub mod handler;
 pub mod context;
-pub mod util;
+pub mod utils;
 pub mod modules;
 pub mod module_manager;
 pub mod cli;

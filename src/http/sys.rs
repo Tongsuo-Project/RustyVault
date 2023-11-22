@@ -210,6 +210,55 @@ async fn sys_remount_request_handler(
     handle_request(core, &mut r)
 }
 
+async fn sys_list_auth_mounts_request_handler(
+    req: HttpRequest,
+    core: web::Data<Arc<RwLock<Core>>>
+) -> Result<HttpResponse, RvError> {
+    let mut r = request_auth(&req);
+    r.path = "sys/auth".to_string();
+    r.operation = Operation::Read;
+
+    handle_request(core, &mut r)
+}
+
+async fn sys_auth_enable_request_handler(
+    req: HttpRequest,
+    path: web::Path<String>,
+    body: web::Bytes,
+    core: web::Data<Arc<RwLock<Core>>>
+) -> Result<HttpResponse, RvError> {
+    let _test = serde_json::from_slice::<MountRequest>(&body)?;
+    let payload = serde_json::from_slice(&body)?;
+    let mount_path = path.into_inner();
+    if mount_path.len() == 0 {
+        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    }
+
+    let mut r = request_auth(&req);
+    r.path = "sys/auth/".to_owned() + mount_path.as_str();
+    r.operation = Operation::Write;
+    r.body = Some(payload);
+
+    handle_request(core, &mut r)
+}
+
+async fn sys_auth_disable_request_handler(
+    req: HttpRequest,
+    path: web::Path<String>,
+    core: web::Data<Arc<RwLock<Core>>>
+) -> Result<HttpResponse, RvError> {
+    let mount_path = path.into_inner();
+    if mount_path.len() == 0 {
+        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    }
+
+    let mut r = request_auth(&req);
+    r.path = "sys/auth/".to_owned() + mount_path.as_str();
+    r.operation = Operation::Delete;
+
+    handle_request(core, &mut r)
+}
+
 pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/v1/sys")
@@ -231,5 +280,11 @@ pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
             .service(web::resource("/remount")
                          .route(web::post().to(sys_remount_request_handler))
                          .route(web::put().to(sys_remount_request_handler)))
+            .service(web::resource("/auth")
+                         .route(web::get().to(sys_list_auth_mounts_request_handler)))
+            .service(web::resource("/auth/{path:.*}")
+                         .route(web::get().to(sys_list_auth_mounts_request_handler))
+                         .route(web::post().to(sys_auth_enable_request_handler))
+                         .route(web::delete().to(sys_auth_disable_request_handler)))
     );
 }

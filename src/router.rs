@@ -1,24 +1,27 @@
 use std::sync::{Arc, RwLock};
 use radix_trie::{Trie, TrieCommon};
-use crate::logical::{Operation, Backend, Request, Response};
-use crate::handler::Handler;
-use crate::storage::barrier_view::BarrierView;
-use crate::errors::RvError;
+use crate::{
+    logical::{Operation, Backend, Request, Response},
+    handler::Handler,
+    mount::MountEntry,
+    storage::barrier_view::BarrierView,
+    errors::RvError,
+};
 
-struct MountEntry {
+struct RouterEntry {
     tainted: bool,
-    salt: String,
     backend: Arc<dyn Backend>,
     view: Arc<BarrierView>,
     root_paths: Trie<String, bool>,
     unauth_paths: Trie<String, bool>,
+    mount_entry: Arc<RwLock<MountEntry>>,
 }
 
 pub struct Router {
-    root: Arc<RwLock<Trie<String, MountEntry>>>,
+    root: Arc<RwLock<Trie<String, RouterEntry>>>,
 }
 
-impl MountEntry {
+impl RouterEntry {
     fn salt_id(&self, id: &str) -> String {
         return id.to_string();
     }
@@ -31,7 +34,8 @@ impl Router {
         }
     }
 
-    pub fn mount(&self, backend: Arc<dyn Backend>, prefix: &str, salt: &str, view: BarrierView) -> Result<(), RvError> {
+    pub fn mount(&self, backend: Arc<dyn Backend>, prefix: &str, mount_entry: Arc<RwLock<MountEntry>>, view: BarrierView) -> Result<(), RvError> {
+        log::debug!("mount, prefix: {}", prefix);
         let mut root = self.root.write()?;
 
         // Check if this is a nested mount
@@ -42,26 +46,28 @@ impl Router {
         let unauth_paths = backend.get_unauth_paths().unwrap_or(Arc::new(Vec::new()));
         let root_paths = backend.get_root_paths().unwrap_or(Arc::new(Vec::new()));
 
-        let me = MountEntry {
+        let router_entry = RouterEntry {
             tainted: false,
             backend,
-            salt: salt.to_string(),
             view: Arc::new(view),
             root_paths: new_radix_from_paths(root_paths.as_ref()),
             unauth_paths: new_radix_from_paths(unauth_paths.as_ref()),
+            mount_entry: mount_entry,
         };
 
-        root.insert(prefix.to_string(), me);
+        root.insert(prefix.to_string(), router_entry);
         Ok(())
     }
 
     pub fn unmount(&self, prefix: &str) -> Result<(), RvError> {
+        log::debug!("unmount, prefix: {}", prefix);
         let mut root = self.root.write()?;
         root.remove(prefix);
         Ok(())
     }
 
     pub fn remount(&self, dst: &str, src: &str) -> Result<(), RvError> {
+        log::debug!("remount, src: {}, dst: {}", src, dst);
         let mut root = self.root.write()?;
         if let Some(raw) = root.remove(src) {
             root.insert(dst.to_string(), raw);
@@ -100,11 +106,21 @@ impl Router {
         }
     }
 
+    pub fn matching_mount_entry(&self, path: &str) -> Result<Option<Arc<RwLock<MountEntry>>>, RvError> {
+        let root = self.root.read()?;
+        if let Some(entry) = root.get_ancestor(path) {
+            let router_entry = entry.value().unwrap();
+            Ok(Some(Arc::clone(&router_entry.mount_entry)))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn matching_view(&self, path: &str) -> Result<Option<Arc<BarrierView>>, RvError> {
         let root = self.root.read()?;
         if let Some(entry) = root.get_ancestor(path) {
-            let me = entry.value().unwrap();
-            Ok(Some(me.view.clone()))
+            let router_entry = entry.value().unwrap();
+            Ok(Some(Arc::clone(&router_entry.view)))
         } else {
             Ok(None)
         }
