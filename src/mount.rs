@@ -6,7 +6,7 @@ use crate::storage::{Storage, StorageEntry};
 use crate::storage::barrier_view::BarrierView;
 use crate::core::Core;
 use crate::router::Router;
-use crate::util;
+use crate::utils::generate_uuid;
 use crate::errors::RvError;
 
 const CORE_MOUNT_CONFIG_PATH: &str = "core/mounts";
@@ -23,7 +23,7 @@ lazy_static! {
     static ref DEFAULT_CORE_MOUNTS: Vec<MountEntry> = vec![
         MountEntry {
             tainted: false,
-            uuid: util::generate_uuid(),
+            uuid: generate_uuid(),
             path: "secret/".to_string(),
             logical_type: "kv".to_string(),
             description: "key/value secret storage".to_string(),
@@ -31,7 +31,7 @@ lazy_static! {
         },
         MountEntry {
             tainted: false,
-            uuid: util::generate_uuid(),
+            uuid: generate_uuid(),
             path: "sys/".to_string(),
             logical_type: "system".to_string(),
             description: "system endpoints used for control, policy and debugging".to_string(),
@@ -179,7 +179,7 @@ impl Core {
             let backend_new_func = self.get_logical_backend(&me.logical_type)?;
             let backend = backend_new_func(Arc::clone(self.self_ref.as_ref().unwrap()))?;
 
-            entry.uuid = util::generate_uuid();
+            entry.uuid = generate_uuid();
 
             let prefix = format!("{}{}/", LOGICAL_BARRIER_PREFIX, &entry.uuid);
             let view = BarrierView::new(self.barrier.clone(), &prefix);

@@ -4,7 +4,7 @@ use std::{
 };
 use lazy_static::lazy_static;
 use crate::{
-    util,
+    utils::generate_uuid,
     logical::Backend,
     modules::Module,
     core::{Core, LogicalBackendNewFunc},
@@ -31,7 +31,7 @@ lazy_static! {
     static ref DEFAULT_AUTH_MOUNTS: Vec<MountEntry> = vec![
         MountEntry {
             tainted: false,
-            uuid: util::generate_uuid(),
+            uuid: generate_uuid(),
             path: "token/".to_string(),
             logical_type: "token".to_string(),
             description: "token based credentials".to_string(),
@@ -110,7 +110,7 @@ impl AuthModule {
             let backend_new_func = self.get_backend(&entry.logical_type)?;
             let backend = backend_new_func(Arc::clone(&self.core))?;
 
-            entry.uuid = util::generate_uuid();
+            entry.uuid = generate_uuid();
 
             let prefix = format!("{}{}/", AUTH_BARRIER_PREFIX, &entry.uuid);
             let view = BarrierView::new(self.barrier.clone(), &prefix);

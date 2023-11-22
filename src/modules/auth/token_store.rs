@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use serde::{Serialize, Deserialize};
 use humantime::parse_duration;
 use crate::{
-    util,
+	utils::{generate_uuid, sha1, is_str_subset},
     new_path, new_path_internal,
     new_logical_backend, new_logical_backend_internal,
     logical::{
@@ -149,7 +149,7 @@ impl TokenStore {
         }
 
         if inner.salt.as_str() == "" {
-            inner.salt = util::generate_uuid();
+            inner.salt = generate_uuid();
             let raw = StorageEntry {
                 key: TOKEN_SALT_LOCATION.to_string(),
                 value: inner.salt.as_bytes().to_vec(),
@@ -266,7 +266,7 @@ impl TokenStore {
 impl TokenStoreInner {
     pub fn salt_id(&self, id: &str) -> String {
         let salted_id = format!("{}{}", self.salt, id);
-        util::sha1(salted_id.as_bytes())
+        sha1(salted_id.as_bytes())
     }
 
     pub fn root_token(&self) -> Result<TokenEntry, RvError> {
@@ -290,7 +290,7 @@ impl TokenStoreInner {
         let view = self.view.as_ref().unwrap();
 
         if entry.id.as_str() == "" {
-            entry.id = util::generate_uuid();
+            entry.id = generate_uuid();
         }
 
         let salted_id = self.salt_id(&entry.id);
@@ -511,7 +511,7 @@ impl TokenStoreInner {
             data.policies = parent.policies.clone();
         }
 
-        if !is_root && !util::is_str_subset(&data.policies, &parent.policies) {
+        if !is_root && !is_str_subset(&data.policies, &parent.policies) {
             return Err(RvError::ErrRequestInvalid);
         }
 

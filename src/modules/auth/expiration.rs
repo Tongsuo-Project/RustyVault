@@ -9,7 +9,7 @@ use serde_json::{Value, Map};
 use serde::{Serialize, Deserialize};
 use delay_timer::prelude::*;
 use crate::{
-	util::{generate_uuid, serialize_system_time, deserialize_system_time},
+	utils::{generate_uuid, serialize_system_time, deserialize_system_time},
     logical::{
         Auth, SecretData, Request, Response,
     },
