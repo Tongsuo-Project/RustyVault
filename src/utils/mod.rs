@@ -1,4 +1,5 @@
-use std::time::SystemTime;
+use std::time::{SystemTime, Duration};
+use chrono::prelude::*;
 use rand::{Rng, thread_rng};
 use openssl::{
     hash::{
@@ -8,6 +9,9 @@ use openssl::{
 };
 use serde::{Serializer, Deserialize, Deserializer};
 use humantime::{format_rfc3339, parse_rfc3339};
+use crate::errors::RvError;
+
+pub mod cert;
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];
@@ -50,4 +54,32 @@ where
     let parsed_time = parse_rfc3339(input).map_err(serde::de::Error::custom)?;
     let system_time: SystemTime = parsed_time.into();
     Ok(system_time)
+}
+
+pub fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer
+{
+    let timestamp = duration.as_secs();
+    serializer.serialize_i64(timestamp as i64)
+}
+
+pub fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where D: serde::Deserializer<'de>
+{
+    let timestamp = i64::deserialize(deserializer)?;
+    Ok(Duration::from_secs(timestamp as u64))
+}
+
+pub fn asn1time_to_timestamp(time_str: &str) -> Result<i64, RvError> {
+    // Parse the time string
+    let dt = NaiveDateTime::parse_from_str(time_str, "%b %e %H:%M:%S %Y %Z")?;
+
+    // Convert to a DateTime object with UTC timezone
+    //let dt_utc = DateTime::<Utc>::from_utc(dt, Utc);
+    let dt_utc = Utc.from_utc_datetime(&dt);
+
+    // Get the timestamp
+    let timestamp = dt_utc.timestamp();
+
+    Ok(timestamp)
 }

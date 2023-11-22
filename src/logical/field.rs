@@ -21,6 +21,7 @@ pub enum FieldType {
 
 #[derive(Clone)]
 pub struct Field {
+    pub required: bool,
     pub field_type: FieldType,
     pub default: Arc<dyn Any + Send + Sync>,
     pub description: String,
@@ -29,6 +30,7 @@ pub struct Field {
 impl Field {
     pub fn new() -> Self {
         Self {
+            required: true,
             field_type: FieldType::Str,
             default: Arc::new(String::new()),
             description: String::new(),
@@ -56,6 +58,7 @@ impl Field {
 impl fmt::Debug for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Field")
+            .field("required", &self.required)
             .field("field_type", &self.field_type)
             .field("default", &self.default)
             .field("description", &self.description)

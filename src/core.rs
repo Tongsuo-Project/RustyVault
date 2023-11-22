@@ -26,7 +26,10 @@ use crate::{
         barrier_aes_gcm,
     },
     module_manager::ModuleManager,
-    modules::auth::AuthModule,
+    modules::{
+        auth::AuthModule,
+        pki::PkiModule,
+    },
     errors::RvError,
 };
 
@@ -98,9 +101,13 @@ impl Core {
         self.module_manager.set_default_modules(Arc::clone(&core))?;
         self.self_ref = Some(Arc::clone(&core));
 
+        // add auth_module
         let auth_module = AuthModule::new(self);
-
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(auth_module))))?;
+
+        // add pki_module
+        let pki_module = PkiModule::new(self);
+        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(pki_module))))?;
 
         Ok(())
     }
