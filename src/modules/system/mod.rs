@@ -98,6 +98,7 @@ impl SystemBackend {
                             description: r#"The type of the backend. Example: "kv""#
                         },
                         "description": {
+                            required: false,
                             field_type: FieldType::Str,
                             description: r#"User-friendly description for this mount."#
                         }
@@ -179,6 +180,7 @@ impl SystemBackend {
                             description: r#"The type of the backend. Example: "userpass""#
                         },
                         "description": {
+                            required: false,
                             field_type: FieldType::Str,
                             description: r#"User-friendly description for this crential backend."#
                         }
@@ -230,6 +232,7 @@ impl SystemBackend {
                             description: r#"The type of the backend. Example: "mysql""#
                         },
                         "description": {
+                            required: false,
                             field_type: FieldType::Str,
                             description: r#"User-friendly description for this audit backend."#
                         },

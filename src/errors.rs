@@ -84,6 +84,8 @@ pub enum RvError {
     ErrRequestInvalid,
     #[error("Request client token is missing.")]
     ErrRequestClientTokenMissing,
+    #[error("Request field is not found.")]
+    ErrRequestFieldNotFound,
     #[error("Handler is default.")]
     ErrHandlerDefault,
     #[error("Module kv data field is missing.")]
@@ -108,6 +110,28 @@ pub enum RvError {
     ErrLeaseNotRenewable,
     #[error("Permission denied.")]
     ErrPermissionDenied,
+    #[error("PKI pem bundle is invalid.")]
+    ErrPkiPemBundleInvalid,
+    #[error("PKI ca public key of certificate does not match private key.")]
+    ErrPkiCertKeyMismatch,
+    #[error("PKI cert chain is incorrect.")]
+    ErrPkiCertChainIncorrect,
+    #[error("PKI cert is not ca.")]
+    ErrPkiCertIsNotCA,
+    #[error("PKI ca private key is not found.")]
+    ErrPkiCaKeyNotFound,
+    #[error("PKI ca is not config.")]
+    ErrPkiCaNotConfig,
+    #[error("PKI ca extension is incorrect.")]
+    ErrPkiCaExtensionIncorrect,
+    #[error("PKI key type is invalid.")]
+    ErrPkiKeyTypeInvalid,
+    #[error("PKI key bits is invalid.")]
+    ErrPkiKeyBitsInvalid,
+    #[error("PKI certificate is not found.")]
+    ErrPkiCertNotFound,
+    #[error("PKI internal error.")]
+    ErrPkiInternal,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -147,6 +171,11 @@ pub enum RvError {
     SystemTimeError {
         #[from]
         source: std::time::SystemTimeError
+    },
+    #[error("Some chrono error happened, {:?}", .source)]
+    ChronoError {
+        #[from]
+        source: chrono::ParseError
     },
     #[error("Some delay_timer error happened, {:?}", .source)]
     TaskError {
@@ -202,6 +231,7 @@ impl PartialEq for RvError {
             | (RvError::ErrRequestNoDataField, RvError::ErrRequestNoDataField)
             | (RvError::ErrRequestInvalid, RvError::ErrRequestInvalid)
             | (RvError::ErrRequestClientTokenMissing, RvError::ErrRequestClientTokenMissing)
+            | (RvError::ErrRequestFieldNotFound, RvError::ErrRequestFieldNotFound)
             | (RvError::ErrHandlerDefault, RvError::ErrHandlerDefault)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
             | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
@@ -220,6 +250,17 @@ impl PartialEq for RvError {
             | (RvError::ErrLeaseNotFound, RvError::ErrLeaseNotFound)
             | (RvError::ErrLeaseNotRenewable, RvError::ErrLeaseNotRenewable)
             | (RvError::ErrPermissionDenied, RvError::ErrPermissionDenied)
+            | (RvError::ErrPkiPemBundleInvalid, RvError::ErrPkiPemBundleInvalid)
+            | (RvError::ErrPkiCertKeyMismatch, RvError::ErrPkiCertKeyMismatch)
+            | (RvError::ErrPkiCertChainIncorrect, RvError::ErrPkiCertChainIncorrect)
+            | (RvError::ErrPkiCertIsNotCA, RvError::ErrPkiCertIsNotCA)
+            | (RvError::ErrPkiCaKeyNotFound, RvError::ErrPkiCaKeyNotFound)
+            | (RvError::ErrPkiCaNotConfig, RvError::ErrPkiCaNotConfig)
+            | (RvError::ErrPkiCaExtensionIncorrect, RvError::ErrPkiCaExtensionIncorrect)
+            | (RvError::ErrPkiKeyTypeInvalid, RvError::ErrPkiKeyTypeInvalid)
+            | (RvError::ErrPkiKeyBitsInvalid, RvError::ErrPkiKeyBitsInvalid)
+            | (RvError::ErrPkiCertNotFound, RvError::ErrPkiCertNotFound)
+            | (RvError::ErrPkiInternal, RvError::ErrPkiInternal)
             | (RvError::ErrUnknown, RvError::ErrUnknown)
             => true,
             _ => false,

@@ -5,6 +5,7 @@ use crate::errors::RvError;
 pub mod kv;
 pub mod system;
 pub mod auth;
+pub mod pki;
 
 pub trait Module: AsAny + Send + Sync {
     fn name(&self) -> String;
