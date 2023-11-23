@@ -9,12 +9,12 @@ use openssl::{
 use serde_json::{json, Value, Map};
 use crate::{
     utils,
+    utils::cert,
     utils::cert::CertBundle,
     logical::{
         Backend, Request, Response,
     },
     storage::{StorageEntry},
-    utils::cert,
     errors::RvError,
 };
 use super::{
@@ -23,12 +23,12 @@ use super::{
 
 impl PkiBackendInner {
     pub fn issue_cert(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let role_value = req.get_data("role").expect("The role field is required");
+        let role_value = req.get_data("role")?;
         let role_name = role_value.as_str().unwrap();
 
         let mut common_names = Vec::new();
 
-        let common_name_value = req.get_data("common_name").expect("The common_name field is required");
+        let common_name_value = req.get_data("common_name")?;
         let common_name = common_name_value.as_str().unwrap();
         if common_name != "" {
             common_names.push(common_name.to_string());
@@ -46,7 +46,11 @@ impl PkiBackendInner {
         }
 
         let role = self.get_role(req, &role_name)?;
-        let role_entry = role.expect(format!("Unknown role_name: {}", role_name).as_str());
+        if role.is_none() {
+            return Err(RvError::ErrPkiRoleNotFound);
+        }
+
+        let role_entry = role.unwrap();
 
         let mut ip_sans = Vec::new();
         let ip_sans_value = req.get_data("ip_sans");
@@ -64,7 +68,7 @@ impl PkiBackendInner {
         let not_before = SystemTime::now() - Duration::from_secs(10);
         let mut not_after = not_before + parse_duration("30d").unwrap();
 
-        let ttl_value = req.get_data("ttl").expect("The ttl field is required");
+        let ttl_value = req.get_data("ttl")?;
         let ttl = ttl_value.as_str().unwrap();
         if ttl != "" {
             let ttl_dur = parse_duration(ttl)?;
@@ -111,6 +115,7 @@ impl PkiBackendInner {
             subject: subject,
             dns_sans: common_names,
             ip_sans: ip_sans,
+            key_bits: role_entry.key_bits,
             ..cert::Certificate::default()
         };
 
@@ -157,7 +162,7 @@ impl PkiBackendInner {
     }
 
     pub fn fetch_cert(&self, req: &Request) -> Result<CertBundle, RvError> {
-        let serial_number_value = req.get_data("serial").expect("The serial_number field is required");
+        let serial_number_value = req.get_data("serial")?;
         let serial_number = serial_number_value.as_str().unwrap();
         let serial_number_hex = serial_number.replace(":", "-").to_lowercase();
         let entry = req.storage_get(format!("certs/{}", serial_number_hex).as_str())?;

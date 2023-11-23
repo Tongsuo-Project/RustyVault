@@ -188,7 +188,7 @@ pub struct Certificate {
     pub uri_sans: Vec<String>,
     pub is_ca: bool,
     pub key_type: String,
-    pub key_bits: i32,
+    pub key_bits: u32,
 }
 
 impl Default for Certificate {
@@ -211,7 +211,7 @@ impl Default for Certificate {
             uri_sans: Vec::new(),
             is_ca: false,
             key_type: "rsa".to_string(),
-            key_bits: 2045,
+            key_bits: 2048,
         }
     }
 }
@@ -293,14 +293,27 @@ impl Certificate {
                           ca_cert: &X509,
                           ca_key: &PKey<Private>)
     -> Result<CertBundle, RvError> {
+        let key_bits = self.key_bits;
         let priv_key = match self.key_type.as_str() {
             "rsa" => {
-                let rsa_key = Rsa::generate(2048)?;
+                if key_bits != 2048 && key_bits != 3072 && key_bits != 4096 {
+                    return Err(RvError::ErrPkiKeyBitsInvalid);
+                }
+                let rsa_key = Rsa::generate(key_bits)?;
                 let pkey = PKey::from_rsa(rsa_key)?;
                 pkey
             },
             "ec" => {
-                let ec_group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
+                let curve_name = match key_bits {
+                    224 => Nid::SECP224R1,
+                    256 => Nid::SECP256K1,
+                    384 => Nid::SECP384R1,
+                    521 => Nid::SECP521R1,
+                    _ => {
+                        return Err(RvError::ErrPkiKeyBitsInvalid);
+                    }
+                };
+                let ec_group = EcGroup::from_curve_name(curve_name)?;
                 let ec_key = EcKey::generate(ec_group.as_ref())?;
                 let pkey = PKey::from_ec_key(ec_key)?;
                 pkey
