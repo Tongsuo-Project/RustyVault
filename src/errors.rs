@@ -128,8 +128,14 @@ pub enum RvError {
     ErrPkiKeyTypeInvalid,
     #[error("PKI key bits is invalid.")]
     ErrPkiKeyBitsInvalid,
+    #[error("PKI key_name already exists.")]
+    ErrPkiKeyNameAlreadyExist,
+    #[error("PKI key operation is invalid.")]
+    ErrPkiKeyOperationInvalid,
     #[error("PKI certificate is not found.")]
     ErrPkiCertNotFound,
+    #[error("PKI role is not found.")]
+    ErrPkiRoleNotFound,
     #[error("PKI internal error.")]
     ErrPkiInternal,
     #[error("Some IO error happened, {:?}", .source)]
@@ -146,6 +152,11 @@ pub enum RvError {
     OpenSSL {
         #[from]
         source: openssl::error::ErrorStack
+    },
+    #[error("Some pem error happened, {:?}", .source)]
+    Pem {
+        #[from]
+        source: pem::PemError
     },
     #[error("Some regex error happened, {:?}", .source)]
     Regex {
@@ -259,7 +270,10 @@ impl PartialEq for RvError {
             | (RvError::ErrPkiCaExtensionIncorrect, RvError::ErrPkiCaExtensionIncorrect)
             | (RvError::ErrPkiKeyTypeInvalid, RvError::ErrPkiKeyTypeInvalid)
             | (RvError::ErrPkiKeyBitsInvalid, RvError::ErrPkiKeyBitsInvalid)
+            | (RvError::ErrPkiKeyNameAlreadyExist, RvError::ErrPkiKeyNameAlreadyExist)
+            | (RvError::ErrPkiKeyOperationInvalid, RvError::ErrPkiKeyOperationInvalid)
             | (RvError::ErrPkiCertNotFound, RvError::ErrPkiCertNotFound)
+            | (RvError::ErrPkiRoleNotFound, RvError::ErrPkiRoleNotFound)
             | (RvError::ErrPkiInternal, RvError::ErrPkiInternal)
             | (RvError::ErrUnknown, RvError::ErrUnknown)
             => true,

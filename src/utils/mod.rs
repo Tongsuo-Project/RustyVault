@@ -12,6 +12,7 @@ use humantime::{format_rfc3339, parse_rfc3339};
 use crate::errors::RvError;
 
 pub mod cert;
+pub mod key;
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];

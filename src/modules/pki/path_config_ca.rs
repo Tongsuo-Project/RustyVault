@@ -18,10 +18,10 @@ use super::{
 
 impl PkiBackendInner {
     pub fn write_path_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let pem_bundle_value = req.get_data("pem_bundle").expect("pem_bundle not found");
+        let pem_bundle_value = req.get_data("pem_bundle")?;
         let pem_bundle = pem_bundle_value.as_str().unwrap();
 
-		let items = pem::parse_many(pem_bundle).expect("Failed to parse PEM bundle");
+		let items = pem::parse_many(pem_bundle)?;
         let mut key_found = false;
         let mut i = 0;
 
