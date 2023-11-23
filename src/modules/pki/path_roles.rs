@@ -22,8 +22,8 @@ pub struct RoleEntry {
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub max_ttl: Duration,
     pub key_type: String,
-    pub key_bits: i32,
-    pub signature_bits: i32,
+    pub key_bits: u32,
+    pub signature_bits: u32,
     pub allow_localhost: bool,
     pub allow_bare_domains: bool,
     pub allow_subdomains: bool,
@@ -57,7 +57,7 @@ impl PkiBackendInner {
     }
 
     pub fn read_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let name_vale = req.get_data("name").expect("The role name field is required");
+        let name_vale = req.get_data("name")?;
         let name = name_vale.as_str().unwrap();
         let role_entry = self.get_role(req, name)?;
         let data = serde_json::to_value(&role_entry)?;
@@ -65,7 +65,7 @@ impl PkiBackendInner {
     }
 
     pub fn create_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let name_vale = req.get_data("name").expect("The role name field is required");
+        let name_vale = req.get_data("name")?;
         let name = name_vale.as_str().unwrap();
         let ttl_vale = req.get_data("ttl")?;
         let ttl = {
@@ -77,7 +77,7 @@ impl PkiBackendInner {
             let max_ttl_str = max_ttl_vale.as_str().unwrap();
             parse_duration(max_ttl_str)?
         };
-        let key_type_vale = req.get_data("key_type").expect("The role key_type field is required");
+        let key_type_vale = req.get_data("key_type")?;
         let key_type = key_type_vale.as_str().unwrap();
         let key_bits_vale = req.get_data("key_bits")?;
         let mut key_bits = key_bits_vale.as_u64().unwrap();
@@ -146,8 +146,8 @@ impl PkiBackendInner {
             ttl: ttl,
             max_ttl: max_ttl,
             key_type: key_type.to_string(),
-            key_bits: key_bits as i32,
-            signature_bits: signature_bits as i32,
+            key_bits: key_bits as u32,
+            signature_bits: signature_bits as u32,
             allow_localhost: allow_localhost,
             allow_bare_domains: allow_bare_domains,
             allow_subdomains: allow_subdomains,
@@ -175,7 +175,7 @@ impl PkiBackendInner {
     }
 
     pub fn delete_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let name_vale = req.get_data("name").expect("The role name field is required");
+        let name_vale = req.get_data("name")?;
         let name = name_vale.as_str().unwrap();
         if name == "" {
             return Err(RvError::ErrRequestNoDataField);
