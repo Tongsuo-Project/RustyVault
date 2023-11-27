@@ -98,122 +98,122 @@ impl PkiBackend {
                 {
                     pattern: r"roles/(?P<name>\w[\w-]+\w)",
                     fields: {
-						"name": {
+                        "name": {
                             field_type: FieldType::Str,
                             required: true,
-							description: r#"Name of the role."#
-						},
-						"ttl": {
+                            description: r#"Name of the role."#
+                        },
+                        "ttl": {
                             field_type: FieldType::Str,
-							description: r#"
+                            description: r#"
 The lease duration (validity period of the certificate) if no specific lease
  duration is requested. The lease duration controls the expiration of certificates
 issued by this backend. defaults to the system default value or the value of
 max_ttl, whichever is shorter."#
-						},
-						"max_ttl": {
+                        },
+                        "max_ttl": {
                             field_type: FieldType::Str,
                             required: true,
-							description: r#"
+                            description: r#"
 The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
-						},
-						"allow_localhost": {
+                        },
+                        "allow_localhost": {
                             field_type: FieldType::Bool,
-							default: true,
-							description: r#"
+                            default: true,
+                            description: r#"
 Whether to allow "localhost" and "localdomain" as a valid common name in a request,
 independent of allowed_domains value."#
-						},
-						"allowed_domains": {
-							field_type: FieldType::Str,
-							description: r#"
+                        },
+                        "allowed_domains": {
+                            field_type: FieldType::Str,
+                            description: r#"
 Specifies the domains this role is allowed to issue certificates for.
 This is used with the allow_bare_domains, allow_subdomains, and allow_glob_domains
 to determine matches for the common name, DNS-typed SAN entries, and Email-typed
 SAN entries of certificates. See the documentation for more information.
 This parameter accepts a comma-separated string or list of domains."#
-						},
-						"allow_bare_domains": {
-							field_type: FieldType::Bool,
+                        },
+                        "allow_bare_domains": {
+                            field_type: FieldType::Bool,
                             default: false,
-							description: r#"
+                            description: r#"
 If set, clients can request certificates for the base domains themselves,
 e.g. "example.com" of domains listed in allowed_domains. This is a separate
 option as in some cases this can be considered a security threat.
 See the documentation for more information."#
-						},
-						"allow_subdomains": {
-							field_type: FieldType::Bool,
+                        },
+                        "allow_subdomains": {
+                            field_type: FieldType::Bool,
                             default: false,
-							description: r#"
+                            description: r#"
 If set, clients can request certificates for subdomains of domains listed in
 allowed_domains, including wildcard subdomains. See the documentation for more information."#
-						},
-						"allow_any_name": {
-							field_type: FieldType::Bool,
+                        },
+                        "allow_any_name": {
+                            field_type: FieldType::Bool,
                             default: false,
-							description: r#"
+                            description: r#"
 If set, clients can request certificates for any domain, regardless of allowed_domains restrictions.
 See the documentation for more information."#
-						},
-						"allow_ip_sans": {
-							field_type: FieldType::Bool,
-							default: true,
-							description: r#"
+                        },
+                        "allow_ip_sans": {
+                            field_type: FieldType::Bool,
+                            default: true,
+                            description: r#"
 If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
-						},
-						"server_flag": {
-							field_type: FieldType::Bool,
-							default: true,
-							description: r#"
+                        },
+                        "server_flag": {
+                            field_type: FieldType::Bool,
+                            default: true,
+                            description: r#"
 If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
-						},
-						"client_flag": {
-							field_type: FieldType::Bool,
-							default: true,
-							description: r#"
+                        },
+                        "client_flag": {
+                            field_type: FieldType::Bool,
+                            default: true,
+                            description: r#"
 If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
-						},
-						"code_signing_flag": {
-							field_type: FieldType::Bool,
-							description: r#"
+                        },
+                        "code_signing_flag": {
+                            field_type: FieldType::Bool,
+                            description: r#"
 If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
-						},
-						"key_type": {
-							field_type: FieldType::Str,
-							default: "rsa",
-							description: r#"
+                        },
+                        "key_type": {
+                            field_type: FieldType::Str,
+                            default: "rsa",
+                            description: r#"
 The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
-						},
-						"key_bits": {
-							field_type: FieldType::Int,
-							default: 0,
-							description: r#"
+                        },
+                        "key_bits": {
+                            field_type: FieldType::Int,
+                            default: 0,
+                            description: r#"
 The number of bits to use. Allowed values are 0 (universal default); with rsa
  key_type: 2048 (default), 3072, or 4096; with ec key_type: 224, 256 (default),
 384, or 521; ignored with ed25519."#
-						},
-						"signature_bits": {
-							field_type: FieldType::Int,
-							default: 0,
-							description: r#"
+                        },
+                        "signature_bits": {
+                            field_type: FieldType::Int,
+                            default: 0,
+                            description: r#"
 The number of bits to use in the signature algorithm; accepts 256 for SHA-2-256,
 384 for SHA-2-384, and 512 for SHA-2-512. defaults to 0 to automatically detect
  based on key length (SHA-2-256 for RSA keys, and matching the curve size for NIST P-Curves)."#
-						},
-						"not_before_duration": {
-							field_type: FieldType::Int,
-							default: 30,
-							description: r#"
+                        },
+                        "not_before_duration": {
+                            field_type: FieldType::Int,
+                            default: 30,
+                            description: r#"
 The duration before now which the certificate needs to be backdated by."#
-						},
-						"not_after": {
-							field_type: FieldType::Str,
+                        },
+                        "not_after": {
+                            field_type: FieldType::Str,
                             default: "",
-							description: r#"
+                            description: r#"
 Set the not after field of the certificate with specified date value.
 The value format should be given in UTC format YYYY-MM-ddTHH:MM:SSZ."#
-						},
+                        },
                         "ou": {
                             required: false,
                             field_type: FieldType::Str,
@@ -282,7 +282,7 @@ or revoked, so this option is recommended only for certificates that are
 non-sensitive, or extremely short-lived. This option implies a value of "false"
 for "generate_lease"."#
                         }
-					},
+                    },
                     operations: [
                         {op: Operation::Read, handler: pki_backend_ref1.read_path_role},
                         {op: Operation::Write, handler: pki_backend_ref2.create_path_role},

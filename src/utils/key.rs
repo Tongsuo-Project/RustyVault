@@ -2,7 +2,7 @@ use openssl::{
     pkey::{PKey},
     rsa::{Rsa, Padding},
     ec::{EcGroup, EcKey},
-	nid::Nid,
+    nid::Nid,
     rand::rand_bytes,
     hash::MessageDigest,
     sign::{Signer, Verifier},
@@ -31,8 +31,8 @@ impl Default for KeyBundle {
             id: generate_uuid(),
             name: String::new(),
             key_type: String::new(),
-			key: Vec::new(),
-			iv: Vec::new(),
+            key: Vec::new(),
+            iv: Vec::new(),
             bits: 0,
         }
     }
@@ -110,9 +110,9 @@ impl KeyBundle {
                 return Ok(signer.sign_to_vec()?);
             },
             "ec" => {
-				let ec_key = EcKey::private_key_from_pem(&self.key)?;
+                let ec_key = EcKey::private_key_from_pem(&self.key)?;
                 let pkey = PKey::from_ec_key(ec_key)?;
-				let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
+                let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
                 signer.update(data)?;
                 return Ok(signer.sign_to_vec()?);
             },
@@ -133,7 +133,7 @@ impl KeyBundle {
                 return Ok(verifier.verify(signature).unwrap_or(false));
             },
             "ec" => {
-				let ec_key = EcKey::private_key_from_pem(&self.key)?;
+                let ec_key = EcKey::private_key_from_pem(&self.key)?;
                 let pkey = PKey::from_ec_key(ec_key)?;
                 let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey)?;
                 verifier.update(data)?;

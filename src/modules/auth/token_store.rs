@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use serde::{Serialize, Deserialize};
 use humantime::parse_duration;
 use crate::{
-	utils::{generate_uuid, sha1, is_str_subset},
+    utils::{generate_uuid, sha1, is_str_subset},
     new_path, new_path_internal,
     new_logical_backend, new_logical_backend_internal,
     logical::{

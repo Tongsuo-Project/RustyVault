@@ -30,18 +30,12 @@ impl Default for StorageEntry {
 }
 
 impl StorageEntry {
-	pub fn new(k: &str, v: &impl Serialize) -> Result<StorageEntry, RvError> {
-        /*
-		let mut buf = Vec::new();
-		let mut enc = serde_json::Serializer::new(&mut buf);
-
-		v.serialize(&mut enc)?;
-        */
+    pub fn new(k: &str, v: &impl Serialize) -> Result<StorageEntry, RvError> {
         let data = serde_json::to_string(v)?;
 
-		Ok(StorageEntry {
-			key: k.to_string(),
-			value: data.into_bytes(),
-		})
-	}
+        Ok(StorageEntry {
+            key: k.to_string(),
+            value: data.into_bytes(),
+        })
+    }
 }
