@@ -1,16 +1,13 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use serde_json::{Value, Map};
+use std::{collections::HashMap, sync::Arc};
+
+use serde_json::{Map, Value};
+
+use super::{Operation, Path};
 use crate::{
-    logical::{
-        connection::Connection,
-        secret::SecretData,
-        auth::Auth,
-    },
-    storage::{Storage, StorageEntry},
     errors::RvError,
+    logical::{auth::Auth, connection::Connection, secret::SecretData},
+    storage::{Storage, StorageEntry},
 };
-use super::{Path, Operation};
 
 pub struct Request {
     pub id: String,
@@ -50,46 +47,19 @@ impl Default for Request {
 
 impl Request {
     pub fn new(path: &str) -> Self {
-        Self {
-            path: path.to_string(),
-            ..Default::default()
-        }
+        Self { path: path.to_string(), ..Default::default() }
     }
 
-    pub fn new_revoke_request(path: &str,
-                              secret: Option<SecretData>,
-                              data: Option<Map<String, Value>>) -> Self {
-        Self {
-            operation: Operation::Revoke,
-            path: path.to_string(),
-            secret: secret,
-            data: data,
-            ..Default::default()
-        }
+    pub fn new_revoke_request(path: &str, secret: Option<SecretData>, data: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Revoke, path: path.to_string(), secret, data, ..Default::default() }
     }
 
-    pub fn new_renew_request(path: &str,
-                             secret: Option<SecretData>,
-                             data: Option<Map<String, Value>>) -> Self {
-        Self {
-            operation: Operation::Renew,
-            path: path.to_string(),
-            secret: secret,
-            data: data,
-            ..Default::default()
-        }
+    pub fn new_renew_request(path: &str, secret: Option<SecretData>, data: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Renew, path: path.to_string(), secret, data, ..Default::default() }
     }
 
-    pub fn new_renew_auth_request(path: &str,
-                                  auth: Option<Auth>,
-                                  data: Option<Map<String, Value>>) -> Self {
-        Self {
-            operation: Operation::Renew,
-            path: path.to_string(),
-            auth: auth,
-            data: data,
-            ..Default::default()
-        }
+    pub fn new_renew_auth_request(path: &str, auth: Option<Auth>, data: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Renew, path: path.to_string(), auth, data, ..Default::default() }
     }
 
     pub fn get_data(&self, key: &str) -> Result<Value, RvError> {
@@ -108,13 +78,13 @@ impl Request {
 
         if self.data.is_some() {
             if let Some(data) = self.data.as_ref().unwrap().get(key) {
-                return Ok(data.clone())
+                return Ok(data.clone());
             }
         }
 
         if self.body.is_some() {
             if let Some(data) = self.body.as_ref().unwrap().get(key) {
-                return Ok(data.clone())
+                return Ok(data.clone());
             }
         }
 

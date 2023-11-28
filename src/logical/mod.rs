@@ -1,26 +1,28 @@
 use std::sync::Arc;
-use enum_map::{Enum};
+
+use enum_map::Enum;
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
-use serde::{Serialize, Deserialize};
+
 use crate::errors::RvError;
 
-pub mod connection;
-pub mod request;
-pub mod response;
+pub mod auth;
 pub mod backend;
-pub mod path;
+pub mod connection;
 pub mod field;
 pub mod lease;
+pub mod path;
+pub mod request;
+pub mod response;
 pub mod secret;
-pub mod auth;
 
+pub use auth::Auth;
+pub use backend::LogicalBackend;
+pub use field::{Field, FieldType};
+pub use lease::Lease;
+pub use path::{Path, PathOperation};
 pub use request::Request;
 pub use response::Response;
-pub use path::{Path, PathOperation};
-pub use field::{Field, FieldType};
-pub use backend::LogicalBackend;
-pub use auth::Auth;
-pub use lease::Lease;
 pub use secret::{Secret, SecretData};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, EnumString, Display, Enum, Serialize, Deserialize)]

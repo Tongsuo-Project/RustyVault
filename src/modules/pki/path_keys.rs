@@ -1,18 +1,12 @@
-use openssl::{
-    rsa::{Rsa},
-    ec::{EcKey},
-};
+use openssl::{ec::EcKey, rsa::Rsa};
 use serde_json::{json, Value};
+
+use super::PkiBackendInner;
 use crate::{
-    utils::key::KeyBundle,
-    logical::{
-        Backend, Request, Response,
-    },
-    storage::{StorageEntry},
     errors::RvError,
-};
-use super::{
-    PkiBackendInner,
+    logical::{Backend, Request, Response},
+    storage::StorageEntry,
+    utils::key::KeyBundle,
 };
 
 const PKI_CONFIG_KEY_PREFIX: &str = "config/key/";
@@ -46,13 +40,19 @@ impl PkiBackendInner {
             "key_name": key_bundle.name.clone(),
             "key_type": key_bundle.key_type.clone(),
             "key_bits": key_bundle.bits,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         if export_private_key {
             match key_type {
                 "rsa" | "ec" => {
-                    resp_data.insert("private_key".to_string(), Value::String(String::from_utf8_lossy(&key_bundle.key).to_string()));
-                },
+                    resp_data.insert(
+                        "private_key".to_string(),
+                        Value::String(String::from_utf8_lossy(&key_bundle.key).to_string()),
+                    );
+                }
                 _ => {
                     resp_data.insert("private_key".to_string(), Value::String(hex::encode(&key_bundle.key)));
                 }
@@ -92,11 +92,11 @@ impl PkiBackendInner {
                         "rsa" => {
                             let rsa = Rsa::private_key_from_pem(&key_bundle.key)?;
                             key_bundle.bits = rsa.size() * 8;
-                        },
+                        }
                         "ec" => {
                             let ec_key = EcKey::private_key_from_pem(&key_bundle.key)?;
                             key_bundle.bits = ec_key.group().degree();
-                        },
+                        }
                         _ => {
                             return Err(RvError::ErrPkiKeyTypeInvalid);
                         }
@@ -112,7 +112,7 @@ impl PkiBackendInner {
                     key_bundle.key = hex::decode(&hex_bundle)?;
                     key_bundle.bits = (key_bundle.key.len() as u32) * 8;
                     match key_bundle.bits {
-                        128 | 192 | 256 => {},
+                        128 | 192 | 256 => {}
                         _ => {
                             return Err(RvError::ErrPkiKeyBitsInvalid);
                         }
@@ -125,8 +125,8 @@ impl PkiBackendInner {
                             } else {
                                 return Err(RvError::ErrRequestFieldNotFound);
                             }
-                        },
-                        "aes-ecb" => {},
+                        }
+                        "aes-ecb" => {}
                         _ => {
                             return Err(RvError::ErrPkiKeyTypeInvalid);
                         }
@@ -143,7 +143,10 @@ impl PkiBackendInner {
             "key_name": key_bundle.name.clone(),
             "key_type": key_bundle.key_type.clone(),
             "key_bits": key_bundle.bits,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(resp_data))))
     }
@@ -161,7 +164,10 @@ impl PkiBackendInner {
 
         let resp_data = json!({
             "result": hex::encode(&result),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(resp_data))))
     }
@@ -182,7 +188,10 @@ impl PkiBackendInner {
 
         let resp_data = json!({
             "result": result,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(resp_data))))
     }
@@ -202,7 +211,10 @@ impl PkiBackendInner {
 
         let resp_data = json!({
             "result": hex::encode(&result),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(resp_data))))
     }
@@ -222,7 +234,10 @@ impl PkiBackendInner {
 
         let resp_data = json!({
             "result": hex::encode(&result),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(resp_data))))
     }

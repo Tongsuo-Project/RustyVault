@@ -1,11 +1,13 @@
 use std::sync::{Arc, RwLock};
+
 use radix_trie::{Trie, TrieCommon};
+
 use crate::{
-    logical::{Operation, Backend, Request, Response},
+    errors::RvError,
     handler::Handler,
+    logical::{Backend, Operation, Request, Response},
     mount::MountEntry,
     storage::barrier_view::BarrierView,
-    errors::RvError,
 };
 
 struct RouterEntry {
@@ -29,12 +31,16 @@ impl RouterEntry {
 
 impl Router {
     pub fn new() -> Self {
-        Self {
-            root: Arc::new(RwLock::new(Trie::new())),
-        }
+        Self { root: Arc::new(RwLock::new(Trie::new())) }
     }
 
-    pub fn mount(&self, backend: Arc<dyn Backend>, prefix: &str, mount_entry: Arc<RwLock<MountEntry>>, view: BarrierView) -> Result<(), RvError> {
+    pub fn mount(
+        &self,
+        backend: Arc<dyn Backend>,
+        prefix: &str,
+        mount_entry: Arc<RwLock<MountEntry>>,
+        view: BarrierView,
+    ) -> Result<(), RvError> {
         log::debug!("mount, prefix: {}", prefix);
         let mut root = self.root.write()?;
 
@@ -52,7 +58,7 @@ impl Router {
             view: Arc::new(view),
             root_paths: new_radix_from_paths(root_paths.as_ref()),
             unauth_paths: new_radix_from_paths(unauth_paths.as_ref()),
-            mount_entry: mount_entry,
+            mount_entry,
         };
 
         root.insert(prefix.to_string(), router_entry);
@@ -172,7 +178,7 @@ impl Router {
 
         let root_path_match = root_entry.as_ref().unwrap().key().unwrap();
         if *root_entry.as_ref().unwrap().value().unwrap() {
-            return Ok(remain.starts_with(root_path_match ));
+            return Ok(remain.starts_with(root_path_match));
         }
 
         return Ok(remain == *root_path_match);
@@ -248,11 +254,7 @@ fn new_radix_from_paths(paths: &[String]) -> Trie<String, bool> {
     for path in paths {
         // Check if this is a prefix or exact match
         let prefix_match = path.ends_with('*');
-        let path = if prefix_match {
-            &path[..path.len() - 1]
-        } else {
-            path
-        };
+        let path = if prefix_match { &path[..path.len() - 1] } else { path };
 
         radix_paths.insert(path.to_string(), prefix_match);
     }

@@ -1,18 +1,17 @@
 use serde_json::json;
+
+use super::PkiBackendInner;
 use crate::{
-    logical::{
-        Backend, Request, Response,
-    },
-    utils::cert::CertBundle,
     errors::RvError,
-};
-use super::{
-    PkiBackendInner,
+    logical::{Backend, Request, Response},
+    utils::cert::CertBundle,
 };
 
 impl PkiBackendInner {
     pub fn handle_fetch_cert_bundle(&self, cert_bundle: &CertBundle) -> Result<Option<Response>, RvError> {
-        let ca_chain_pem: String = cert_bundle.ca_chain.iter()
+        let ca_chain_pem: String = cert_bundle
+            .ca_chain
+            .iter()
             .map(|x509| x509.to_pem().unwrap())
             .map(|pem| String::from_utf8_lossy(&pem).to_string())
             .collect::<Vec<String>>()
@@ -21,7 +20,10 @@ impl PkiBackendInner {
             "ca_chain": ca_chain_pem,
             "certificate": String::from_utf8_lossy(&cert_bundle.certificate.to_pem()?),
             "serial_number": cert_bundle.serial_number.clone(),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(resp_data))))
     }
@@ -40,8 +42,11 @@ impl PkiBackendInner {
         self.handle_fetch_cert_bundle(&cert_bundle)
     }
 
-    pub fn read_path_fetch_cert_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub fn read_path_fetch_cert_crl(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 }
-

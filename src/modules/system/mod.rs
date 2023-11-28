@@ -1,23 +1,20 @@
 use std::{
-    sync::{Arc, RwLock},
-    ops::Deref,
     collections::HashMap,
+    ops::Deref,
+    sync::{Arc, RwLock},
 };
-use as_any::{Downcast};
-use serde_json::{json, from_value, Value, Map};
+
+use as_any::Downcast;
+use serde_json::{from_value, json, Map, Value};
+
 use crate::{
-    new_path, new_path_internal, new_logical_backend, new_logical_backend_internal,
-    logical::{
-        Backend, LogicalBackend, Request, Response,
-        Operation, Path, PathOperation, Field, FieldType,
-    },
-    storage::{StorageEntry},
-    modules::{
-        Module, auth::AuthModule,
-    },
-    mount::MountEntry,
     core::Core,
     errors::RvError,
+    logical::{Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response},
+    modules::{auth::AuthModule, Module},
+    mount::MountEntry,
+    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
+    storage::StorageEntry,
 };
 
 static SYSTEM_BACKEND_HELP: &str = r#"
@@ -49,11 +46,7 @@ impl Deref for SystemBackend {
 
 impl SystemBackend {
     pub fn new(core: Arc<RwLock<Core>>) -> Self {
-        Self {
-            inner: Arc::new(SystemBackendInner {
-                core: core,
-            })
-        }
+        Self { inner: Arc::new(SystemBackendInner { core }) }
     }
 
     pub fn new_backend(&self) -> LogicalBackend {
@@ -448,7 +441,11 @@ impl SystemBackendInner {
         Ok(None)
     }
 
-    pub fn handle_policy_delete(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub fn handle_policy_delete(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
@@ -460,7 +457,11 @@ impl SystemBackendInner {
         Ok(None)
     }
 
-    pub fn handle_audit_disable(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub fn handle_audit_disable(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
@@ -478,7 +479,10 @@ impl SystemBackendInner {
 
         let data = json!({
             "value": String::from_utf8_lossy(&entry.unwrap().value),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(data))))
     }
@@ -493,10 +497,7 @@ impl SystemBackendInner {
         let core = self.core.read()?;
         let storage = core.barrier.as_storage();
 
-        let entry = StorageEntry {
-            key: path.to_string(),
-            value: value.as_bytes().to_vec(),
-        };
+        let entry = StorageEntry { key: path.to_string(), value: value.as_bytes().to_vec() };
 
         storage.put(&entry)?;
 
@@ -519,10 +520,7 @@ impl SystemBackendInner {
 
 impl SystemModule {
     pub fn new(core: Arc<RwLock<Core>>) -> Self {
-        Self {
-            name: "system".to_string(),
-            backend: Arc::new(SystemBackend::new(core)),
-        }
+        Self { name: "system".to_string(), backend: Arc::new(SystemBackend::new(core)) }
     }
 }
 

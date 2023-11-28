@@ -1,11 +1,11 @@
-use as_any::{AsAny};
-use crate::core::Core;
-use crate::errors::RvError;
+use as_any::AsAny;
 
-pub mod kv;
-pub mod system;
+use crate::{core::Core, errors::RvError};
+
 pub mod auth;
+pub mod kv;
 pub mod pki;
+pub mod system;
 
 pub trait Module: AsAny + Send + Sync {
     fn name(&self) -> String;

@@ -1,43 +1,40 @@
 use std::{
-    sync::{Arc, Mutex, RwLock},
     collections::HashMap,
+    sync::{Arc, Mutex, RwLock},
 };
+
 use lazy_static::lazy_static;
+
 use crate::{
-    utils::generate_uuid,
+    core::{Core, LogicalBackendNewFunc},
+    errors::RvError,
+    handler::Handler,
     logical::Backend,
     modules::Module,
-    core::{Core, LogicalBackendNewFunc},
-    mount::{MountTable, MountEntry},
+    mount::{MountEntry, MountTable},
     router::Router,
-    storage::{
-        barrier::SecurityBarrier,
-        barrier_view::BarrierView
-    },
-    handler::Handler,
-    errors::RvError,
+    storage::{barrier::SecurityBarrier, barrier_view::BarrierView},
+    utils::generate_uuid,
 };
 
 pub mod expiration;
 pub mod token_store;
-pub use token_store::TokenStore;
 pub use expiration::ExpirationManager;
+pub use token_store::TokenStore;
 
 const AUTH_CONFIG_PATH: &str = "core/auth";
 const AUTH_BARRIER_PREFIX: &str = "auth/";
 const AUTH_ROUTER_PREFIX: &str = "auth/";
 
 lazy_static! {
-    static ref DEFAULT_AUTH_MOUNTS: Vec<MountEntry> = vec![
-        MountEntry {
-            tainted: false,
-            uuid: generate_uuid(),
-            path: "token/".to_string(),
-            logical_type: "token".to_string(),
-            description: "token based credentials".to_string(),
-            options: None,
-        }
-    ];
+    static ref DEFAULT_AUTH_MOUNTS: Vec<MountEntry> = vec![MountEntry {
+        tainted: false,
+        uuid: generate_uuid(),
+        path: "token/".to_string(),
+        logical_type: "token".to_string(),
+        description: "token based credentials".to_string(),
+        options: None,
+    }];
 }
 
 pub struct AuthRouterStore {
@@ -47,10 +44,7 @@ pub struct AuthRouterStore {
 
 impl AuthRouterStore {
     pub fn new(mounts: Arc<MountTable>, router: Arc<Router>) -> Self {
-        Self {
-            mounts,
-            router,
-        }
+        Self { mounts, router }
     }
 }
 

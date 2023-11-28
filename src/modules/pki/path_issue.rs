@@ -1,24 +1,16 @@
-use std::time::{SystemTime, Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use humantime::parse_duration;
-use openssl::{
-    x509::{
-        X509NameBuilder,
-    },
-    asn1::Asn1Time,
-};
-use serde_json::{json, Value, Map};
+use openssl::{asn1::Asn1Time, x509::X509NameBuilder};
+use serde_json::{json, Map, Value};
+
+use super::PkiBackendInner;
 use crate::{
-    utils,
-    utils::cert,
-    utils::cert::CertBundle,
-    logical::{
-        Backend, Request, Response,
-    },
-    storage::{StorageEntry},
     errors::RvError,
-};
-use super::{
-    PkiBackendInner,
+    logical::{Backend, Request, Response},
+    storage::StorageEntry,
+    utils,
+    utils::{cert, cert::CertBundle},
 };
 
 impl PkiBackendInner {
@@ -73,7 +65,8 @@ impl PkiBackendInner {
         if ttl != "" {
             let ttl_dur = parse_duration(ttl)?;
             let req_ttl_not_after_dur = SystemTime::now() + ttl_dur;
-            let req_ttl_not_after = Asn1Time::from_unix(req_ttl_not_after_dur.duration_since(UNIX_EPOCH)?.as_secs() as i64)?;
+            let req_ttl_not_after =
+                Asn1Time::from_unix(req_ttl_not_after_dur.duration_since(UNIX_EPOCH)?.as_secs() as i64)?;
             let ca_not_after = ca_bundle.certificate.not_after();
             match ca_not_after.compare(&req_ttl_not_after) {
                 Ok(ret) => {
@@ -81,14 +74,14 @@ impl PkiBackendInner {
                         return Err(RvError::ErrRequestInvalid);
                     }
                     not_after = req_ttl_not_after_dur;
-                },
+                }
                 Err(err) => {
                     return Err(RvError::OpenSSL { source: err });
                 }
             }
         }
 
-        let mut subject_name  = X509NameBuilder::new().unwrap();
+        let mut subject_name = X509NameBuilder::new().unwrap();
         if role_entry.country.len() > 0 {
             subject_name.append_entry_by_text("C", &role_entry.country).unwrap();
         }
@@ -110,11 +103,11 @@ impl PkiBackendInner {
         let subject = subject_name.build();
 
         let mut cert = cert::Certificate {
-            not_before: not_before,
-            not_after: not_after,
-            subject: subject,
+            not_before,
+            not_after,
+            subject,
             dns_sans: common_names,
-            ip_sans: ip_sans,
+            ip_sans,
             key_bits: role_entry.key_bits,
             ..cert::Certificate::default()
         };
@@ -128,7 +121,9 @@ impl PkiBackendInner {
         }
 
         let cert_expiration = utils::asn1time_to_timestamp(cert_bundle.certificate.not_after().to_string().as_str())?;
-        let ca_chain_pem: String = cert_bundle.ca_chain.iter()
+        let ca_chain_pem: String = cert_bundle
+            .ca_chain
+            .iter()
             .map(|x509| x509.to_pem().unwrap())
             .map(|pem| String::from_utf8_lossy(&pem).to_string())
             .collect::<Vec<String>>()
@@ -141,7 +136,10 @@ impl PkiBackendInner {
             "private_key": String::from_utf8_lossy(&cert_bundle.private_key.private_key_to_pem_pkcs8()?),
             "private_key_type": cert_bundle.private_key_type.clone(),
             "serial_number": cert_bundle.serial_number.clone(),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         if role_entry.generate_lease {
             let mut secret_data: Map<String, Value> = Map::new();
@@ -174,4 +172,3 @@ impl PkiBackendInner {
         Ok(cert_bundle)
     }
 }
-

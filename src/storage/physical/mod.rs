@@ -1,7 +1,8 @@
-use std::sync::Arc;
-use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
-use serde_json::{Value};
+use std::{collections::HashMap, sync::Arc};
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
 use crate::errors::RvError;
 
 pub mod file;
@@ -27,21 +28,17 @@ pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Bac
             let backend = file::FileBackend::new(conf)?;
             Ok(Arc::new(backend))
         }
-        "mock" => {
-            Ok(Arc::new(mock::MockBackend::new()))
-        }
-        _ => {
-            Err(RvError::ErrPhysicalTypeInvalid)
-        }
+        "mock" => Ok(Arc::new(mock::MockBackend::new())),
+        _ => Err(RvError::ErrPhysicalTypeInvalid),
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::env;
-    use std::fs;
-    use std::collections::HashMap;
+    use std::{collections::HashMap, env, fs};
+
     use go_defer::defer;
+
     use super::*;
 
     #[test]
@@ -82,10 +79,7 @@ mod test {
         assert_eq!(res.unwrap(), None);
 
         // Make an Entry
-        let entry = BackendEntry {
-            key: "bar".to_string(),
-            value: "test".as_bytes().to_vec(),
-        };
+        let entry = BackendEntry { key: "bar".to_string(), value: "test".as_bytes().to_vec() };
 
         let res = backend.put(&entry);
         assert!(res.is_ok());
@@ -97,7 +91,7 @@ mod test {
             Some(e) => {
                 assert_eq!(e, entry);
             }
-            None => panic!("Get should ok!")
+            None => panic!("Get should ok!"),
         }
 
         // List should not be empty
@@ -124,18 +118,9 @@ mod test {
     }
 
     pub fn test_backend_list_prefix(backend: &dyn Backend) {
-        let entry1 = BackendEntry {
-            key: "bar".to_string(),
-            value: "test".as_bytes().to_vec(),
-        };
-        let entry2 = BackendEntry {
-            key: "bar/foo".to_string(),
-            value: "test".as_bytes().to_vec(),
-        };
-        let entry3 = BackendEntry {
-            key: "bar/foo/goo".to_string(),
-            value: "test".as_bytes().to_vec(),
-        };
+        let entry1 = BackendEntry { key: "bar".to_string(), value: "test".as_bytes().to_vec() };
+        let entry2 = BackendEntry { key: "bar/foo".to_string(), value: "test".as_bytes().to_vec() };
+        let entry3 = BackendEntry { key: "bar/foo/goo".to_string(), value: "test".as_bytes().to_vec() };
 
         let res = backend.put(&entry1);
         assert!(res.is_ok());

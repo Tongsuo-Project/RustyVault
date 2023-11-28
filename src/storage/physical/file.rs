@@ -1,11 +1,15 @@
-use std::sync::{Mutex, Arc};
-use std::collections::HashMap;
-use std::path::{PathBuf};
-use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::{self, Read, Write},
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+
 use serde_json::Value;
-use crate::errors::RvError;
+
 use super::{Backend, BackendEntry};
+use crate::errors::RvError;
 
 #[derive(Debug)]
 pub struct FileBackend {
@@ -115,12 +119,9 @@ impl FileBackend {
                     return Err(RvError::ErrPhysicalConfigItemMissing);
                 }
 
-                Ok(FileBackend {
-                    path: PathBuf::from(path.unwrap()),
-                    lock: Arc::new(Mutex::new(0)),
-                })
+                Ok(FileBackend { path: PathBuf::from(path.unwrap()), lock: Arc::new(Mutex::new(0)) })
             }
-            None => Err(RvError::ErrPhysicalConfigItemMissing)
+            None => Err(RvError::ErrPhysicalConfigItemMissing),
         }
     }
 
@@ -134,13 +135,14 @@ impl FileBackend {
 
 #[cfg(test)]
 mod test {
-    use std::env;
-    use std::fs;
-    use std::collections::HashMap;
+    use std::{collections::HashMap, env, fs};
+
     use go_defer::defer;
-    use super::*;
-    use super::super::test::test_backend;
-    use super::super::test::test_backend_list_prefix;
+
+    use super::{
+        super::test::{test_backend, test_backend_list_prefix},
+        *,
+    };
 
     #[test]
     fn test_file_backend() {
