@@ -1,12 +1,18 @@
-use std::sync::{RwLock, Arc};
-use rand::{Rng, thread_rng};
-use openssl::cipher::{Cipher, CipherRef};
-use openssl::cipher_ctx::{CipherCtx};
-use serde::{Serialize, Deserialize};
+use std::sync::{Arc, RwLock};
+
+use openssl::{
+    cipher::{Cipher, CipherRef},
+    cipher_ctx::CipherCtx,
+};
+use rand::{thread_rng, Rng};
+use serde::{Deserialize, Serialize};
+
+use super::{
+    barrier::{SecurityBarrier, BARRIER_INIT_PATH},
+    physical::{Backend, BackendEntry},
+    Storage, StorageEntry,
+};
 use crate::errors::RvError;
-use super::{Storage, StorageEntry};
-use super::barrier::{SecurityBarrier, BARRIER_INIT_PATH};
-use super::physical::{Backend, BackendEntry};
 
 const EPOCH_SIZE: usize = 4;
 const KEY_EPOCH: u8 = 1;
@@ -55,10 +61,7 @@ impl Storage for AESGCMBarrier {
 
         // Decrypt the ciphertext
         let plain = self.decrypt(pe.as_ref().unwrap().value.as_slice())?;
-        let entry = StorageEntry{
-            key: key.to_string(),
-            value: plain,
-        };
+        let entry = StorageEntry { key: key.to_string(), value: plain };
 
         Ok(Some(entry))
     }
@@ -71,10 +74,7 @@ impl Storage for AESGCMBarrier {
 
         let ciphertext = self.encrypt(entry.value.as_slice())?;
 
-        let be = BackendEntry {
-            key: entry.key.clone(),
-            value: ciphertext,
-        };
+        let be = BackendEntry { key: entry.key.clone(), value: ciphertext };
 
         self.backend.put(&be)?;
 
@@ -110,10 +110,7 @@ impl SecurityBarrier for AESGCMBarrier {
 
         let encrypt_key = self.generate_key()?;
 
-        let barrier_init = BarrierInit {
-            version: 1,
-            key: encrypt_key,
-        };
+        let barrier_init = BarrierInit { version: 1, key: encrypt_key };
 
         let serialized_barrier_init = serde_json::to_string(&barrier_init)?;
 
@@ -121,10 +118,7 @@ impl SecurityBarrier for AESGCMBarrier {
 
         let value = self.encrypt(serialized_barrier_init.as_bytes())?;
 
-        let be = BackendEntry {
-            key: BARRIER_INIT_PATH.to_string(),
-            value: value,
-        };
+        let be = BackendEntry { key: BARRIER_INIT_PATH.to_string(), value };
 
         self.backend.put(&be)?;
 
@@ -251,9 +245,9 @@ impl AESGCMBarrier {
 
         out[3] = KEY_EPOCH;
         out[4] = AES_GCM_VERSION;
-        out[5..5+nonce_size].copy_from_slice(nonce.as_slice());
-        out[5+nonce_size..5+nonce_size+ciphertext.len()].copy_from_slice(ciphertext.as_slice());
-        out[5+nonce_size+ciphertext.len()..size].copy_from_slice(tag.as_slice());
+        out[5..5 + nonce_size].copy_from_slice(nonce.as_slice());
+        out[5 + nonce_size..5 + nonce_size + ciphertext.len()].copy_from_slice(ciphertext.as_slice());
+        out[5 + nonce_size + ciphertext.len()..size].copy_from_slice(tag.as_slice());
 
         Ok(out)
     }
@@ -278,14 +272,14 @@ impl AESGCMBarrier {
             return Err(RvError::ErrBarrierVersionMismatch);
         }
 
-        let nonce = &ciphertext[5..5+nonce_size];
+        let nonce = &ciphertext[5..5 + nonce_size];
 
         cipher_ctx.decrypt_init(Some(cipher), Some(key.as_slice()), Some(nonce))?;
         cipher_ctx.set_padding(false);
 
         let tag_size = cipher_ctx.tag_length();
-        let raw = &ciphertext[5+nonce_size..ciphertext.len()-tag_size];
-        let tag = &ciphertext[ciphertext.len()-tag_size..ciphertext.len()];
+        let raw = &ciphertext[5 + nonce_size..ciphertext.len() - tag_size];
+        let tag = &ciphertext[ciphertext.len() - tag_size..ciphertext.len()];
         let size = ciphertext.len() - 5 - nonce_size - tag_size;
         let mut out = vec![0u8; size];
 
@@ -300,13 +294,12 @@ impl AESGCMBarrier {
 
 #[cfg(test)]
 mod test {
-    use std::env;
-    use std::fs;
-    use std::collections::HashMap;
-    use serde_json::Value;
+    use std::{collections::HashMap, env, fs};
+
     use go_defer::defer;
-    use super::*;
-    use super::super::*;
+    use serde_json::Value;
+
+    use super::{super::*, *};
 
     #[test]
     fn test_encrypt_decrypt() {
@@ -330,7 +323,7 @@ mod test {
         let backend = physical::new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier {
-            backend: backend,
+            backend,
             barrier_info: Arc::new(RwLock::new(BarrierInfo {
                 sealed: true,
                 key: Some(key),
@@ -362,14 +355,15 @@ mod test {
         assert!(ctx.is_ok());
         let cipher_ctx = ctx.unwrap();
 
-        let key = vec![121, 133, 170, 204, 71, 77, 160, 134, 22, 37, 254, 206, 120,
-                        206, 143, 197, 150, 83, 5, 45, 121, 51, 124, 110, 162, 1,
-                        9, 51, 16, 75, 157, 129];
+        let key = vec![
+            121, 133, 170, 204, 71, 77, 160, 134, 22, 37, 254, 206, 120, 206, 143, 197, 150, 83, 5, 45, 121, 51, 124,
+            110, 162, 1, 9, 51, 16, 75, 157, 129,
+        ];
 
         let backend = physical::new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier {
-            backend: backend,
+            backend,
             barrier_info: Arc::new(RwLock::new(BarrierInfo {
                 sealed: true,
                 key: Some(key),
@@ -378,10 +372,11 @@ mod test {
             })),
         };
 
-        let ciphertext = &[0, 0, 0, 1, 1, 99, 115, 28, 164, 208, 39, 20, 70, 150,
-                            217, 80, 159, 80, 251, 42, 49, 32, 136, 109, 90, 160,
-                            217, 227, 252, 159, 54, 194, 68, 146, 37, 88, 57, 225,
-                            144, 96, 105, 160, 187, 112, 145, 175, 24, 89, 33];
+        let ciphertext = &[
+            0, 0, 0, 1, 1, 99, 115, 28, 164, 208, 39, 20, 70, 150, 217, 80, 159, 80, 251, 42, 49, 32, 136, 109, 90,
+            160, 217, 227, 252, 159, 54, 194, 68, 146, 37, 88, 57, 225, 144, 96, 105, 160, 187, 112, 145, 175, 24, 89,
+            33,
+        ];
         let res = barrier.decrypt(ciphertext);
         assert!(res.is_ok());
     }
@@ -478,18 +473,9 @@ mod test {
         let get = barrier.get("/");
         assert!(get.is_err());
 
-        let entry1 = StorageEntry {
-            key: "bar".to_string(),
-            value: "test1".as_bytes().to_vec(),
-        };
-        let entry2 = StorageEntry {
-            key: "bar/foo".to_string(),
-            value: "test2".as_bytes().to_vec(),
-        };
-        let entry3 = StorageEntry {
-            key: "bar/foo/goo".to_string(),
-            value: "test3".as_bytes().to_vec(),
-        };
+        let entry1 = StorageEntry { key: "bar".to_string(), value: "test1".as_bytes().to_vec() };
+        let entry2 = StorageEntry { key: "bar/foo".to_string(), value: "test2".as_bytes().to_vec() };
+        let entry3 = StorageEntry { key: "bar/foo/goo".to_string(), value: "test3".as_bytes().to_vec() };
 
         let put = barrier.put(&entry1);
         assert!(put.is_ok());
@@ -505,12 +491,14 @@ mod test {
         assert!(keys.is_ok());
         let keys = keys.unwrap();
         assert_eq!(keys.len(), 3);
-        assert!(keys.join("") == "barbarrier/bar/"
+        assert!(
+            keys.join("") == "barbarrier/bar/"
                 || keys.join("") == "barbar/barrier/"
                 || keys.join("") == "bar/barbarrier/"
                 || keys.join("") == "barrier/bar/bar"
                 || keys.join("") == "barrier/barbar/"
-                || keys.join("") == "bar/barrier/bar");
+                || keys.join("") == "bar/barrier/bar"
+        );
         let get = barrier.get("bar");
         assert!(get.is_ok());
         assert_eq!(get.unwrap().unwrap().value, "test1".as_bytes());

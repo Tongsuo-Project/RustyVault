@@ -1,11 +1,7 @@
+use super::PkiBackendInner;
 use crate::{
-    logical::{
-        Backend, Request, Response,
-    },
     errors::RvError,
-};
-use super::{
-    PkiBackendInner,
+    logical::{Backend, Request, Response},
 };
 
 impl PkiBackendInner {

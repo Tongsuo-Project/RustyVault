@@ -1,24 +1,24 @@
 use std::{
-    sync::{Arc, RwLock},
-    ops::{Deref},
-    time::{SystemTime, Duration},
     collections::HashMap,
+    ops::Deref,
     path::PathBuf,
+    sync::{Arc, RwLock},
+    time::{Duration, SystemTime},
 };
-use serde_json::{Value, Map};
-use serde::{Serialize, Deserialize};
+
 use delay_timer::prelude::*;
-use crate::{
-    utils::{generate_uuid, serialize_system_time, deserialize_system_time},
-    logical::{
-        Auth, SecretData, Request, Response,
-    },
-    storage::{StorageEntry, barrier_view::BarrierView},
-    core::Core,
-    router::Router,
-    errors::RvError,
-};
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+
 use super::TokenStore;
+use crate::{
+    core::Core,
+    errors::RvError,
+    logical::{Auth, Request, Response, SecretData},
+    router::Router,
+    storage::{barrier_view::BarrierView, StorageEntry},
+    utils::{deserialize_system_time, generate_uuid, serialize_system_time},
+};
 
 pub const EXPIRATION_SUB_PATH: &str = "expire/";
 pub const LEASE_VIEW_PREFIX: &str = "id/";
@@ -26,8 +26,8 @@ pub const TOKEN_VIEW_PREFIX: &str = "token/";
 pub const MAX_REVOKE_ATTEMPTS: u32 = 6;
 pub const REVOKE_RETRY_SECS: Duration = Duration::from_secs(10);
 pub const MIN_REVOKE_DELAY_SECS: Duration = Duration::from_secs(5);
-pub const MAX_LEASE_DURATION_SECS: Duration= Duration::from_secs(30 * 24 * 60 * 60);
-pub const DEFAULT_LEASE_DURATION_SECS: Duration= MAX_LEASE_DURATION_SECS;
+pub const MAX_LEASE_DURATION_SECS: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+pub const DEFAULT_LEASE_DURATION_SECS: Duration = MAX_LEASE_DURATION_SECS;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LeaseEntry {
@@ -88,9 +88,7 @@ impl Default for ExpirationManagerInner {
 
 impl Default for ExpirationManager {
     fn default() -> Self {
-        Self {
-            inner: Arc::new(ExpirationManagerInner::default()),
-        }
+        Self { inner: Arc::new(ExpirationManagerInner::default()) }
     }
 }
 
@@ -106,15 +104,15 @@ impl LeaseEntry {
     fn renewable(&self) -> bool {
         let now = SystemTime::now();
         if self.expire_time < now {
-            return false
+            return false;
         }
 
         if self.secret.is_some() && !self.secret.as_ref().unwrap().renewable() {
-            return false
+            return false;
         }
 
         if self.auth.is_some() && !self.auth.as_ref().unwrap().renewable() {
-            return false
+            return false;
         }
 
         true
@@ -123,7 +121,10 @@ impl LeaseEntry {
 
 impl ExpirationTask {
     fn add_task<F: Fn() -> U + 'static + Send, U: std::future::Future + 'static + Send>(
-        &mut self, lease_id: &str, ttl: u64, routine: F
+        &mut self,
+        lease_id: &str,
+        ttl: u64,
+        routine: F,
     ) -> Result<(), RvError> {
         self.clean_finish_task()?;
 
@@ -144,7 +145,10 @@ impl ExpirationTask {
     }
 
     fn update_task<F: Fn() -> U + 'static + Send, U: std::future::Future + 'static + Send>(
-        &mut self, lease_id: &str, ttl: u64, routine: F
+        &mut self,
+        lease_id: &str,
+        ttl: u64,
+        routine: F,
     ) -> Result<(), RvError> {
         let task_id = self.task_id_map.get(lease_id);
         log::debug!("update task, lease_id: {}, ttl: {}", lease_id, ttl);
@@ -201,9 +205,7 @@ impl ExpirationManager {
         inner.id_view = Some(Arc::new(id_view));
         inner.token_view = Some(Arc::new(token_view));
 
-        let expiration = ExpirationManager {
-            inner: Arc::new(inner),
-        };
+        let expiration = ExpirationManager { inner: Arc::new(inner) };
 
         Ok(expiration)
     }
@@ -264,9 +266,7 @@ impl ExpirationManager {
         let ttl = resp.secret.as_ref().unwrap().ttl().as_secs();
         resp.secret.as_mut().unwrap().lease_id = lease_id.to_string();
 
-        le.data = resp.data.clone().map(|serde_map| {
-            serde_map.into_iter().collect()
-        });
+        le.data = resp.data.clone().map(|serde_map| serde_map.into_iter().collect());
         le.expire_time = resp.secret.as_ref().unwrap().expiration_time();
         le.secret = resp.secret.clone();
 
@@ -347,12 +347,10 @@ impl ExpirationManager {
             let lease_id = path.join(generate_uuid()).to_string_lossy().to_string();
 
             let le = LeaseEntry {
-                lease_id: lease_id,
+                lease_id,
                 client_token: req.client_token.clone(),
                 path: req.path.clone(),
-                data: resp.data.clone().map(|serde_map| {
-                    serde_map.into_iter().collect()
-                }),
+                data: resp.data.clone().map(|serde_map| serde_map.into_iter().collect()),
                 secret: Some(secret.clone()),
                 auth: None,
                 issue_time: now,
@@ -384,7 +382,7 @@ impl ExpirationManager {
         auth.issue_time = Some(now);
 
         let le = LeaseEntry {
-            lease_id: lease_id,
+            lease_id,
             client_token: auth.client_token.clone(),
             path: source.to_string(),
             data: None,
@@ -483,10 +481,7 @@ impl ExpirationManagerInner {
 
         let value = serde_json::to_string(&le)?;
 
-        let entry = StorageEntry {
-            key: le.lease_id.clone(),
-            value: value.as_bytes().to_vec(),
-        };
+        let entry = StorageEntry { key: le.lease_id.clone(), value: value.as_bytes().to_vec() };
 
         id_view.put(&entry)
     }
@@ -513,10 +508,7 @@ impl ExpirationManagerInner {
 
         let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
 
-        let entry = StorageEntry {
-            key: key,
-            value: lease_id.as_bytes().to_owned(),
-        };
+        let entry = StorageEntry { key, value: lease_id.as_bytes().to_owned() };
 
         token_view.put(&entry)
     }

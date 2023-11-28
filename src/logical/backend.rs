@@ -1,13 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
+
 use regex::Regex;
-use std::collections::HashMap;
-use serde_json::{Value, Map};
+use serde_json::{Map, Value};
+
+use super::{path::Path, request::Request, response::Response, secret::Secret, Backend, Operation};
 use crate::errors::RvError;
-use super::request::Request;
-use super::response::Response;
-use super::path::Path;
-use super::secret::Secret;
-use super::{Backend, Operation};
 
 #[derive(Clone)]
 pub struct LogicalBackend {
@@ -174,17 +171,16 @@ macro_rules! new_logical_backend_internal {
 
 #[cfg(test)]
 mod test {
-    use std::env;
-    use std::fs;
-    use std::sync::Arc;
-    use std::collections::HashMap;
-    use std::time::Duration;
+    use std::{collections::HashMap, env, fs, sync::Arc, time::Duration};
+
     use go_defer::defer;
+
     use super::*;
-    use crate::{new_path, new_path_internal, new_secret, new_secret_internal};
-    use crate::storage::physical;
-    use crate::storage::barrier_aes_gcm::AESGCMBarrier;
-    use crate::logical::{Field, FieldType, PathOperation};
+    use crate::{
+        logical::{Field, FieldType, PathOperation},
+        new_path, new_path_internal, new_secret, new_secret_internal,
+        storage::{barrier_aes_gcm::AESGCMBarrier, physical},
+    };
 
     #[test]
     fn test_logical_backend_match_path() {

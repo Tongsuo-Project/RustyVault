@@ -1,25 +1,25 @@
-use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
+
 use lazy_static::lazy_static;
-use serde::{Serialize, Deserialize};
-use crate::storage::{Storage, StorageEntry};
-use crate::storage::barrier_view::BarrierView;
-use crate::core::Core;
-use crate::router::Router;
-use crate::utils::generate_uuid;
-use crate::errors::RvError;
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    core::Core,
+    errors::RvError,
+    router::Router,
+    storage::{barrier_view::BarrierView, Storage, StorageEntry},
+    utils::generate_uuid,
+};
 
 const CORE_MOUNT_CONFIG_PATH: &str = "core/mounts";
 const LOGICAL_BARRIER_PREFIX: &str = "logical/";
-const SYSTEM_BARRIER_PREFIX: &str  = "sys/";
+const SYSTEM_BARRIER_PREFIX: &str = "sys/";
 
 lazy_static! {
-    static ref PROTECTED_MOUNTS: Vec<&'static str> = vec![
-        "audit/",
-        "auth/",
-        "sys/",
-    ];
-
+    static ref PROTECTED_MOUNTS: Vec<&'static str> = vec!["audit/", "auth/", "sys/",];
     static ref DEFAULT_CORE_MOUNTS: Vec<MountEntry> = vec![
         MountEntry {
             tainted: false,
@@ -70,9 +70,7 @@ impl MountEntry {
 
 impl MountTable {
     pub fn new() -> Self {
-        Self {
-            entries: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Self { entries: Arc::new(RwLock::new(HashMap::new())) }
     }
 
     pub fn hash(&self) -> Result<Vec<u8>, RvError> {
@@ -87,12 +85,8 @@ impl MountTable {
 
     pub fn delete(&self, path: &str) -> bool {
         match self.entries.write() {
-            Ok(mut mounts) => {
-                mounts.remove(path).is_some()
-            }
-            Err(_) => {
-                false
-            }
+            Ok(mut mounts) => mounts.remove(path).is_some(),
+            Err(_) => false,
         }
     }
 
@@ -148,10 +142,7 @@ impl MountTable {
 
     pub fn persist(&self, to: &str, storage: &dyn Storage) -> Result<(), RvError> {
         let value = serde_json::to_string(self)?;
-        let entry = StorageEntry {
-            key: to.to_string(),
-            value: value.into_bytes(),
-        };
+        let entry = StorageEntry { key: to.to_string(), value: value.into_bytes() };
         storage.put(&entry)?;
         Ok(())
     }

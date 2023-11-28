@@ -1,6 +1,7 @@
-use crate::errors::RvError;
-use crate::logical::request::Request;
-use crate::logical::response::Response;
+use crate::{
+    errors::RvError,
+    logical::{request::Request, response::Response},
+};
 
 pub trait Handler: Send + Sync {
     fn name(&self) -> String;
@@ -21,4 +22,3 @@ pub trait Handler: Send + Sync {
         Err(RvError::ErrHandlerDefault)
     }
 }
-

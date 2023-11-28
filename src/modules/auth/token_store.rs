@@ -1,32 +1,26 @@
-use std::{
-    sync::Arc,
-    ops::Deref,
-    time::Duration,
-    collections::HashMap,
-};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+
+use humantime::parse_duration;
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serde::{Serialize, Deserialize};
-use humantime::parse_duration;
-use crate::{
-    utils::{generate_uuid, sha1, is_str_subset},
-    new_path, new_path_internal,
-    new_logical_backend, new_logical_backend_internal,
-    logical::{
-        Auth, Lease,
-        Backend, LogicalBackend, Request, Response,
-        Operation, Path, PathOperation, Field, FieldType,
-    },
-    storage::{Storage, StorageEntry},
-    core::Core,
-    router::Router,
-    handler::Handler,
-    errors::RvError,
-};
+
 use super::{
+    expiration::{ExpirationManager, DEFAULT_LEASE_DURATION_SECS, MAX_LEASE_DURATION_SECS},
     AUTH_ROUTER_PREFIX,
-    expiration::{ExpirationManager, MAX_LEASE_DURATION_SECS, DEFAULT_LEASE_DURATION_SECS},
+};
+use crate::{
+    core::Core,
+    errors::RvError,
+    handler::Handler,
+    logical::{
+        Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
+    },
+    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
+    router::Router,
+    storage::{Storage, StorageEntry},
+    utils::{generate_uuid, is_str_subset, sha1},
 };
 
 const TOKEN_LOOKUP_PREFIX: &str = "id/";
@@ -84,7 +78,7 @@ pub struct TokenStoreInner {
 }
 
 pub struct TokenStore {
-    pub inner: Arc<TokenStoreInner>
+    pub inner: Arc<TokenStoreInner>,
 }
 
 impl Deref for TokenStore {
@@ -123,13 +117,9 @@ impl Default for TokenStoreInner {
 
 impl Default for TokenStore {
     fn default() -> Self {
-        let inner = TokenStoreInner {
-            ..TokenStoreInner::default()
-        };
+        let inner = TokenStoreInner { ..TokenStoreInner::default() };
 
-        Self {
-            inner: Arc::new(inner),
-        }
+        Self { inner: Arc::new(inner) }
     }
 }
 
@@ -150,10 +140,7 @@ impl TokenStore {
 
         if inner.salt.as_str() == "" {
             inner.salt = generate_uuid();
-            let raw = StorageEntry {
-                key: TOKEN_SALT_LOCATION.to_string(),
-                value: inner.salt.as_bytes().to_vec(),
-            };
+            let raw = StorageEntry { key: TOKEN_SALT_LOCATION.to_string(), value: inner.salt.as_bytes().to_vec() };
             view.as_storage().put(&raw)?;
         }
 
@@ -161,9 +148,7 @@ impl TokenStore {
         inner.view = Some(Arc::new(view));
         inner.expiration = expiration;
 
-        let token_store = TokenStore {
-            inner: Arc::new(inner),
-        };
+        let token_store = TokenStore { inner: Arc::new(inner) };
 
         Ok(token_store)
     }
@@ -303,21 +288,14 @@ impl TokenStoreInner {
                 return Err(RvError::ErrAuthTokenNotFound);
             }
 
-            let path = format!("{}{}/{}", TOKEN_PARENT_PREFIX,
-                               self.salt_id(&entry.parent), salted_id);
-            let entry = StorageEntry {
-                key: path,
-                ..StorageEntry::default()
-            };
+            let path = format!("{}{}/{}", TOKEN_PARENT_PREFIX, self.salt_id(&entry.parent), salted_id);
+            let entry = StorageEntry { key: path, ..StorageEntry::default() };
 
             view.put(&entry)?;
         }
 
         let path = format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id);
-        let entry = StorageEntry {
-            key: path,
-            value: value.as_bytes().to_vec(),
-        };
+        let entry = StorageEntry { key: path, value: value.as_bytes().to_vec() };
 
         view.put(&entry)
     }
@@ -329,13 +307,13 @@ impl TokenStoreInner {
 
         let view = self.view.as_ref().unwrap();
 
-        if entry.num_uses == 0{
+        if entry.num_uses == 0 {
             return Ok(());
         }
 
         entry.num_uses -= 1;
 
-        if entry.num_uses == 0{
+        if entry.num_uses == 0 {
             return self.revoke(&entry.id);
         }
 
@@ -343,10 +321,7 @@ impl TokenStoreInner {
         let value = serde_json::to_string(&entry)?;
 
         let path = format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id);
-        let entry = StorageEntry {
-            key: path,
-            value: value.as_bytes().to_vec(),
-        };
+        let entry = StorageEntry { key: path, value: value.as_bytes().to_vec() };
 
         view.put(&entry)
     }
@@ -427,8 +402,7 @@ impl TokenStoreInner {
         if entry.is_some() {
             let entry = entry.unwrap();
             if entry.parent.as_str() != "" {
-                let path = format!("{}{}/{}", TOKEN_PARENT_PREFIX,
-                                   self.salt_id(&entry.parent), salted_id);
+                let path = format!("{}{}/{}", TOKEN_PARENT_PREFIX, self.salt_id(&entry.parent), salted_id);
                 view.delete(&path)?;
             }
             //Revoke all secrets under this token
@@ -535,20 +509,13 @@ impl TokenStoreInner {
         self.create(&mut te)?;
 
         let auth = Auth {
-            lease: Lease {
-                ttl: Duration::from_secs(te.ttl),
-                renewable: renewable,
-                ..Lease::default()
-            },
+            lease: Lease { ttl: Duration::from_secs(te.ttl), renewable, ..Lease::default() },
             client_token: te.id.clone(),
             display_name: te.display_name.clone(),
             policies: te.policies.clone(),
             metadata: te.meta.clone(),
         };
-        let resp = Response {
-            auth: Some(auth),
-            ..Response::default()
-        };
+        let resp = Response { auth: Some(auth), ..Response::default() };
 
         Ok(Some(resp))
     }
@@ -581,9 +548,14 @@ impl TokenStoreInner {
         if let Some(data) = req.data.as_mut() {
             data.insert("token".to_string(), Value::String(req.client_token.clone()));
         } else {
-            req.data = Some(json!({
-                "token": req.client_token.clone(),
-            }).as_object().unwrap().clone());
+            req.data = Some(
+                json!({
+                    "token": req.client_token.clone(),
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            );
         }
 
         self.handle_lookup(backend, req)
@@ -618,7 +590,10 @@ impl TokenStoreInner {
             "display_name": te.display_name.clone(),
             "num_uses": te.num_uses,
             "ttl": te.ttl,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         Ok(Some(Response::data_response(Some(data))))
     }
@@ -641,10 +616,7 @@ impl TokenStoreInner {
 
         let auth = self.expiration.renew_token(&te.path, &te.id, increment)?;
 
-        let resp = Response {
-            auth: auth,
-            ..Response::default()
-        };
+        let resp = Response { auth, ..Response::default() };
 
         Ok(Some(resp))
     }

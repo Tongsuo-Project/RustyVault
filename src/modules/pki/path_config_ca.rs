@@ -1,19 +1,15 @@
 use openssl::{
-    x509::{X509},
-    pkey::{PKey, Id},
+    pkey::{Id, PKey},
+    x509::X509,
 };
 use pem;
+
+use super::PkiBackendInner;
 use crate::{
-    utils::cert,
-    utils::cert::CertBundle,
-    logical::{
-        Backend, Request, Response,
-    },
-    storage::{StorageEntry},
     errors::RvError,
-};
-use super::{
-    PkiBackendInner,
+    logical::{Backend, Request, Response},
+    storage::StorageEntry,
+    utils::{cert, cert::CertBundle},
 };
 
 impl PkiBackendInner {
@@ -50,16 +46,16 @@ impl PkiBackendInner {
                 match key.id() {
                     Id::RSA => {
                         cert_bundle.private_key_type = "rsa".to_string();
-                    },
+                    }
                     Id::EC => {
                         cert_bundle.private_key_type = "ec".to_string();
-                    },
+                    }
                     Id::SM2 => {
                         cert_bundle.private_key_type = "sm2".to_string();
-                    },
+                    }
                     Id::ED25519 => {
                         cert_bundle.private_key_type = "ed25519".to_string();
-                    },
+                    }
                     _ => {
                         cert_bundle.private_key_type = "other".to_string();
                     }

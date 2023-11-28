@@ -1,30 +1,27 @@
 use std::{
-    ops::Deref,
-    sync::{Arc, RwLock, atomic::AtomicU64},
-    time::{Duration},
     collections::HashMap,
-};
-use crate::{
-    new_path, new_path_internal,
-    new_secret, new_secret_internal,
-    new_logical_backend, new_logical_backend_internal,
-    logical::{
-        Backend, LogicalBackend, Request, Response,
-        Operation, Path, PathOperation, Field, FieldType,
-        secret::Secret,
-    },
-    modules::Module,
-    core::Core,
-    errors::RvError,
+    ops::Deref,
+    sync::{atomic::AtomicU64, Arc, RwLock},
+    time::Duration,
 };
 
-pub mod path_roles;
+use crate::{
+    core::Core,
+    errors::RvError,
+    logical::{
+        secret::Secret, Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response,
+    },
+    modules::Module,
+    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_secret, new_secret_internal,
+};
+
 pub mod path_config_ca;
 pub mod path_config_crl;
 pub mod path_fetch;
 pub mod path_issue;
-pub mod path_revoke;
 pub mod path_keys;
+pub mod path_revoke;
+pub mod path_roles;
 
 static PKI_BACKEND_HELP: &str = r#"
 The PKI backend dynamically generates X509 server and client certificates.
@@ -61,10 +58,10 @@ impl PkiBackend {
     pub fn new(core: Arc<RwLock<Core>>) -> Self {
         Self {
             inner: Arc::new(PkiBackendInner {
-                core: core,
+                core,
                 cert_count: AtomicU64::new(0),
                 revoked_cert_count: AtomicU64::new(0),
-            })
+            }),
         }
     }
 
@@ -115,7 +112,7 @@ max_ttl, whichever is shorter."#
                             field_type: FieldType::Str,
                             required: true,
                             description: r#"
-The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
+        The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
                         },
                         "allow_localhost": {
                             field_type: FieldType::Bool,
@@ -160,30 +157,30 @@ See the documentation for more information."#
                             field_type: FieldType::Bool,
                             default: true,
                             description: r#"
-If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
+        If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
                         },
                         "server_flag": {
                             field_type: FieldType::Bool,
                             default: true,
                             description: r#"
-If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
+        If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
                         },
                         "client_flag": {
                             field_type: FieldType::Bool,
                             default: true,
                             description: r#"
-If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
+        If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
                         },
                         "code_signing_flag": {
                             field_type: FieldType::Bool,
                             description: r#"
-If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
+        If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
                         },
                         "key_type": {
                             field_type: FieldType::Str,
                             default: "rsa",
                             description: r#"
-The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
+        The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
                         },
                         "key_bits": {
                             field_type: FieldType::Int,
@@ -205,7 +202,7 @@ The number of bits to use in the signature algorithm; accepts 256 for SHA-2-256,
                             field_type: FieldType::Int,
                             default: 30,
                             description: r#"
-The duration before now which the certificate needs to be backdated by."#
+        The duration before now which the certificate needs to be backdated by."#
                         },
                         "not_after": {
                             field_type: FieldType::Str,
@@ -218,31 +215,31 @@ The value format should be given in UTC format YYYY-MM-ddTHH:MM:SSZ."#
                             required: false,
                             field_type: FieldType::Str,
                             description: r#"
-If set, OU (OrganizationalUnit) will be set to this value in certificates issued by this role."#
+        If set, OU (OrganizationalUnit) will be set to this value in certificates issued by this role."#
                         },
                         "organization": {
                             required: false,
                             field_type: FieldType::Str,
                             description: r#"
-If set, O (Organization) will be set to this value in certificates issued by this role."#
+        If set, O (Organization) will be set to this value in certificates issued by this role."#
                         },
                         "country": {
                             required: false,
                             field_type: FieldType::Str,
                             description: r#"
-If set, Country will be set to this value in certificates issued by this role."#
+        If set, Country will be set to this value in certificates issued by this role."#
                         },
                         "locality": {
                             required: false,
                             field_type: FieldType::Str,
                             description: r#"
-If set, Locality will be set to this value in certificates issued by this role."#
+        If set, Locality will be set to this value in certificates issued by this role."#
                         },
                         "province": {
                             required: false,
                             field_type: FieldType::Str,
                             description: r#"
-If set, Province will be set to this value in certificates issued by this role."#
+        If set, Province will be set to this value in certificates issued by this role."#
                         },
                         "use_csr_common_name": {
                             field_type: FieldType::Bool,
@@ -383,13 +380,13 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
                         "common_name": {
                             field_type: FieldType::Str,
                             description: r#"
-The requested common name; if you want more than one, specify the alternative names in the alt_names map"#
+        The requested common name; if you want more than one, specify the alternative names in the alt_names map"#
                         },
                         "alt_names": {
                             required: false,
                             field_type: FieldType::Str,
                             description: r#"
-The requested Subject Alternative Names, if any, in a comma-delimited list"#
+        The requested Subject Alternative Names, if any, in a comma-delimited list"#
                         },
                         "ip_sans": {
                             required: false,
@@ -639,28 +636,23 @@ impl Module for PkiModule {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::{
-        env,
-        fs,
-        time::{SystemTime, UNIX_EPOCH},
-        default::Default,
-        sync::{Arc, RwLock},
         collections::HashMap,
+        default::Default,
+        env, fs,
+        sync::{Arc, RwLock},
+        time::{SystemTime, UNIX_EPOCH},
     };
-    use serde_json::{json, Value, Map};
+
     use go_defer::defer;
-    use openssl::{
-        x509::X509,
-        pkey::PKey,
-        rsa::{Rsa},
-        ec::{EcKey},
-        asn1::Asn1Time,
-    };
+    use openssl::{asn1::Asn1Time, ec::EcKey, pkey::PKey, rsa::Rsa, x509::X509};
+    use serde_json::{json, Map, Value};
+
+    use super::*;
     use crate::{
-        storage::{physical, barrier_aes_gcm},
         core::{Core, SealConfig},
         logical::{Operation, Request},
+        storage::{barrier_aes_gcm, physical},
     };
 
     const CA_CERT_PEM: &str = r#"
@@ -721,7 +713,13 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         resp
     }
 
-    fn test_write_api(core: &Core, token: &str, path: &str, is_ok: bool, data: Option<Map<String, Value>>) -> Result<Option<Response>, RvError> {
+    fn test_write_api(
+        core: &Core,
+        token: &str,
+        path: &str,
+        is_ok: bool,
+        data: Option<Map<String, Value>>,
+    ) -> Result<Option<Response>, RvError> {
         let mut req = Request::new(path);
         req.operation = Operation::Write;
         req.client_token = token.to_string();
@@ -759,7 +757,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         // mount pki backend to path: pki/
         let mount_data = json!({
             "type": "pki",
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         let resp = test_write_api(&core, token, "sys/mounts/pki/", true, Some(mount_data));
         assert!(resp.is_ok());
@@ -768,7 +769,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
         let ca_data = json!({
             "pem_bundle": ca_pem_bundle,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         // config ca
         let resp = test_write_api(&core, token, "pki/config/ca", true, Some(ca_data));
@@ -779,8 +783,14 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
         assert!(resp_ca_cert_data.get("private_key").is_none());
         assert!(resp_ca_pem_cert_data.get("private_key").is_none());
-        assert_eq!(resp_ca_cert_data["certificate"].as_str().unwrap(), resp_ca_pem_cert_data["certificate"].as_str().unwrap());
-        assert_eq!(resp_ca_cert_data["serial_number"].as_str().unwrap(), resp_ca_pem_cert_data["serial_number"].as_str().unwrap());
+        assert_eq!(
+            resp_ca_cert_data["certificate"].as_str().unwrap(),
+            resp_ca_pem_cert_data["certificate"].as_str().unwrap()
+        );
+        assert_eq!(
+            resp_ca_cert_data["serial_number"].as_str().unwrap(),
+            resp_ca_pem_cert_data["serial_number"].as_str().unwrap()
+        );
         assert_eq!(resp_ca_cert_data["certificate"].as_str().unwrap().trim(), CA_CERT_PEM.trim());
     }
 
@@ -798,7 +808,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "organization": "ANT-Group",
             "ou": "Big-Security",
             "no_store": false,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         // config role
         assert!(test_write_api(&core, token, "pki/roles/test", true, Some(role_data)).is_ok());
@@ -809,8 +822,8 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let data = resp.unwrap().data;
         assert!(data.is_some());
         let role_data = data.unwrap();
-        assert_eq!(role_data["ttl"].as_u64().unwrap(), 60*24*60*60);
-        assert_eq!(role_data["max_ttl"].as_u64().unwrap(), 365*24*60*60);
+        assert_eq!(role_data["ttl"].as_u64().unwrap(), 60 * 24 * 60 * 60);
+        assert_eq!(role_data["max_ttl"].as_u64().unwrap(), 365 * 24 * 60 * 60);
         assert_eq!(role_data["key_type"].as_str().unwrap(), "rsa");
         assert_eq!(role_data["key_bits"].as_u64().unwrap(), 4096);
         assert_eq!(role_data["country"].as_str().unwrap(), "CN");
@@ -829,7 +842,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "ttl": "10d",
             "common_name": "test.com",
             "alt_names": "a.test.com,b.test.com",
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         // issue cert
         let resp = test_write_api(&core, token, "pki/issue/test", true, Some(issue_data));
@@ -853,7 +869,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert!(priv_key.public_eq(&cert.public_key().unwrap()));
         let serial_number = cert.serial_number().to_bn().unwrap();
         let serial_number_hex = serial_number.to_hex_str().unwrap();
-        assert_eq!(cert_data["serial_number"].as_str().unwrap().replace(":", "").to_lowercase().as_str(), serial_number_hex.to_lowercase().as_str());
+        assert_eq!(
+            cert_data["serial_number"].as_str().unwrap().replace(":", "").to_lowercase().as_str(),
+            serial_number_hex.to_lowercase().as_str()
+        );
         let expiration_time = Asn1Time::from_unix(cert_data["expiration"].as_i64().unwrap()).unwrap();
         let ttl_compare = cert.not_after().compare(&expiration_time);
         assert!(ttl_compare.is_ok());
@@ -861,31 +880,67 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let expiration_ttl = cert_data["expiration"].as_u64().unwrap();
         let ttl = expiration_ttl - now_timestamp;
-        let expect_ttl = 10*24*60*60;
+        let expect_ttl = 10 * 24 * 60 * 60;
         assert!(ttl <= expect_ttl);
         assert!((ttl + 10) > expect_ttl);
 
         //test fetch cert
         let serial_number_hex = cert_data["serial_number"].as_str().unwrap();
-        let resp_lowercase = test_read_api(&core, token, format!("pki/cert/{}", serial_number_hex.to_lowercase().as_str()).as_str(), true);
-        let resp_uppercase = test_read_api(&core, token, format!("pki/cert/{}", serial_number_hex.to_uppercase().as_str()).as_str(), true);
+        let resp_lowercase = test_read_api(
+            &core,
+            token,
+            format!("pki/cert/{}", serial_number_hex.to_lowercase().as_str()).as_str(),
+            true,
+        );
+        let resp_uppercase = test_read_api(
+            &core,
+            token,
+            format!("pki/cert/{}", serial_number_hex.to_uppercase().as_str()).as_str(),
+            true,
+        );
         let resp_lowercase_cert_data = resp_lowercase.unwrap().unwrap().data.unwrap();
         let resp_uppercase_cert_data = resp_uppercase.unwrap().unwrap().data.unwrap();
         assert!(resp_lowercase_cert_data.get("private_key").is_none());
         assert!(resp_uppercase_cert_data.get("private_key").is_none());
-        assert_eq!(resp_lowercase_cert_data["certificate"].as_str().unwrap(), resp_uppercase_cert_data["certificate"].as_str().unwrap());
-        assert_eq!(cert_data["certificate"].as_str().unwrap(), resp_uppercase_cert_data["certificate"].as_str().unwrap());
-        assert_eq!(cert_data["serial_number"].as_str().unwrap(), resp_lowercase_cert_data["serial_number"].as_str().unwrap());
+        assert_eq!(
+            resp_lowercase_cert_data["certificate"].as_str().unwrap(),
+            resp_uppercase_cert_data["certificate"].as_str().unwrap()
+        );
+        assert_eq!(
+            cert_data["certificate"].as_str().unwrap(),
+            resp_uppercase_cert_data["certificate"].as_str().unwrap()
+        );
+        assert_eq!(
+            cert_data["serial_number"].as_str().unwrap(),
+            resp_lowercase_cert_data["serial_number"].as_str().unwrap()
+        );
     }
 
-    fn test_pki_generate_key_case(core: &Core, token: &str, key_name: &str, key_type: &str, key_bits: u32, exported: bool, is_ok: bool) {
+    fn test_pki_generate_key_case(
+        core: &Core,
+        token: &str,
+        key_name: &str,
+        key_type: &str,
+        key_bits: u32,
+        exported: bool,
+        is_ok: bool,
+    ) {
         let req_data = json!({
             "key_name": key_name.to_string(),
             "key_type": key_type.to_string(),
             "key_bits": key_bits,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         println!("generate req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(core, token, format!("pki/keys/generate/{}", if exported { "exported" } else { "internal" }).as_str(), is_ok, Some(req_data));
+        let resp = test_write_api(
+            core,
+            token,
+            format!("pki/keys/generate/{}", if exported { "exported" } else { "internal" }).as_str(),
+            is_ok,
+            Some(req_data),
+        );
         if !is_ok {
             return;
         }
@@ -906,41 +961,51 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
                     let rsa_key = Rsa::private_key_from_pem(private_key_pem.as_bytes());
                     assert!(rsa_key.is_ok());
                     assert_eq!(rsa_key.unwrap().size() * 8, key_bits);
-                },
+                }
                 "ec" => {
                     let ec_key = EcKey::private_key_from_pem(private_key_pem.as_bytes());
                     assert!(ec_key.is_ok());
                     assert_eq!(ec_key.unwrap().group().degree(), key_bits);
-                },
+                }
                 "aes-gcm" | "aes-cbc" | "aes-ecb" => {
                     let aes_key = hex::decode(private_key_pem.as_bytes());
                     assert!(aes_key.is_ok());
                     assert_eq!(aes_key.unwrap().len() as u32 * 8, key_bits);
-                },
-                _ => {
                 }
+                _ => {}
             }
         } else {
             assert!(key_data.get("private_key").is_none());
         }
     }
 
-    fn test_pki_import_key_case(core: &Core, token: &str, key_name: &str, key_type: &str, key_bits: u32, iv: &str, data: &str, is_ok: bool) {
+    fn test_pki_import_key_case(
+        core: &Core,
+        token: &str,
+        key_name: &str,
+        key_type: &str,
+        key_bits: u32,
+        iv: &str,
+        data: &str,
+        is_ok: bool,
+    ) {
         let mut req_data = json!({
             "key_name": key_name.to_string(),
             "key_type": key_type.to_string(),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         match key_type {
             "rsa" | "ec" => {
                 req_data.insert("pem_bundle".to_string(), Value::String(data.to_string()));
-            },
+            }
             "aes-gcm" | "aes-cbc" | "aes-ecb" => {
                 req_data.insert("hex_bundle".to_string(), Value::String(data.to_string()));
                 req_data.insert("iv".to_string(), Value::String(iv.to_string()));
-            },
-            _ => {
             }
+            _ => {}
         }
 
         println!("import req_data: {:?}, is_ok: {}", req_data, is_ok);
@@ -963,7 +1028,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let req_data = json!({
             "key_name": key_name.to_string(),
             "data": hex::encode(data),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         println!("sign req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(core, token, "pki/keys/sign", is_ok, Some(req_data));
         if !is_ok {
@@ -982,7 +1050,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "key_name": key_name.to_string(),
             "data": hex::encode(data),
             "signature": signature,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         println!("verify req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(core, token, "pki/keys/verify", is_ok, Some(req_data));
         let resp_body = resp.unwrap();
@@ -998,7 +1069,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "key_name": key_name.to_string(),
             "data": hex::encode("bad data".as_bytes()),
             "signature": signature,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         println!("verify bad req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(core, token, "pki/keys/verify", true, Some(req_data));
         let resp_body = resp.unwrap();
@@ -1013,7 +1087,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "key_name": key_name.to_string(),
             "data": hex::encode(data),
             "signature": signature[2..],
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         println!("verify bad signatue req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(core, token, "pki/keys/verify", true, Some(req_data));
         let resp_body = resp.unwrap();
@@ -1028,7 +1105,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "key_name": key_name.to_string(),
             "data": hex::encode(data),
             "signature": signature[1..],
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         assert!(test_write_api(core, token, "pki/keys/verify", false, Some(req_data)).is_err());
     }
 
@@ -1037,7 +1117,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let req_data = json!({
             "key_name": key_name.to_string(),
             "data": origin_data.clone(),
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         println!("encrypt req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(core, token, "pki/keys/encrypt", is_ok, Some(req_data));
         if !is_ok {
@@ -1055,7 +1138,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let req_data = json!({
             "key_name": key_name.to_string(),
             "data": encrypted_data,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         println!("decrypt req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(core, token, "pki/keys/decrypt", is_ok, Some(req_data));
         let resp_body = resp.unwrap();
@@ -1070,7 +1156,10 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let req_data = json!({
             "key_name": key_name.to_string(),
             "data": encrypted_data[1..],
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         assert!(test_write_api(core, token, "pki/keys/decrypt", false, Some(req_data)).is_err());
     }
 
@@ -1169,12 +1258,349 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
     fn test_pki_import_key(core: Arc<RwLock<Core>>, token: &str) {
         let core = core.read().unwrap();
         //test import rsa key
-        test_pki_import_key_case(&core, token, "rsa-2048-import", "rsa", 2048, "", "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/K85aluWn5Pkl\nHZ5Ye59UkY7S5dLLBSOXpVyECniTpYi08jK0mwP3D+xqgDvS7OBEK2OVO+eUSWCe\ntNHGA/u00HeeADVTNaZK7f2+1KQPkmernOecRU0xbl59ScSOzDDYXMKIhoRs6Neu\nqw+jRTuW0t9/UOmni1pN+w9i5z9Lmz0qMsSaPDoy1JqajZoTyzJz30ftN/kEg75T\nuhwczIzyKPib/IzvsgoPq6ZtVFx9hVEU6SkaKu3jLrxEIpwAROn0fIrcNuOE+VxY\ntpGrBFheD0qbEqOLtMgUYAMWWG86tqWBOBxEnRSEmxhPDLqhu6a4yfBKtwL1JA1e\nPeuiEEKJAgMBAAECggEAFHIZx0bajVrSqf1hc+LWLGQcQNezSY2lUVuDqgbj/3KA\nTPiW+LRC4ne8WBBFQFlKNlrnncyC3Nv+LpXLK7Y9rjMaNUvzaBCrANo0PbvInMu9\nNQr6cGmvCFQ0BzVOWtwMIKUcacqX5if+9/Tenskm8YoLEjbz+RHRLi7lkIqH5/d6\nlIJAss5Q/u3D9uTP0ngmztG65IV0vHacn0S3zyOZ7DD+MJwk4GUpYxTtgkFIzuDH\naQgkYcjJeNNWcOesEHs0u1Nqt9GlPyScde/jcblNPMdkBuu1vP0gxjCNdRVu9ZE5\nx7V9w2buKFwPIS+Hpv35t/0qvcoYDq1Vg1wj6VUVewKBgQDgv0pq1gwkvcZCttEb\nEIitqlQ2y0HH7TdiMB317U2wmLwPmVQ2b1gTD+cHNWE9y1F9rSVeDUfcizm9qvDk\nkjNOAfXRt5aFi2a03DKlGY57k6o9sp3qqvESEoryzUOUTUvYe9S7nXZ7B8/Pv0OE\n2yyEiCg4XtHTRYPLMqbGp359OwKBgQDZwT/ahzYM7RZex9i3BHpuqs6m9ig7W2oM\n7H1Qd4FOOa1lnnq5+/CXDH258OmqANvie/wcD/eQ/tvKIrUfm6DRBvSul2Bbae5F\nGJxLttPFqxCiGgWhPW4EWdFgHXCTmMd3gOByklfw1dMZkjor2kJJSi8kPvfWUKgM\noCyZ7aiTCwKBgFmnFSl/D0MMzOzJ/qocM1mLi6J7/FajYydw6FK1AfvDQam7UWOR\nkQGxo0g12/+Jfo1yp2hYReVNSJBHg2a6h2rDz2qEILBPBn55JF7FzhevtQZ9nQ8C\nd73s1a67gQzEtM+7vgXFb4DugdBujKGPyLdplRm/gVYU8dj58JtoL0YHAoGBAMyi\nQvOGJVE4bNFdVVeIqdXeRp24rk45tgu3InzAEZAFu+HHcOXe0VXhszVOJQhSDlFk\n2qM0jh6AouPuge/WPOaydrasIy1E+1mLqzWr9o/IFrV/ZtMD+6OzFIQSpnzOEoVH\nY6XHyUTWbK+XL3uOfMSLJooVcqrA2WwkCkYNhWHJAoGBANRT1KPQP0+Tlc+8FoGa\nq2Kt71bpNXUzj5Vi/Ikgqm0z943hAvBKIvxY2SPdybvSxk9YeUXhB88cApdepRzc\n4hNAvCtpiAQHbH5P9dpDXx6xbr1kT/z5iKe3VzxnEyLlm6yEItoq1k0ZvpyQO+W4\nbwtnhIcuKu7aG0qI2abuLtNI\n-----END PRIVATE KEY-----\n", true);
-        test_pki_import_key_case(&core, token, "rsa-3072-import", "rsa", 3072, "", "-----BEGIN PRIVATE KEY-----\n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\nDo5o32GEcxbLo+woXez/9og=\n-----END PRIVATE KEY-----\n", true);
-        test_pki_import_key_case(&core, token, "rsa-4096-import", "rsa", 4096, "", "-----BEGIN PRIVATE KEY-----\n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\nsrlAra2xKovU8At81EhC3oarMYLbY9w=\n-----END PRIVATE KEY-----\n", true);
-        test_pki_import_key_case(&core, token, "rsa-4096-import", "rsa", 4096, "", "-----BEGIN PRIVATE KEY-----\n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\nsrlAra2xKovU8At81EhC3oarMYLbY9w=\n-----END PRIVATE KEY-----\n", false);
-        test_pki_import_key_case(&core, token, "rsa-4096-import-bad-type", "rsaa", 4096, "", "-----BEGIN PRIVATE KEY-----\n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\nsrlAra2xKovU8At81EhC3oarMYLbY9w=\n-----END PRIVATE KEY-----\n", false);
-        test_pki_import_key_case(&core, token, "rsa-4096-import-bad-pem", "rsaa", 4096, "", "-----BEGIN PRIVATE KEY-----\n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\nsrlAra2xKovU8At81EhC3oarMYLbY9w=\n-----END PRIVATE KEY-----\n", false);
+        test_pki_import_key_case(
+            &core,
+            token,
+            "rsa-2048-import",
+            "rsa",
+            2048,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/K85aluWn5Pkl
+HZ5Ye59UkY7S5dLLBSOXpVyECniTpYi08jK0mwP3D+xqgDvS7OBEK2OVO+eUSWCe
+tNHGA/u00HeeADVTNaZK7f2+1KQPkmernOecRU0xbl59ScSOzDDYXMKIhoRs6Neu
+qw+jRTuW0t9/UOmni1pN+w9i5z9Lmz0qMsSaPDoy1JqajZoTyzJz30ftN/kEg75T
+uhwczIzyKPib/IzvsgoPq6ZtVFx9hVEU6SkaKu3jLrxEIpwAROn0fIrcNuOE+VxY
+tpGrBFheD0qbEqOLtMgUYAMWWG86tqWBOBxEnRSEmxhPDLqhu6a4yfBKtwL1JA1e
+PeuiEEKJAgMBAAECggEAFHIZx0bajVrSqf1hc+LWLGQcQNezSY2lUVuDqgbj/3KA
+TPiW+LRC4ne8WBBFQFlKNlrnncyC3Nv+LpXLK7Y9rjMaNUvzaBCrANo0PbvInMu9
+NQr6cGmvCFQ0BzVOWtwMIKUcacqX5if+9/Tenskm8YoLEjbz+RHRLi7lkIqH5/d6
+lIJAss5Q/u3D9uTP0ngmztG65IV0vHacn0S3zyOZ7DD+MJwk4GUpYxTtgkFIzuDH
+aQgkYcjJeNNWcOesEHs0u1Nqt9GlPyScde/jcblNPMdkBuu1vP0gxjCNdRVu9ZE5
+x7V9w2buKFwPIS+Hpv35t/0qvcoYDq1Vg1wj6VUVewKBgQDgv0pq1gwkvcZCttEb
+EIitqlQ2y0HH7TdiMB317U2wmLwPmVQ2b1gTD+cHNWE9y1F9rSVeDUfcizm9qvDk
+kjNOAfXRt5aFi2a03DKlGY57k6o9sp3qqvESEoryzUOUTUvYe9S7nXZ7B8/Pv0OE
+2yyEiCg4XtHTRYPLMqbGp359OwKBgQDZwT/ahzYM7RZex9i3BHpuqs6m9ig7W2oM
+7H1Qd4FOOa1lnnq5+/CXDH258OmqANvie/wcD/eQ/tvKIrUfm6DRBvSul2Bbae5F
+GJxLttPFqxCiGgWhPW4EWdFgHXCTmMd3gOByklfw1dMZkjor2kJJSi8kPvfWUKgM
+oCyZ7aiTCwKBgFmnFSl/D0MMzOzJ/qocM1mLi6J7/FajYydw6FK1AfvDQam7UWOR
+kQGxo0g12/+Jfo1yp2hYReVNSJBHg2a6h2rDz2qEILBPBn55JF7FzhevtQZ9nQ8C
+d73s1a67gQzEtM+7vgXFb4DugdBujKGPyLdplRm/gVYU8dj58JtoL0YHAoGBAMyi
+QvOGJVE4bNFdVVeIqdXeRp24rk45tgu3InzAEZAFu+HHcOXe0VXhszVOJQhSDlFk
+2qM0jh6AouPuge/WPOaydrasIy1E+1mLqzWr9o/IFrV/ZtMD+6OzFIQSpnzOEoVH
+Y6XHyUTWbK+XL3uOfMSLJooVcqrA2WwkCkYNhWHJAoGBANRT1KPQP0+Tlc+8FoGa
+q2Kt71bpNXUzj5Vi/Ikgqm0z943hAvBKIvxY2SPdybvSxk9YeUXhB88cApdepRzc
+4hNAvCtpiAQHbH5P9dpDXx6xbr1kT/z5iKe3VzxnEyLlm6yEItoq1k0ZvpyQO+W4
+bwtnhIcuKu7aG0qI2abuLtNI
+-----END PRIVATE KEY-----
+"#,
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "rsa-3072-import",
+            "rsa",
+            3072,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+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
+Do5o32GEcxbLo+woXez/9og=
+-----END PRIVATE KEY-----
+"#,
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "rsa-4096-import",
+            "rsa",
+            4096,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+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
+srlAra2xKovU8At81EhC3oarMYLbY9w=
+-----END PRIVATE KEY-----
+"#,
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "rsa-4096-import",
+            "rsa",
+            4096,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+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
+srlAra2xKovU8At81EhC3oarMYLbY9w=
+-----END PRIVATE KEY-----
+"#,
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "rsa-4096-import-bad-type",
+            "rsaa",
+            4096,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+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
+srlAra2xKovU8At81EhC3oarMYLbY9w=
+-----END PRIVATE KEY-----
+"#,
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "rsa-4096-import-bad-pem",
+            "rsaa",
+            4096,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+AAAAAAAAAAAAAAAAAAAAAAAkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+MIIJQwIBADANBgkqhkiG9w0BAQEFAASCCS0wggkpAgEAAoICAQDonanogPRAGLwJ
+Bg1EWDgaqJlQLnb7TrvtBzKCLjtw6ssi/1Q1Oldsw6+QEcDOUl5Z+p2SgyT9Ciq+
+eXZQ31TxSppmjyQ1E7xsUk33+TBt8Clcw7sXG0MT7CI+q4s356bJ5IF7O5Sz38Lj
+RC2svmE6ptWO+lGtZZTUM4nKs6TWOo/uwfg1OzmwIbFhZsy0l1cF6DO8XKI0L2I8
+MjNCZ6mUh7fYfREuXzX/rnZI8Kc4cQWaGfxHGXkXzmW0WQ3K7EfdXgdP9xAeTmvJ
+sSWlUVsrxo3+IHGjxExrAjB7xLCl778Nff+MVErt+4aveWocrNHOyXgfYHijyjxl
+x0BbjNmPiiBmtaApE950VNzmaoj7B+OrC4SY2yxVjnSOoGo0i08wJIIwYVZQBSwI
+yFECMzQupSQfo7/AeIhtXzKRtVHgI6M08IqRIiirqA0x62HQmFmjny3cWhUSHSaJ
+fcO0YLThCIjbyw8HtfMyHH3whFrX+hOvgEpC5yabwoqs5PseEAJ7vkOrsfo5/61R
+kRrwqonXD68CBwRXWwuGWlxPGRjBt9EMRh7tPTAQD5v5u4ZI1jDsAF24pIPMDAQs
+AhqahX+5zsNgIaY2YIBhMcu90eCqqUc9oHQ3l5jOYoGyfI58Vs3N5TEyGYPCu2Es
+FJKXNoU8NhH77Y+yWSkxCA20MB6lsQIDAQABAoICABoREOktCjHkk62vL+1otWDH
+Y+bITiz7NbPqCo7r/1038muJkTYlw4Y8p3/NfX2hXVFX9DBm4c45RXDyy39kh3BC
+m+rCP5xzCbpZvsL6+aJYN0pd5KlCNNIWs/+x2Xf6TYZyRNA6bP97I6u0CCpDa0HX
+UDcldeGocHUXEWnVl7Mp/NcUhWvxpxVFsUro6ieSjf3rd2C0QLj4VlnIhlX6p9Yt
+HzzzRumbYcG1GywxS4vXnnkWUF7nS9qPFnaPRCxpLeRwlQEw/m1m/E0tvLo5062k
+ImVH3XQsmyOiqywzblgp9Y7df7WJ/JuOhBlF0c5Ez34MtZlOhjZUg1Akc+HOdtKY
+RHPBk7Ixtg/PHRK/+nS/+7JqQ6SlDdwq6yarm0nghwcgmp+xC9Z4PgUpXO0RCoMi
+zwMSKtvlH1C8+dtaVIocPco9SRINV8WeiLcIM6IRkdvS9O+VqgBvjs/79r4iulqZ
+CroRUwaFVzrwJ/HDSIJMJDINdBnknPoETCW5fJKw7nO+sjp2W95Y8gtUT/Z2zv+u
+Ph5yUvFIuf9Wetl9PxAd4XkWZXUzSNKpxMbOCA1PofpLL3i9AB4cYSGpiUPFFoHO
+T/j2bEbswxGARzPe20JCmufqf22c3z8ulgusVLS67ds7vh6m29mvZqyi6uvmF5QB
+17Ji53b/lHrLJg/kkwjBAoIBAQD4iusLH+KhrE34f/FjkUQOMXqXy9gYZPlS3PpY
+frYdvLw6K2NXb15fV+OfwH7cdNBw5kQtx4odasw2cKxcbgyS4eoQLWnxLCTWQuOo
+RnGEvQWnUefccMWXsjdmvJQlbCB0WhWGgVorEGrN2W3d4vaVA6zahSQ7m8GvT5wz
+1h6ahQylOhAzAzdpewymET5QlAsyX54pAjTAUOXQzbxTabbPNli0mVa1xi/a1LKv
+J0GngUP/rXFWAvnDjbZsfsyRa5947HRt5yvwGgSj+3/8q6CMlSA8IjRgFVEJAtUS
+t/OkLBzXZ7AdRgD1EzSpI3YXFdvkMgMJQQxr5qmRsSshP7RXAoIBAQDvmGkM9dNd
+RZ4X3tgguIaldm2YUir8I1gFy2SjUe0BVxDuLqI+fCebE0J2BEwxrEJpJskDtMtF
+h/PVSSKNUhpe12A98qYhlczfyqtfLfnyAsX1C0YbtEK041NjM/NIX7Zr1xoQyRT9
+TL0CsLavl3oNRZ2j4d2rTYyBcn1A9blFfCfOppG3E0pd2f+JmTdp8ap/ITas4Rpj
+rYSiTMMDS0zT6agjsur/8/yPbgUjRzU02JUjfEXBpT6bCKdom+X+UTacnBri+JRx
+Kr6ZOPNxZzJX6hRHnrJ5b4x75JKYHeMQPaRy9/6+hj5QnC/5ZJLdgFBf986xNcM9
+uzIkWD8Q//E3AoIBAQCp/pI+/KMNA4Yc9p2LBXuv3YXFN2ZpYP7q/zu3tYsokcOI
+Yc7Dqee5fKqyxH3AmaFL5yMw0K8V6csdXTl2ysqM2Do4sGcqzo+vgPanTO8t4/9u
+7uWQcA2l8P5VpZwKcIdOLaNVaTncBJGYlCPCRQ904puiprgekS0LlH75MXWjKGd6
+x1j3GzcWTVRcbaTahjeWT7IkyF5+P5bAl0c9IiwoVDqd49db4t8uZJaGmGoegJqa
+0O2Y79YXO+FPGfcfa6YallgYJ6p0wcb0xftHPbhFD2aJ2rdKFKplaGuGLw1U99sO
+NdxOWWgkN+un2BpYNdo9nTtYZAZz8sN+Y9hlGGZnAoIBAAGqxdBZRYc4nMj9u/M+
+VXGBSXHt4G6wsEQaDjE0uLlxqaR+npJgusXRdHzturn9wNiKdIuaDnAFaiTpxVvG
+Xniadwj3T0CckjhcaKTY5QxSCJ6T3YED2BL6IfJmwiKWx+YoMP485/B7QDVslVjT
+bP36pgYl5Cz09S1RZp21F/zryDsf3ZOwhqvwgF6suj36eH059e9uAYkABBQ9BH5Z
+X8d5sLnO3OO7Bt7YnSCJtk0P1LnSe4nFZJIflUqdCxSh7Ada7rT1ldLTwU+/nbIE
+Tc1ey5VT/Vnq9MdH5903GAVc6HAEWblppbVZ4NuTX5I6+lQwnTeOcDVVwBuQoZ+0
+qDECggEBAIwdjxe5PVCk4dNZh5tiGta+IEeiF7nTrqFJrlGYQ5HUPUcD8chupAAB
+LdHdzlsJUyCsqAHUxk74CYPMmG2w4+Lyr8siTfDvTW5f9Q43vGAGzRF0oGyQNBHv
+VTNPCI2QzRBXneLn+hWcDda3Lgg0IMpPQEXJKOak3kOFnboSwvsN8aP2/LrLBKaV
+V6B7Y5GlEch1VTZMb8tyAeLa1PIFFGoJb7mfiZqIfRqrRbQ9kzVBzyeiHAc06VvJ
+CMWOmQT9pmXTLLmS4KDU+ktQao+U+LXvgYzhzFo9KqkVeNkifppVFZBW5sC/DQbd
+srlAra2xKovU8At81EhC3oarMYLbY9w=
+-----END PRIVATE KEY-----
+"#,
+            false,
+        );
 
         //test rsa sign and verify
         test_pki_sign_verify(&core, token, "rsa-2048-import", "rusty_vault test".as_bytes(), true);
@@ -1182,13 +1608,114 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         test_pki_sign_verify(&core, token, "rsa-4096-import", "rusty_vault test".as_bytes(), true);
 
         //test import ec key
-        test_pki_import_key_case(&core, token, "ec-224-import", "ec", 224, "", "-----BEGIN PRIVATE KEY-----\nMHgCAQAwEAYHKoZIzj0CAQYFK4EEACEEYTBfAgEBBBzsiBoYW2wy95WsH51cIW90\nl5jP3LyA//F/qHE5oTwDOgAEasjtLNpFz6+08WsxkDppMANKXPfaiIzvSfLMFIZU\nK9bNL/xrK2WENeATjX1eZE9JZtjDwnAqlJM=\n-----END PRIVATE KEY-----\n", true);
-        test_pki_import_key_case(&core, token, "ec-256-import", "ec", 256, "", "-----BEGIN PRIVATE KEY-----\nMIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgfSJ3DnUokwFD0QtnEE1f\ne0Y20qDAjcYbwFwkWBkWcy+hRANCAATKrAXdOc0ufhMk8225jX+C9a/WfjNIp7lu\nAAOYNTNA2jpy34lQ2zlBLIoaTuxXtg6mWvfITYPGrpWorcPTYzG+\n-----END PRIVATE KEY-----\n", true);
-        test_pki_import_key_case(&core, token, "ec-384-import", "ec", 384, "", "-----BEGIN PRIVATE KEY-----\nMIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDDY0x5JtPPUfipvnd7P\nC6vZfNzkyBRCiwzGbFY1MH39ZC4TfNx0t5SiADPDNv4g1y6hZANiAASMgIt8fVVY\nTKSYqB3QPPoSWhfvlq1iSdarRYfH+6S9dRpeaf+xnnVVMD8iqmUBOdl0UZZHOOt6\n+JJpUl0cZF9t6E92N4SaXaFI3ZLzYziaMZU1MSTWJZyJvi3vswqHEYU=\n-----END PRIVATE KEY-----\n", true);
-        test_pki_import_key_case(&core, token, "ec-521-import", "ec", 521, "", "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIA/PzzOHksK0r/Z/82\n43IOFCYFjhOL08+cFGElJjHfubjTGhzr1jDHwwnMnd7LAOk+M9395uJjwXMrW5GN\nqWeY8cWhgYkDgYYABAG44vWoqZdKP+nGTDNcmK2phS9/TWfHrCqxJAckyINLYwuE\nUdkF6MbAwJJOPnBntqZOt83iUtFKUWxy0iFPQVn49QHP/yT+G/cz3qjx7TkFP+4W\njmQbXbxLGIvSIZoscho/LSWyyct4CBPbPplopiMTgDN1MA7mFvT2TYAxFJA0rVWk\nFw==\n-----END PRIVATE KEY-----\n", true);
+        test_pki_import_key_case(
+            &core,
+            token,
+            "ec-224-import",
+            "ec",
+            224,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+MHgCAQAwEAYHKoZIzj0CAQYFK4EEACEEYTBfAgEBBBzsiBoYW2wy95WsH51cIW90
+l5jP3LyA//F/qHE5oTwDOgAEasjtLNpFz6+08WsxkDppMANKXPfaiIzvSfLMFIZU
+K9bNL/xrK2WENeATjX1eZE9JZtjDwnAqlJM=
+-----END PRIVATE KEY-----
+                                "#,
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "ec-256-import",
+            "ec",
+            256,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgfSJ3DnUokwFD0QtnEE1f
+e0Y20qDAjcYbwFwkWBkWcy+hRANCAATKrAXdOc0ufhMk8225jX+C9a/WfjNIp7lu
+AAOYNTNA2jpy34lQ2zlBLIoaTuxXtg6mWvfITYPGrpWorcPTYzG+
+-----END PRIVATE KEY-----
+"#,
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "ec-384-import",
+            "ec",
+            384,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDDY0x5JtPPUfipvnd7P
+C6vZfNzkyBRCiwzGbFY1MH39ZC4TfNx0t5SiADPDNv4g1y6hZANiAASMgIt8fVVY
+TKSYqB3QPPoSWhfvlq1iSdarRYfH+6S9dRpeaf+xnnVVMD8iqmUBOdl0UZZHOOt6
++JJpUl0cZF9t6E92N4SaXaFI3ZLzYziaMZU1MSTWJZyJvi3vswqHEYU=
+-----END PRIVATE KEY-----
+"#,
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "ec-521-import",
+            "ec",
+            521,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+MIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIA/PzzOHksK0r/Z/82
+43IOFCYFjhOL08+cFGElJjHfubjTGhzr1jDHwwnMnd7LAOk+M9395uJjwXMrW5GN
+qWeY8cWhgYkDgYYABAG44vWoqZdKP+nGTDNcmK2phS9/TWfHrCqxJAckyINLYwuE
+UdkF6MbAwJJOPnBntqZOt83iUtFKUWxy0iFPQVn49QHP/yT+G/cz3qjx7TkFP+4W
+jmQbXbxLGIvSIZoscho/LSWyyct4CBPbPplopiMTgDN1MA7mFvT2TYAxFJA0rVWk
+Fw==
+-----END PRIVATE KEY-----
+"#,
+            true,
+        );
         test_pki_import_key_case(&core, token, "ec-521-import", "ec", 521, "", "same key name", false);
-        test_pki_import_key_case(&core, token, "ec-521-import-bad-type", "ecc", 521, "", "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIA/PzzOHksK0r/Z/82\n43IOFCYFjhOL08+cFGElJjHfubjTGhzr1jDHwwnMnd7LAOk+M9395uJjwXMrW5GN\nqWeY8cWhgYkDgYYABAG44vWoqZdKP+nGTDNcmK2phS9/TWfHrCqxJAckyINLYwuE\nUdkF6MbAwJJOPnBntqZOt83iUtFKUWxy0iFPQVn49QHP/yT+G/cz3qjx7TkFP+4W\njmQbXbxLGIvSIZoscho/LSWyyct4CBPbPplopiMTgDN1MA7mFvT2TYAxFJA0rVWk\nFw==\n-----END PRIVATE KEY-----\n", false);
-        test_pki_import_key_case(&core, token, "ec-521-import-bad-pem", "ec", 521, "", "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIA/PzzOHksK0r/Z/82\n43IOFCYFjhOL08+cFGElJjHfubjTGhzr1jDHwwnMnd7LAOk+M9395uJjwXMrW5GN\nqWeY8cWhgYkDgYYABAG44vWoqZdKP+nGTDNcmK2phS9/TWfHrCqxJAckyINLYwuE\nUdkF6MbAwJJOPnBntqZOt83iUtFKUWxy0iFPQVn49QHP/yT+G/cz3qjx7TkFP+4W\njmQbXbxLGIvSIZoscho/LSWyyct4CBPbPplopiMTgDN1MA7mFvT2TYAxFJA0rVWkaabb\nFw==\nxxxxxxxxxxxxxx\n-----END PRIVATE KEY-----\n", false);
+        test_pki_import_key_case(
+            &core,
+            token,
+            "ec-521-import-bad-type",
+            "ecc",
+            521,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+MIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIA/PzzOHksK0r/Z/82
+43IOFCYFjhOL08+cFGElJjHfubjTGhzr1jDHwwnMnd7LAOk+M9395uJjwXMrW5GN
+qWeY8cWhgYkDgYYABAG44vWoqZdKP+nGTDNcmK2phS9/TWfHrCqxJAckyINLYwuE
+UdkF6MbAwJJOPnBntqZOt83iUtFKUWxy0iFPQVn49QHP/yT+G/cz3qjx7TkFP+4W
+jmQbXbxLGIvSIZoscho/LSWyyct4CBPbPplopiMTgDN1MA7mFvT2TYAxFJA0rVWk
+Fw==
+-----END PRIVATE KEY-----
+"#,
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "ec-521-import-bad-pem",
+            "ec",
+            521,
+            "",
+            r#"
+-----BEGIN PRIVATE KEY-----
+MIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIA/PzzOHksK0r/Z/82
+43IOFCYFjhOL08+cFGElJjHfubjTGhzr1jDHwwnMnd7LAOk+M9395uJjwXMrW5GN
+qWeY8cWhgYkDgYYABAG44vWoqZdKP+nGTDNcmK2phS9/TWfHrCqxJAckyINLYwuE
+UdkF6MbAwJJOPnBntqZOt83iUtFKUWxy0iFPQVn49QHP/yT+G/cz3qjx7TkFP+4W
+jmQbXbxLGIvSIZoscho/LSWyyct4CBPbPplopiMTgDN1MA7mFvT2TYAxFJA0rVWkaabb
+Fw==
+xxxxxxxxxxxxxx
+-----END PRIVATE KEY-----
+        "#,
+            false,
+        );
 
         //test ec sign and verify
         test_pki_sign_verify(&core, token, "ec-224-import", "rusty_vault test".as_bytes(), true);
@@ -1197,12 +1724,66 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         test_pki_sign_verify(&core, token, "ec-521-import", "rusty_vault test".as_bytes(), true);
 
         //test import aes-gcm key
-        test_pki_import_key_case(&core, token, "aes-gcm-128-import", "aes-gcm", 128, "1c499088cddd0382918bd5650718533d", "cfe0f571fe695c6a4c5e34339d32eb3c", true);
-        test_pki_import_key_case(&core, token, "aes-gcm-192-import", "aes-gcm", 192, "1c499088cddd0382918bd5650718533d", "3077fdca16350c85c354a700bbc127972dafe2138874cdea", true);
-        test_pki_import_key_case(&core, token, "aes-gcm-256-import", "aes-gcm", 256, "1c499088cddd0382918bd5650718533d", "6349e3032b690f2fe61a824746ac3ab05c1829a4147f4891f595dfb19cddfd06", true);
-        test_pki_import_key_case(&core, token, "aes-gcm-256-import", "aes-gcm", 256, "1c499088cddd0382918bd5650718533d", "same key name", false);
-        test_pki_import_key_case(&core, token, "aes-gcm-256-import-bad-type", "aes-gcmm", 256, "1c499088cddd0382918bd5650718533d", "6349e3032b690f2fe61a824746ac3ab05c1829a4147f4891f595dfb19cddfd06", false);
-        test_pki_import_key_case(&core, token, "aes-gcm-256-import-bad-hex", "aes-gcm", 256, "1c499088cddd0382918bd5650718533d", "aa6349e3032b690f2fe61a824746ac3ab05c1829a4147f4891f595dfb19cddfd06", false);
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-gcm-128-import",
+            "aes-gcm",
+            128,
+            "1c499088cddd0382918bd5650718533d",
+            "cfe0f571fe695c6a4c5e34339d32eb3c",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-gcm-192-import",
+            "aes-gcm",
+            192,
+            "1c499088cddd0382918bd5650718533d",
+            "3077fdca16350c85c354a700bbc127972dafe2138874cdea",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-gcm-256-import",
+            "aes-gcm",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "6349e3032b690f2fe61a824746ac3ab05c1829a4147f4891f595dfb19cddfd06",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-gcm-256-import",
+            "aes-gcm",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "same key name",
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-gcm-256-import-bad-type",
+            "aes-gcmm",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "6349e3032b690f2fe61a824746ac3ab05c1829a4147f4891f595dfb19cddfd06",
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-gcm-256-import-bad-hex",
+            "aes-gcm",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "aa6349e3032b690f2fe61a824746ac3ab05c1829a4147f4891f595dfb19cddfd06",
+            false,
+        );
 
         //test aes-gcm encrypt and decrypt
         test_pki_encrypt_decrypt(&core, token, "aes-gcm-128-import", "rusty_vault test".as_bytes(), true);
@@ -1210,12 +1791,66 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         test_pki_encrypt_decrypt(&core, token, "aes-gcm-256-import", "rusty_vault test".as_bytes(), true);
 
         //test import aes-cbc key
-        test_pki_import_key_case(&core, token, "aes-cbc-128-import", "aes-cbc", 128, "1c499088cddd0382918bd5650718533d", "77628ff2c35adc7efdecfb0e86a4576f", true);
-        test_pki_import_key_case(&core, token, "aes-cbc-192-import", "aes-cbc", 192, "1c499088cddd0382918bd5650718533d", "807f5f15d2924f104700f058030298c8591d0f6b5163b333", true);
-        test_pki_import_key_case(&core, token, "aes-cbc-256-import", "aes-cbc", 256, "1c499088cddd0382918bd5650718533d", "521fc4bb8ee6015ac5a6e3e611854aa7608a17413f72ee007e799dac303853e1", true);
-        test_pki_import_key_case(&core, token, "aes-cbc-256-import", "aes-cbc", 256, "1c499088cddd0382918bd5650718533d", "same key name", false);
-        test_pki_import_key_case(&core, token, "aes-cbc-256-import-bad-type", "aes-cbcc", 256, "1c499088cddd0382918bd5650718533d", "521fc4bb8ee6015ac5a6e3e611854aa7608a17413f72ee007e799dac303853e1", false);
-        test_pki_import_key_case(&core, token, "aes-cbc-256-import-bad-hex", "aes-cbc", 256, "1c499088cddd0382918bd5650718533d", "21521fc4bb8ee6015ac5a6e3e611854aa7608a17413f72ee007e799dac303853e1", false);
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-cbc-128-import",
+            "aes-cbc",
+            128,
+            "1c499088cddd0382918bd5650718533d",
+            "77628ff2c35adc7efdecfb0e86a4576f",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-cbc-192-import",
+            "aes-cbc",
+            192,
+            "1c499088cddd0382918bd5650718533d",
+            "807f5f15d2924f104700f058030298c8591d0f6b5163b333",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-cbc-256-import",
+            "aes-cbc",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "521fc4bb8ee6015ac5a6e3e611854aa7608a17413f72ee007e799dac303853e1",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-cbc-256-import",
+            "aes-cbc",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "same key name",
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-cbc-256-import-bad-type",
+            "aes-cbcc",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "521fc4bb8ee6015ac5a6e3e611854aa7608a17413f72ee007e799dac303853e1",
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-cbc-256-import-bad-hex",
+            "aes-cbc",
+            256,
+            "1c499088cddd0382918bd5650718533d",
+            "21521fc4bb8ee6015ac5a6e3e611854aa7608a17413f72ee007e799dac303853e1",
+            false,
+        );
 
         //test aes-cbc encrypt and decrypt
         test_pki_encrypt_decrypt(&core, token, "aes-cbc-128-import", "rusty_vault test".as_bytes(), true);
@@ -1223,12 +1858,57 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         test_pki_encrypt_decrypt(&core, token, "aes-cbc-256-import", "rusty_vault test".as_bytes(), true);
 
         //test import aes-ecb key
-        test_pki_import_key_case(&core, token, "aes-ecb-128-import", "aes-ecb", 128, "", "38a1f9ad74562db696872cbfa10cc46e", true);
-        test_pki_import_key_case(&core, token, "aes-ecb-192-import", "aes-ecb", 192, "", "b80f65a5a334e583bafd18d2e86667384ae16cb0467982de", true);
-        test_pki_import_key_case(&core, token, "aes-ecb-256-import", "aes-ecb", 256, "", "95b622ebf838b0b8b4cc60635333f87f9b10bcbe340b710020a6e9789156c052", true);
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-ecb-128-import",
+            "aes-ecb",
+            128,
+            "",
+            "38a1f9ad74562db696872cbfa10cc46e",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-ecb-192-import",
+            "aes-ecb",
+            192,
+            "",
+            "b80f65a5a334e583bafd18d2e86667384ae16cb0467982de",
+            true,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-ecb-256-import",
+            "aes-ecb",
+            256,
+            "",
+            "95b622ebf838b0b8b4cc60635333f87f9b10bcbe340b710020a6e9789156c052",
+            true,
+        );
         test_pki_import_key_case(&core, token, "aes-ecb-256-import", "aes-ecb", 256, "", "same key name", false);
-        test_pki_import_key_case(&core, token, "aes-ecb-256-import-bad-type", "aes-ecbb", 256, "", "95b622ebf838b0b8b4cc60635333f87f9b10bcbe340b710020a6e9789156c052", false);
-        test_pki_import_key_case(&core, token, "aes-ecb-256-import-bad-hex", "aes-ecb", 256, "", "2295b622ebf838b0b8b4cc60635333f87f9b10bcbe340b710020a6e9789156c052", false);
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-ecb-256-import-bad-type",
+            "aes-ecbb",
+            256,
+            "",
+            "95b622ebf838b0b8b4cc60635333f87f9b10bcbe340b710020a6e9789156c052",
+            false,
+        );
+        test_pki_import_key_case(
+            &core,
+            token,
+            "aes-ecb-256-import-bad-hex",
+            "aes-ecb",
+            256,
+            "",
+            "2295b622ebf838b0b8b4cc60635333f87f9b10bcbe340b710020a6e9789156c052",
+            false,
+        );
 
         //test aes-gcm encrypt and decrypt
         test_pki_encrypt_decrypt(&core, token, "aes-ecb-128-import", "rusty_vault test".as_bytes(), true);
@@ -1254,20 +1934,13 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
         let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
-        let c = Arc::new(RwLock::new(Core {
-            physical: backend,
-            barrier: Arc::new(barrier),
-            ..Default::default()
-        }));
+        let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
 
         {
             let mut core = c.write().unwrap();
             assert!(core.config(Arc::clone(&c), None).is_ok());
 
-            let seal_config = SealConfig {
-                secret_shares: 10,
-                secret_threshold: 5,
-            };
+            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
 
             let result = core.init(&seal_config);
             assert!(result.is_ok());

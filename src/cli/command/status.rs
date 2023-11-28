@@ -1,7 +1,7 @@
-use clap::{ArgMatches};
+use clap::ArgMatches;
 use sysexits::ExitCode;
-use crate::{EXIT_CODE_OK, EXIT_CODE_INSUFFICIENT_PARAMS};
-use crate::errors::RvError;
+
+use crate::{errors::RvError, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_OK};
 
 pub fn main() -> Result<(), RvError> {
     println!("status: ok");

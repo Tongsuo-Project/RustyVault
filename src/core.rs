@@ -1,36 +1,29 @@
 use std::{
-    sync::{Arc, Mutex, RwLock},
     collections::HashMap,
+    sync::{Arc, Mutex, RwLock},
 };
-use as_any::{Downcast};
-use serde::{Serialize, Deserialize};
+
+use as_any::Downcast;
 use go_defer::defer;
+use serde::{Deserialize, Serialize};
+
 use crate::{
     cli::config::Config,
-    shamir::{ShamirSecret, SHAMIR_OVERHEAD},
+    errors::RvError,
+    handler::Handler,
+    logical::{Backend, Request, Response},
+    module_manager::ModuleManager,
+    modules::{auth::AuthModule, pki::PkiModule},
     mount::MountTable,
     router::Router,
-    handler::Handler,
-    logical::{
-        Backend,
-        Request,
-        Response,
-    },
+    shamir::{ShamirSecret, SHAMIR_OVERHEAD},
     storage::{
-        physical,
-        physical::{
-            Backend as PhysicalBackend,
-            BackendEntry as PhysicalBackendEntry},
         barrier::SecurityBarrier,
-        barrier_view::BarrierView,
         barrier_aes_gcm,
+        barrier_view::BarrierView,
+        physical,
+        physical::{Backend as PhysicalBackend, BackendEntry as PhysicalBackendEntry},
     },
-    module_manager::ModuleManager,
-    modules::{
-        auth::AuthModule,
-        pki::PkiModule,
-    },
-    errors::RvError,
 };
 
 pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Core>>) -> Result<Arc<dyn Backend>, RvError> + Send + Sync;
@@ -95,7 +88,6 @@ impl Default for Core {
     }
 }
 
-
 impl Core {
     pub fn config(&mut self, core: Arc<RwLock<Core>>, _config: Option<Config>) -> Result<(), RvError> {
         self.module_manager.set_default_modules(Arc::clone(&core))?;
@@ -141,17 +133,13 @@ impl Core {
         // Initialize the barrier
         barrier.init(master_key.as_slice())?;
 
-        let mut init_result = InitResult {
-            secret_shares: Vec::new(),
-            root_token: String::new(),
-        };
+        let mut init_result = InitResult { secret_shares: Vec::new(), root_token: String::new() };
 
         if seal_config.secret_shares == 1 {
             init_result.secret_shares.push(master_key.clone());
         } else {
-            init_result.secret_shares = ShamirSecret::split(&master_key,
-                                                      seal_config.secret_shares,
-                                                      seal_config.secret_threshold)?;
+            init_result.secret_shares =
+                ShamirSecret::split(&master_key, seal_config.secret_shares, seal_config.secret_threshold)?;
         }
 
         log::debug!("master_key: {}", hex::encode(&master_key));
@@ -390,8 +378,7 @@ impl Core {
             if err.is_none() {
                 for handler in handlers.iter() {
                     match handler.post_route(req, &mut resp) {
-                        Ok(_) => {
-                        }
+                        Ok(_) => {}
                         Err(error) => {
                             if error != RvError::ErrHandlerDefault {
                                 err = Some(error);
@@ -405,8 +392,7 @@ impl Core {
 
         for handler in handlers.iter() {
             match handler.log(req, &resp) {
-                Ok(_) => {
-                }
+                Ok(_) => {}
                 Err(error) => {
                     if error != RvError::ErrHandlerDefault {
                         err = Some(error);
@@ -426,15 +412,13 @@ impl Core {
 
 #[cfg(test)]
 mod test {
-    use std::env;
-    use std::fs;
-    use std::sync::Arc;
-    use std::collections::HashMap;
-    use serde_json::Value;
+    use std::{collections::HashMap, env, fs, sync::Arc};
+
     use go_defer::defer;
-    use crate::storage::physical;
-    use crate::storage::barrier_aes_gcm;
+    use serde_json::Value;
+
     use super::*;
+    use crate::storage::{barrier_aes_gcm, physical};
 
     #[test]
     fn test_core_init() {
@@ -469,10 +453,7 @@ mod test {
             let mut c = core.write().unwrap();
             assert!(c.config(Arc::clone(&core), None).is_ok());
 
-            let seal_config = SealConfig {
-                secret_shares: 10,
-                secret_threshold: 5,
-            };
+            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
 
             let result = c.init(&seal_config);
             assert!(result.is_ok());
@@ -504,20 +485,13 @@ mod test {
         let backend = physical::new_backend("file", &conf).unwrap();
         let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
-        let core = Arc::new(RwLock::new(Core {
-            physical: backend,
-            barrier: Arc::new(barrier),
-            ..Default::default()
-        }));
+        let core = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
 
         {
             let mut c = core.write().unwrap();
             assert!(c.config(Arc::clone(&core), None).is_ok());
 
-            let seal_config = SealConfig {
-                secret_shares: 10,
-                secret_threshold: 5,
-            };
+            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
 
             let result = c.init(&seal_config);
             assert!(result.is_ok());
