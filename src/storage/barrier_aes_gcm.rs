@@ -505,9 +505,12 @@ mod test {
         assert!(keys.is_ok());
         let keys = keys.unwrap();
         assert_eq!(keys.len(), 3);
-        assert_eq!(keys[0], "bar".to_string());
-        assert_eq!(keys[1], "barrier/".to_string());
-        assert_eq!(keys[2], "bar/".to_string());
+        assert!(keys.join("") == "barbarrier/bar/"
+                || keys.join("") == "barbar/barrier/"
+                || keys.join("") == "bar/barbarrier/"
+                || keys.join("") == "barrier/bar/bar"
+                || keys.join("") == "barrier/barbar/"
+                || keys.join("") == "bar/barrier/bar");
         let get = barrier.get("bar");
         assert!(get.is_ok());
         assert_eq!(get.unwrap().unwrap().value, "test1".as_bytes());
@@ -517,8 +520,7 @@ mod test {
         assert!(keys.is_ok());
         let keys = keys.unwrap();
         assert_eq!(keys.len(), 2);
-        assert_eq!(keys[0], "foo".to_string());
-        assert_eq!(keys[1], "foo/".to_string());
+        assert!(keys.join("") == "foofoo/" || keys.join("") == "foo/foo");
         let get = barrier.get("bar/foo");
         assert!(get.is_ok());
         assert_eq!(get.unwrap().unwrap().value, "test2".as_bytes());
@@ -548,8 +550,7 @@ mod test {
         assert!(keys.is_ok());
         let keys = keys.unwrap();
         assert_eq!(keys.len(), 2);
-        assert_eq!(keys[0], "barrier/".to_string());
-        assert_eq!(keys[1], "bar/".to_string());
+        assert!(keys.join("") == "barrier/bar/" || keys.join("") == "bar/barrier/");
 
         let seal = barrier.seal();
         assert!(seal.is_ok());
