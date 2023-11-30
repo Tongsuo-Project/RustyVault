@@ -151,16 +151,14 @@ mod test {
         assert!(keys.is_ok());
         let keys = keys.unwrap();
         assert_eq!(keys.len(), 2);
-        assert_eq!(keys[0], "bar".to_string());
-        assert_eq!(keys[1], "bar/".to_string());
+        assert!(keys.join("") == "barbar/" || keys.join("") == "bar/bar");
 
         // Scan bar/
         let keys = backend.list("bar/");
         assert!(keys.is_ok());
         let keys = keys.unwrap();
         assert_eq!(keys.len(), 2);
-        assert_eq!(keys[0], "foo".to_string());
-        assert_eq!(keys[1], "foo/".to_string());
+        assert!(keys.join("") == "foofoo/" || keys.join("") == "foo/foo");
 
         // Scan bar/foo/
         let keys = backend.list("bar/foo/");

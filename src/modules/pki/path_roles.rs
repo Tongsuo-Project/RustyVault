@@ -4,7 +4,7 @@ use std::{
 use humantime::parse_duration;
 use serde::{Serialize, Deserialize};
 use crate::{
-	utils::{serialize_duration, deserialize_duration},
+    utils::{serialize_duration, deserialize_duration},
     logical::{
         Backend, Request, Response,
     },

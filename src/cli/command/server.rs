@@ -2,11 +2,9 @@ use std::{
     env,
     fs,
     default::Default,
-    fs::OpenOptions,
     path::Path,
     sync::{Arc, RwLock}
 };
-use daemonize::Daemonize;
 use clap::{ArgMatches};
 use sysexits::ExitCode;
 use actix_web::{
@@ -52,6 +50,7 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
         fs::create_dir_all(work_dir.as_str())?;
     }
 
+    #[cfg(not(windows))]
     if config.daemon {
         // start daemon
         let log_path = format!("{}/rusty_vault.log", work_dir);
@@ -70,7 +69,7 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
             group = config.daemon_group.clone();
         }
 
-        let log_file = OpenOptions::new()
+        let log_file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
             .append(true)
@@ -79,7 +78,7 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
             .open(log_path)
             .unwrap();
 
-        let daemonize = Daemonize::new()
+        let daemonize = daemonize::Daemonize::new()
             .working_directory(work_dir.as_str())
             .user(user.as_str())
             .group(group.as_str())

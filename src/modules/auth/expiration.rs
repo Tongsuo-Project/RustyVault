@@ -9,7 +9,7 @@ use serde_json::{Value, Map};
 use serde::{Serialize, Deserialize};
 use delay_timer::prelude::*;
 use crate::{
-	utils::{generate_uuid, serialize_system_time, deserialize_system_time},
+    utils::{generate_uuid, serialize_system_time, deserialize_system_time},
     logical::{
         Auth, SecretData, Request, Response,
     },
@@ -163,7 +163,7 @@ impl ExpirationTask {
     }
 
     fn remove_task(&mut self, lease_id: &str) -> Result<(), RvError> {
-		log::debug!("remove task, lease_id: {}", lease_id);
+        log::debug!("remove task, lease_id: {}", lease_id);
         if let Some(task_id) = self.task_id_map.remove(lease_id) {
             self.task_id_remove_pending.push(task_id);
         }
@@ -172,7 +172,7 @@ impl ExpirationTask {
 
     fn clean_finish_task(&mut self) -> Result<(), RvError> {
         for task_id in self.task_id_remove_pending.iter() {
-			log::debug!("clean finish task, task_id: {}", *task_id);
+            log::debug!("clean finish task, task_id: {}", *task_id);
             self.task_timer.remove_task(*task_id)?;
         }
         self.task_id_remove_pending.clear();
@@ -182,8 +182,8 @@ impl ExpirationTask {
 
 impl Drop for ExpirationTask {
     fn drop(&mut self) {
-		log::debug!("expiration task timer stopping!");
-		let _ = self.task_timer.stop_delay_timer();
+        log::debug!("expiration task timer stopping!");
+        let _ = self.task_timer.stop_delay_timer();
     }
 }
 

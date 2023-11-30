@@ -13,8 +13,8 @@ use openssl::{
     ec::{EcGroup, EcKey},
     bn::{BigNum, MsbOption},
     hash::MessageDigest,
-	nid::Nid,
-	asn1::{Asn1OctetString, Asn1Time},
+    nid::Nid,
+    asn1::{Asn1OctetString, Asn1Time},
 };
 use libc::c_int;
 use lazy_static::lazy_static;
@@ -104,16 +104,16 @@ where
 }
 
 pub fn is_ca_cert(cert: &X509) -> bool {
-	unsafe {
-		X509_check_ca(cert.as_ptr()) != 0
-	}
+    unsafe {
+        X509_check_ca(cert.as_ptr()) != 0
+    }
 }
 
 impl Default for CertBundle {
     fn default() -> Self {
         CertBundle {
             certificate: X509_DEFAULT.clone(),
-			ca_chain: Vec::new(),
+            ca_chain: Vec::new(),
             private_key: PKEY_DEFAULT.clone(),
             private_key_type: String::new(),
             serial_number: String::new(),
@@ -259,12 +259,12 @@ impl Certificate {
 
         builder.append_extension(san_ext.build(&builder.x509v3_context(Some(ca_cert), None))?)?;
 
-		for ext in &self.extensions {
+        for ext in &self.extensions {
             builder.append_extension2(ext)?;
         }
 
         if self.is_ca {
-			builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
+            builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
         }
 
         builder.append_extension(KeyUsage::new()
@@ -335,7 +335,7 @@ impl Certificate {
 
         let cert_bundle = CertBundle {
             certificate: cert,
-			ca_chain: vec![ca_cert.clone()],
+            ca_chain: vec![ca_cert.clone()],
             private_key: priv_key.clone(),
             private_key_type: self.key_type.clone(),
             serial_number: serial_number_hex.to_lowercase(),
