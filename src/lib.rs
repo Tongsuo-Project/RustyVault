@@ -1,17 +1,17 @@
-pub mod errors;
-pub mod storage;
-pub mod logical;
-pub mod router;
-pub mod mount;
-pub mod core;
-pub mod handler;
-pub mod context;
-pub mod utils;
-pub mod modules;
-pub mod module_manager;
 pub mod cli;
+pub mod context;
+pub mod core;
+pub mod errors;
+pub mod handler;
 pub mod http;
+pub mod logical;
+pub mod module_manager;
+pub mod modules;
+pub mod mount;
+pub mod router;
 pub mod shamir;
+pub mod storage;
+pub mod utils;
 
 /// Exit ok
 pub const EXIT_CODE_OK: sysexits::ExitCode = sysexits::ExitCode::Ok;

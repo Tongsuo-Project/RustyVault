@@ -1,9 +1,10 @@
-use std::time::{SystemTime, Duration};
-use serde::{Serialize, Deserialize};
+use std::time::{Duration, SystemTime};
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lease {
-    #[serde(rename="lease")]
+    #[serde(rename = "lease")]
     pub ttl: Duration,
     pub max_ttl: Duration,
     pub renewable: bool,
@@ -29,9 +30,7 @@ impl Default for Lease {
 
 impl Lease {
     pub fn new() -> Self {
-        Self {
-            ..Default::default()
-        }
+        Self { ..Default::default() }
     }
 
     pub fn ttl(&self) -> Duration {

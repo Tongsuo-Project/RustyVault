@@ -1,9 +1,11 @@
 use std::{
-    ops::{Deref, DerefMut},
     collections::HashMap,
+    ops::{Deref, DerefMut},
 };
-use serde::{Serialize, Deserialize};
-use super::{lease::Lease};
+
+use serde::{Deserialize, Serialize};
+
+use super::lease::Lease;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Auth {

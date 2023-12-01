@@ -1,13 +1,9 @@
-use std::{
-    fs,
-    path::Path,
-    collections::HashMap,
-};
-use serde::{Serialize, Deserialize, Deserializer};
-use serde_json::{Value};
-use crate::{
-    errors::RvError,
-};
+use std::{collections::HashMap, fs, path::Path};
+
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+
+use crate::errors::RvError;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -52,7 +48,7 @@ pub struct Storage {
 
 fn parse_bool_string<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
-D: Deserializer<'de>,
+    D: Deserializer<'de>,
 {
     let value: Value = Deserialize::deserialize(deserializer)?;
     match value {
@@ -68,7 +64,7 @@ D: Deserializer<'de>,
 
 fn validate_storage<'de, D>(deserializer: D) -> Result<HashMap<String, Storage>, D::Error>
 where
-D: serde::Deserializer<'de>,
+    D: serde::Deserializer<'de>,
 {
     let storage: HashMap<String, Storage> = Deserialize::deserialize(deserializer)?;
 
@@ -83,7 +79,7 @@ D: serde::Deserializer<'de>,
 
 fn validate_listener<'de, D>(deserializer: D) -> Result<HashMap<String, Listener>, D::Error>
 where
-D: serde::Deserializer<'de>,
+    D: serde::Deserializer<'de>,
 {
     let listener: HashMap<String, Listener> = Deserialize::deserialize(deserializer)?;
 
@@ -191,10 +187,10 @@ fn set_config_type_field(config: &mut Config) -> Result<(), RvError> {
 
 #[cfg(test)]
 mod test {
-    use std::env;
-    use std::fs;
-    use std::io::prelude::*;
+    use std::{env, fs, io::prelude::*};
+
     use go_defer::defer;
+
     use super::*;
 
     fn write_file(path: &str, config: &str) -> Result<(), RvError> {
@@ -212,8 +208,8 @@ mod test {
         let dir = env::temp_dir().join("rusty_vault_config_test");
         assert!(fs::create_dir(&dir).is_ok());
         defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-            );
+        assert!(fs::remove_dir_all(&dir).is_ok());
+        );
 
         let file_path = dir.join("config.hcl");
         let path = file_path.to_str().unwrap_or("config.hcl");
@@ -233,14 +229,14 @@ mod test {
             pid_file = "/tmp/rusty_vault.pid"
         "#;
 
-            assert!(write_file(path, hcl_config).is_ok());
+        assert!(write_file(path, hcl_config).is_ok());
 
-            let config = load_config(path);
-            assert!(config.is_ok());
-            let hcl_config = config.unwrap();
-            println!("hcl config: {:?}", hcl_config);
+        let config = load_config(path);
+        assert!(config.is_ok());
+        let hcl_config = config.unwrap();
+        println!("hcl config: {:?}", hcl_config);
 
-            let json_config = r#"{
+        let json_config = r#"{
             "storage": {
                 "file": {
                     "path": "./vault/data"
@@ -257,23 +253,23 @@ mod test {
             "pid_file": "/tmp/rusty_vault.pid"
         }"#;
 
-            let file_path = dir.join("config.json");
-            let path = file_path.to_str().unwrap_or("config.json");
-            assert!(write_file(path, json_config).is_ok());
+        let file_path = dir.join("config.json");
+        let path = file_path.to_str().unwrap_or("config.json");
+        assert!(write_file(path, json_config).is_ok());
 
-            let config = load_config(path);
-            assert!(config.is_ok());
-            let json_config = config.unwrap();
-            println!("json config: {:?}", json_config);
+        let config = load_config(path);
+        assert!(config.is_ok());
+        let json_config = config.unwrap();
+        println!("json config: {:?}", json_config);
 
-            let hcl_config_value = serde_json::to_value(&hcl_config);
-            assert!(hcl_config_value.is_ok());
-            let hcl_config_value: Value = hcl_config_value.unwrap();
+        let hcl_config_value = serde_json::to_value(&hcl_config);
+        assert!(hcl_config_value.is_ok());
+        let hcl_config_value: Value = hcl_config_value.unwrap();
 
-            let json_config_value = serde_json::to_value(&json_config);
-            assert!(json_config_value.is_ok());
-            let json_config_value: Value = json_config_value.unwrap();
-            assert_eq!(hcl_config_value, json_config_value);
+        let json_config_value = serde_json::to_value(&json_config);
+        assert!(json_config_value.is_ok());
+        let json_config_value: Value = json_config_value.unwrap();
+        assert_eq!(hcl_config_value, json_config_value);
     }
 
     #[test]
@@ -281,8 +277,8 @@ mod test {
         let dir = env::temp_dir().join("rusty_vault_config_dir_test");
         assert!(fs::create_dir(&dir).is_ok());
         defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-            );
+        assert!(fs::remove_dir_all(&dir).is_ok());
+        );
 
         let file_path = dir.join("config1.hcl");
         let path = file_path.to_str().unwrap_or("config1.hcl");
@@ -303,12 +299,12 @@ mod test {
             pid_file = "/tmp/rusty_vault.pid"
         "#;
 
-            assert!(write_file(path, hcl_config).is_ok());
+        assert!(write_file(path, hcl_config).is_ok());
 
-            let file_path = dir.join("config2.hcl");
-            let path = file_path.to_str().unwrap_or("config2.hcl");
+        let file_path = dir.join("config2.hcl");
+        let path = file_path.to_str().unwrap_or("config2.hcl");
 
-            let hcl_config = r#"
+        let hcl_config = r#"
             storage "file" {
               address    = "127.0.0.1:8899"
             }
@@ -321,11 +317,11 @@ mod test {
             log_level = "info"
         "#;
 
-            assert!(write_file(path, hcl_config).is_ok());
+        assert!(write_file(path, hcl_config).is_ok());
 
-            let config = load_config(dir.to_str().unwrap());
-            assert!(config.is_ok());
-            let hcl_config = config.unwrap();
-            println!("hcl config: {:?}", hcl_config);
+        let config = load_config(dir.to_str().unwrap());
+        assert!(config.is_ok());
+        let hcl_config = config.unwrap();
+        println!("hcl config: {:?}", hcl_config);
     }
 }

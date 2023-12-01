@@ -1,22 +1,21 @@
 use std::{
-    env,
-    fs,
     default::Default,
+    env, fs,
     path::Path,
-    sync::{Arc, RwLock}
+    sync::{Arc, RwLock},
 };
-use clap::{ArgMatches};
+
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use clap::ArgMatches;
 use sysexits::ExitCode;
-use actix_web::{
-    middleware, web, App, HttpResponse, HttpServer
-};
+
 use crate::{
-    http,
-    errors::RvError,
-    EXIT_CODE_OK, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE,
     cli::config,
-    storage::{physical, barrier_aes_gcm},
-    core::Core
+    core::Core,
+    errors::RvError,
+    http,
+    storage::{barrier_aes_gcm, physical},
+    EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
 };
 
 pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";
@@ -107,11 +106,7 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
 
     let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
-    let core = Arc::new(RwLock::new(Core {
-        physical: backend,
-        barrier: Arc::new(barrier),
-        ..Default::default()
-    }));
+    let core = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
 
     {
         let mut c = core.write()?;
@@ -148,7 +143,7 @@ pub fn execute(matches: &ArgMatches) -> ExitCode {
                 println!("server error: {:?}", e);
                 EXIT_CODE_LOAD_CONFIG_FAILURE
             }
-        }
+        };
     }
 
     return EXIT_CODE_INSUFFICIENT_PARAMS;

@@ -1,5 +1,8 @@
-use std::io;
-use std::sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard};
+use std::{
+    io,
+    sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard},
+};
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -141,64 +144,64 @@ pub enum RvError {
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
-        source: io::Error
+        source: io::Error,
     },
     #[error("Some serde error happened, {:?}", .source)]
     Serde {
         #[from]
-        source: serde_json::Error
+        source: serde_json::Error,
     },
     #[error("Some openssl error happened, {:?}", .source)]
     OpenSSL {
         #[from]
-        source: openssl::error::ErrorStack
+        source: openssl::error::ErrorStack,
     },
     #[error("Some pem error happened, {:?}", .source)]
     Pem {
         #[from]
-        source: pem::PemError
+        source: pem::PemError,
     },
     #[error("Some regex error happened, {:?}", .source)]
     Regex {
         #[from]
-        source: regex::Error
+        source: regex::Error,
     },
     #[error("Some hex error happened, {:?}", .source)]
     Hex {
         #[from]
-        source: hex::FromHexError
+        source: hex::FromHexError,
     },
     #[error("Some hcl error happened, {:?}", .source)]
     Hcl {
         #[from]
-        source: hcl::Error
+        source: hcl::Error,
     },
     #[error("Some humantime error happened, {:?}", .source)]
     Humantime {
         #[from]
-        source: humantime::DurationError
+        source: humantime::DurationError,
     },
     #[error("Some system_time error happened, {:?}", .source)]
     SystemTimeError {
         #[from]
-        source: std::time::SystemTimeError
+        source: std::time::SystemTimeError,
     },
     #[error("Some chrono error happened, {:?}", .source)]
     ChronoError {
         #[from]
-        source: chrono::ParseError
+        source: chrono::ParseError,
     },
     #[error("Some delay_timer error happened, {:?}", .source)]
     TaskError {
         #[from]
-        source: delay_timer::error::TaskError
+        source: delay_timer::error::TaskError,
     },
     #[error("RwLock was poisoned (reading)")]
     ErrRwLockReadPoison,
     #[error("RwLock was poisoned (writing)")]
     ErrRwLockWritePoison,
     #[error(transparent)]
-    ErrOther (#[from] anyhow::Error),
+    ErrOther(#[from] anyhow::Error),
     #[error("Unknown error.")]
     ErrUnknown,
 }
@@ -275,8 +278,7 @@ impl PartialEq for RvError {
             | (RvError::ErrPkiCertNotFound, RvError::ErrPkiCertNotFound)
             | (RvError::ErrPkiRoleNotFound, RvError::ErrPkiRoleNotFound)
             | (RvError::ErrPkiInternal, RvError::ErrPkiInternal)
-            | (RvError::ErrUnknown, RvError::ErrUnknown)
-            => true,
+            | (RvError::ErrUnknown, RvError::ErrUnknown) => true,
             _ => false,
         }
     }

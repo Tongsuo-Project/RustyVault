@@ -1,11 +1,10 @@
-use std::{
-    sync::{Arc, RwLock},
+use std::sync::{Arc, RwLock};
+
+use crate::{
+    core::Core,
+    errors::RvError,
+    modules::{kv::KvModule, system::SystemModule, Module},
 };
-use crate::core::Core;
-use crate::modules::Module;
-use crate::modules::kv::KvModule;
-use crate::modules::system::SystemModule;
-use crate::errors::RvError;
 
 pub struct ModuleManager {
     pub modules: Vec<Arc<RwLock<Box<dyn Module>>>>,
@@ -13,15 +12,13 @@ pub struct ModuleManager {
 
 impl ModuleManager {
     pub fn new() -> Self {
-        Self {
-            modules: Vec::new(),
-        }
+        Self { modules: Vec::new() }
     }
 
     pub fn set_default_modules(&mut self, core: Arc<RwLock<Core>>) -> Result<(), RvError> {
         self.modules = vec![
             Arc::new(RwLock::new(Box::new(KvModule::new(Arc::clone(&core))))),
-            Arc::new(RwLock::new(Box::new(SystemModule::new(core))))
+            Arc::new(RwLock::new(Box::new(SystemModule::new(core)))),
         ];
         Ok(())
     }

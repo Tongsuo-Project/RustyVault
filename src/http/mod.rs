@@ -1,34 +1,22 @@
 use std::{
     any::Any,
     net::SocketAddr,
-    sync::{Arc, RwLock}
-};
-use actix_web::{
-    dev::Extensions,
-    rt::net::TcpStream,
-    http::{
-        StatusCode
-    },
-    cookie::{
-        Cookie,
-    },
-    web, HttpRequest, HttpResponse, ResponseError
-};
-use serde::{Serialize};
-use serde_json::{json, Map, Value};
-use actix_tls::accept::openssl::TlsStream;
-use openssl::{
-    x509::{X509, X509Ref, X509VerifyResult},
-//    ssl::{SslAcceptor, SslVerifyMode, SslFiletype, SslMethod}
-};
-use crate::{
-    core::Core,
-    logical::{Request},
-    errors::RvError
+    sync::{Arc, RwLock},
 };
 
-pub mod sys;
+use actix_tls::accept::openssl::TlsStream;
+use actix_web::{
+    cookie::Cookie, dev::Extensions, http::StatusCode, rt::net::TcpStream, web, HttpRequest, HttpResponse,
+    ResponseError,
+};
+use openssl::x509::{X509Ref, X509VerifyResult, X509};
+use serde::Serialize;
+use serde_json::{json, Map, Value};
+
+use crate::{core::Core, errors::RvError, logical::Request};
+
 pub mod logical;
+pub mod sys;
 
 pub const AUTH_COOKIE_NAME: &str = "token";
 
@@ -40,10 +28,7 @@ pub struct TlsClientInfo {
 
 impl TlsClientInfo {
     pub fn new() -> Self {
-        TlsClientInfo {
-            client_cert_chain: None,
-            client_verify_result: X509VerifyResult::OK,
-        }
+        TlsClientInfo { client_cert_chain: None, client_verify_result: X509VerifyResult::OK }
     }
 }
 
@@ -71,7 +56,7 @@ pub fn request_on_connect_handler(conn: &dyn Any, ext: &mut Extensions) {
         let socket = tls_stream.get_ref();
         let mut cert_chain = None;
 
-        if let Some(cert_stack) =  tls_stream.ssl().verified_chain() {
+        if let Some(cert_stack) = tls_stream.ssl().verified_chain() {
             let certs: Vec<X509> = cert_stack.iter().map(X509Ref::to_owned).collect();
             cert_chain = Some(certs);
         }
@@ -155,10 +140,7 @@ pub fn response_json_ok<T: Serialize>(cookie: Option<Cookie>, body: T) -> HttpRe
     response_json(StatusCode::OK, cookie, body)
 }
 
-pub fn handle_request(
-    core: web::Data<Arc<RwLock<Core>>>,
-    req: &mut Request
-) -> Result<HttpResponse, RvError> {
+pub fn handle_request(core: web::Data<Arc<RwLock<Core>>>, req: &mut Request) -> Result<HttpResponse, RvError> {
     let core = core.read()?;
     let resp = core.handle_request(req)?;
     if resp.is_none() {

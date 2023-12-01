@@ -1,6 +1,7 @@
 use std::sync::Arc;
+
+use super::{barrier::SecurityBarrier, Storage, StorageEntry};
 use crate::errors::RvError;
-use super::{Storage, StorageEntry, barrier::SecurityBarrier};
 
 pub struct BarrierView {
     barrier: Arc<dyn SecurityBarrier>,
@@ -17,10 +18,7 @@ impl Storage for BarrierView {
         self.sanity_check(key)?;
         let storage_entry = self.barrier.get(self.expand_key(key).as_str())?;
         if let Some(entry) = storage_entry {
-            Ok(Some(StorageEntry {
-                key: self.truncate_key(entry.key.as_str()),
-                value: entry.value,
-            }))
+            Ok(Some(StorageEntry { key: self.truncate_key(entry.key.as_str()), value: entry.value }))
         } else {
             Ok(None)
         }
@@ -28,10 +26,7 @@ impl Storage for BarrierView {
 
     fn put(&self, entry: &StorageEntry) -> Result<(), RvError> {
         self.sanity_check(entry.key.as_str())?;
-        let nested = StorageEntry {
-            key: self.expand_key(entry.key.as_str()),
-            value: entry.value.clone(),
-        };
+        let nested = StorageEntry { key: self.expand_key(entry.key.as_str()), value: entry.value.clone() };
         self.barrier.put(&nested)
     }
 
@@ -43,17 +38,11 @@ impl Storage for BarrierView {
 
 impl BarrierView {
     pub fn new(barrier: Arc<dyn SecurityBarrier>, prefix: &str) -> Self {
-        Self {
-            barrier: barrier,
-            prefix: prefix.to_string(),
-        }
+        Self { barrier, prefix: prefix.to_string() }
     }
 
     pub fn new_sub_view(&self, prefix: &str) -> Self {
-        Self {
-            barrier: Arc::clone(&self.barrier),
-            prefix: self.expand_key(prefix),
-        }
+        Self { barrier: Arc::clone(&self.barrier), prefix: self.expand_key(prefix) }
     }
 
     pub fn get_keys(&self) -> Result<Vec<String>, RvError> {
@@ -112,15 +101,13 @@ impl BarrierView {
 
 #[cfg(test)]
 mod test {
-    use std::env;
-    use std::fs;
-    use std::sync::Arc;
-    use std::collections::HashMap;
-    use rand::{Rng, thread_rng};
-    use serde_json::Value;
+    use std::{collections::HashMap, env, fs, sync::Arc};
+
     use go_defer::defer;
-    use super::*;
-    use super::super::*;
+    use rand::{thread_rng, Rng};
+    use serde_json::Value;
+
+    use super::{super::*, *};
 
     #[test]
     fn test_new_barrier_view() {

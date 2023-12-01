@@ -1,29 +1,25 @@
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use foreign_types::ForeignType;
+use lazy_static::lazy_static;
+use libc::c_int;
 use openssl::{
-    x509::{
-        X509, X509Builder, X509Name, X509NameBuilder, X509Extension,
-        extension::{
-            KeyUsage, SubjectAlternativeName,
-            SubjectKeyIdentifier, AuthorityKeyIdentifier,
-            BasicConstraints,
-        },
-    },
-    pkey::{PKey, Private},
-    rsa::Rsa,
-    ec::{EcGroup, EcKey},
+    asn1::{Asn1OctetString, Asn1Time},
     bn::{BigNum, MsbOption},
+    ec::{EcGroup, EcKey},
     hash::MessageDigest,
     nid::Nid,
-    asn1::{Asn1OctetString, Asn1Time},
+    pkey::{PKey, Private},
+    rsa::Rsa,
+    x509::{
+        extension::{AuthorityKeyIdentifier, BasicConstraints, KeyUsage, SubjectAlternativeName, SubjectKeyIdentifier},
+        X509Builder, X509Extension, X509Name, X509NameBuilder, X509,
+    },
 };
-use libc::c_int;
-use lazy_static::lazy_static;
-use foreign_types::{ForeignType};
-use serde::{ser::SerializeTuple, Serialize, Serializer, Deserialize, Deserializer};
+use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::ByteBuf;
-use crate::{
-    errors::RvError,
-};
+
+use crate::errors::RvError;
 
 lazy_static! {
     static ref X509_DEFAULT: X509 = X509Builder::new().unwrap().build();
@@ -104,9 +100,7 @@ where
 }
 
 pub fn is_ca_cert(cert: &X509) -> bool {
-    unsafe {
-        X509_check_ca(cert.as_ptr()) != 0
-    }
+    unsafe { X509_check_ca(cert.as_ptr()) != 0 }
 }
 
 impl Default for CertBundle {
@@ -217,10 +211,11 @@ impl Default for Certificate {
 }
 
 impl Certificate {
-    pub fn to_x509(&mut self,
-                   ca_cert: &X509,
-                   ca_key: &PKey<Private>,
-                   private_key: &PKey<Private>
+    pub fn to_x509(
+        &mut self,
+        ca_cert: &X509,
+        ca_key: &PKey<Private>,
+        private_key: &PKey<Private>,
     ) -> Result<X509, RvError> {
         let mut builder = X509::builder()?;
         builder.set_version(self.version)?;
@@ -267,15 +262,11 @@ impl Certificate {
             builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
         }
 
-        builder.append_extension(KeyUsage::new()
-                                 .critical()
-                                 .non_repudiation()
-                                 .digital_signature()
-                                 .key_encipherment()
-                                 .build()?)?;
+        builder.append_extension(
+            KeyUsage::new().critical().non_repudiation().digital_signature().key_encipherment().build()?,
+        )?;
 
-        let subject_key_id = SubjectKeyIdentifier::new()
-            .build(&builder.x509v3_context(Some(ca_cert), None))?;
+        let subject_key_id = SubjectKeyIdentifier::new().build(&builder.x509v3_context(Some(ca_cert), None))?;
         builder.append_extension(subject_key_id)?;
 
         let authority_key_id = AuthorityKeyIdentifier::new()
@@ -289,10 +280,7 @@ impl Certificate {
         Ok(builder.build())
     }
 
-    pub fn to_cert_bundle(&mut self,
-                          ca_cert: &X509,
-                          ca_key: &PKey<Private>)
-    -> Result<CertBundle, RvError> {
+    pub fn to_cert_bundle(&mut self, ca_cert: &X509, ca_key: &PKey<Private>) -> Result<CertBundle, RvError> {
         let key_bits = self.key_bits;
         let priv_key = match self.key_type.as_str() {
             "rsa" => {
@@ -302,7 +290,7 @@ impl Certificate {
                 let rsa_key = Rsa::generate(key_bits)?;
                 let pkey = PKey::from_rsa(rsa_key)?;
                 pkey
-            },
+            }
             "ec" => {
                 let curve_name = match key_bits {
                     224 => Nid::SECP224R1,
@@ -317,7 +305,7 @@ impl Certificate {
                 let ec_key = EcKey::generate(ec_group.as_ref())?;
                 let pkey = PKey::from_ec_key(ec_key)?;
                 pkey
-            },
+            }
             _ => {
                 return Err(RvError::ErrPkiKeyTypeInvalid);
             }
@@ -326,7 +314,8 @@ impl Certificate {
         let cert = self.to_x509(ca_cert, ca_key, &priv_key)?;
         let serial_number = cert.serial_number().to_bn()?;
         let serial_number_hex = serial_number.to_hex_str()?;
-        let serial_number_hex = serial_number_hex.chars()
+        let serial_number_hex = serial_number_hex
+            .chars()
             .collect::<Vec<char>>()
             .chunks(2)
             .map(|chunk| chunk.iter().collect::<String>())
@@ -347,15 +336,16 @@ impl Certificate {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use humantime::parse_duration;
     use openssl::rsa::Rsa;
+
+    use super::*;
 
     #[test]
     fn test_create_certificate() {
         let not_before = SystemTime::now();
         let not_after = not_before + parse_duration("30d").unwrap();
-        let mut subject_name  = X509NameBuilder::new().unwrap();
+        let mut subject_name = X509NameBuilder::new().unwrap();
         subject_name.append_entry_by_text("C", "CN").unwrap();
         subject_name.append_entry_by_text("ST", "ZJ").unwrap();
         subject_name.append_entry_by_text("L", "HZ").unwrap();
@@ -364,9 +354,9 @@ mod test {
         let subject = subject_name.build();
 
         let mut cert = Certificate {
-            not_before: not_before,
-            not_after: not_after,
-            subject: subject,
+            not_before,
+            not_after,
+            subject,
             dns_sans: vec!["www.test.com".to_string(), "test.com".to_string()],
             email_sans: vec!["www@test.com".to_string(), "xx@test.com".to_string()],
             ip_sans: vec!["1.1.1.1".to_string(), "2.2.2.2".to_string()],

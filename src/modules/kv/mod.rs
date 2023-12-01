@@ -1,24 +1,22 @@
 use std::{
+    collections::HashMap,
     ops::Deref,
     sync::{Arc, RwLock},
-    time::{Duration},
-    collections::HashMap,
+    time::Duration,
 };
-use serde_json::{Value, Map};
+
 use humantime::parse_duration;
+use serde_json::{Map, Value};
+
 use crate::{
-    new_path, new_path_internal,
-    new_secret, new_secret_internal,
-    new_logical_backend, new_logical_backend_internal,
-    logical::{
-        Backend, LogicalBackend, Request, Response,
-        Operation, Path, PathOperation, Field, FieldType,
-        secret::Secret,
-    },
-    storage::{StorageEntry},
-    modules::Module,
     core::Core,
     errors::RvError,
+    logical::{
+        secret::Secret, Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response,
+    },
+    modules::Module,
+    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_secret, new_secret_internal,
+    storage::StorageEntry,
 };
 
 static KV_BACKEND_HELP: &str = r#"
@@ -56,11 +54,7 @@ impl Deref for KvBackend {
 
 impl KvBackend {
     pub fn new(core: Arc<RwLock<Core>>) -> Self {
-        Self {
-            inner: Arc::new(KvBackendInner {
-                core: core,
-            })
-        }
+        Self { inner: Arc::new(KvBackendInner { core }) }
     }
 
     pub fn new_backend(&self) -> LogicalBackend {
@@ -151,10 +145,7 @@ impl KvBackendInner {
         }
 
         let data = serde_json::to_string(req.body.as_ref().unwrap())?;
-        let entry = StorageEntry {
-            key: req.path.clone(),
-            value: data.into_bytes(),
-        };
+        let entry = StorageEntry { key: req.path.clone(), value: data.into_bytes() };
 
         req.storage_put(&entry)?;
         Ok(None)
@@ -178,10 +169,7 @@ impl KvBackendInner {
 
 impl KvModule {
     pub fn new(core: Arc<RwLock<Core>>) -> Self {
-        Self {
-            name: "kv".to_string(),
-            backend: Arc::new(KvBackend::new(core)),
-        }
+        Self { name: "kv".to_string(), backend: Arc::new(KvBackend::new(core)) }
     }
 }
 
