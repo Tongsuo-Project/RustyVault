@@ -178,7 +178,7 @@ mod test {
     use super::*;
     use crate::{
         logical::{Field, FieldType, PathOperation},
-        new_path, new_path_internal, new_secret, new_secret_internal,
+        new_path, new_path_internal, new_secret, new_secret_internal, new_fields, new_fields_internal,
         storage::{barrier_aes_gcm::AESGCMBarrier, physical},
     };
 

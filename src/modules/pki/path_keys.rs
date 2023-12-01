@@ -1,15 +1,217 @@
+use std::{
+    sync::Arc,
+    collections::HashMap,
+};
 use openssl::{ec::EcKey, rsa::Rsa};
 use serde_json::{json, Value};
 
-use super::PkiBackendInner;
+use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{Backend, Request, Response},
+    logical::{
+        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
+    },
     storage::StorageEntry,
     utils::key::KeyBundle,
+    new_path, new_path_internal, new_fields, new_fields_internal,
 };
 
 const PKI_CONFIG_KEY_PREFIX: &str = "config/key/";
+
+impl PkiBackend {
+    pub fn keys_generate_path(&self) -> Path {
+        let pki_backend_ref = Arc::clone(&self.inner);
+
+        let path = new_path!({
+            pattern: r"keys/generate/(exported|internal)",
+            fields: {
+                "key_name": {
+                    field_type: FieldType::Str,
+                    description: "key name"
+                },
+                "key_bits": {
+                    required: true,
+                    field_type: FieldType::Int,
+                    description: r#"
+The number of bits to use. Allowed values are 0 (universal default); with rsa
+key_type: 2048 (default), 3072, or 4096; with ec key_type: 224, 256 (default),
+384, or 521; ignored with ed25519."#
+                },
+                "key_type": {
+                    field_type: FieldType::Str,
+                    default: "rsa",
+                    description: r#"The type of key to use; defaults to RSA. "rsa""#
+                }
+            },
+            operations: [
+                {op: Operation::Write, handler: pki_backend_ref.generate_key}
+            ],
+            help: r#"
+This endpoint will generate a new key pair of the specified type (internal, exported)
+used for sign,verify,encrypt,decrypt.
+                "#
+        });
+
+        path
+    }
+
+    pub fn keys_import_path(&self) -> Path {
+        let pki_backend_ref = Arc::clone(&self.inner);
+
+        let path = new_path!({
+            pattern: r"keys/import",
+            fields: {
+                "key_name": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "key name"
+                },
+                "key_type": {
+                    field_type: FieldType::Str,
+                    default: "rsa",
+                    description: r#"The type of key to use; defaults to RSA. "rsa""#
+                },
+                "pem_bundle": {
+                    field_type: FieldType::Str,
+                    description: "PEM-format, unencrypted secret"
+                },
+                "hex_bundle": {
+                    field_type: FieldType::Str,
+                    description: "Hex-format, unencrypted secret"
+                },
+                "iv": {
+                    field_type: FieldType::Str,
+                    description: "IV for aes-gcm/aes-cbc"
+                }
+            },
+            operations: [
+                {op: Operation::Write, handler: pki_backend_ref.import_key}
+            ],
+            help: "Import the specified key."
+        });
+
+        path
+    }
+
+    pub fn keys_sign_path(&self) -> Path {
+        let pki_backend_ref = Arc::clone(&self.inner);
+
+        let path = new_path!({
+            pattern: r"keys/sign",
+            fields: {
+                "key_name": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "key name"
+                },
+                "data": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "Data that needs to be signed"
+                }
+            },
+            operations: [
+                {op: Operation::Write, handler: pki_backend_ref.key_sign}
+            ],
+            help: "Data Signatures."
+        });
+
+        path
+    }
+
+    pub fn keys_verify_path(&self) -> Path {
+        let pki_backend_ref = Arc::clone(&self.inner);
+
+        let path = new_path!({
+            pattern: r"keys/verify",
+            fields: {
+                "key_name": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "key name"
+                },
+                "data": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "Data that needs to be verified"
+                },
+                "signature": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "Signature data"
+                }
+            },
+            operations: [
+                {op: Operation::Write, handler: pki_backend_ref.key_verify}
+            ],
+            help: "Data verification."
+        });
+
+        path
+    }
+
+    pub fn keys_encrypt_path(&self) -> Path {
+        let pki_backend_ref = Arc::clone(&self.inner);
+
+        let path = new_path!({
+            pattern: r"keys/encrypt",
+            fields: {
+                "key_name": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "key name"
+                },
+                "data": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "Data that needs to be encrypted"
+                },
+                "aad": {
+                    required: false,
+                    field_type: FieldType::Str,
+                    description: "Additional Authenticated Data can be provided for aes-gcm/cbc encryption"
+                }
+            },
+            operations: [
+                {op: Operation::Write, handler: pki_backend_ref.key_encrypt}
+            ],
+            help: "Data encryption."
+        });
+
+        path
+    }
+
+    pub fn keys_decrypt_path(&self) -> Path {
+        let pki_backend_ref = Arc::clone(&self.inner);
+
+        let path = new_path!({
+            pattern: r"keys/decrypt",
+            fields: {
+                "key_name": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "key name"
+                },
+                "data": {
+                    required: true,
+                    field_type: FieldType::Str,
+                    description: "Data that needs to be decrypted"
+                },
+                "aad": {
+                    required: false,
+                    field_type: FieldType::Str,
+                    description: "Additional Authenticated Data can be provided for aes-gcm/cbc decryption"
+                }
+            },
+            operations: [
+                {op: Operation::Write, handler: pki_backend_ref.key_decrypt}
+            ],
+            help: "Data decryption."
+        });
+
+        path
+    }
+}
 
 impl PkiBackendInner {
     pub fn generate_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {

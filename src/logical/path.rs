@@ -51,21 +51,15 @@ impl PathOperation {
 }
 
 #[macro_export]
-macro_rules! new_path {
+macro_rules! new_fields {
     ($($tt:tt)*) => {
-        new_path_internal!($($tt)*)
+        new_fields_internal!($($tt)*)
     };
 }
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! new_path_internal {
-    (@object $object:ident pattern: $pattern:expr) => {
-        $object.pattern = $pattern.to_string();
-    };
-    (@object $object:ident help: $help:expr) => {
-        $object.help = $help.to_string();
-    };
+macro_rules! new_fields_internal {
     (@object $object:ident field_type: $field_type:expr) => {
         $object.field_type = $field_type;
     };
@@ -85,24 +79,52 @@ macro_rules! new_path_internal {
     };
     (@object $object:ident field_tt: {$($key:ident: $value:expr),*}) => {
         {
-            let mut path_field = Field::new();
+            let mut field = Field::new();
 
             $(
-                new_path_internal!(@object path_field $key: $value);
+                new_fields_internal!(@object field $key: $value);
             )*
 
-            path_field
+            field
         }
+    };
+    (@object $object:ident $($field_name:tt: $field_tt:tt),*) => {
+        $(
+            $object.insert($field_name.to_string(),
+                           Arc::new(new_fields_internal!(@object $object field_tt: $field_tt)));
+        )*
+    };
+    ({ $($tt:tt)+ }) => {
+        {
+            let mut fields = HashMap::new();
+            new_fields_internal!(@object fields $($tt)+);
+            fields
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! new_path {
+    ($($tt:tt)*) => {
+        new_path_internal!($($tt)*)
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! new_path_internal {
+    (@object $object:ident pattern: $pattern:expr) => {
+        $object.pattern = $pattern.to_string();
+    };
+    (@object $object:ident help: $help:expr) => {
+        $object.help = $help.to_string();
     };
     (@object $object:ident
         fields: {
-            $($field_name:tt: $field_tt:tt),*
+            $($tt:tt)+
         }
     ) => {
-        $(
-            $object.fields.insert($field_name.to_string(),
-                        Arc::new(new_path_internal!(@object $object field_tt: $field_tt)));
-        )*
+        $object.fields = new_fields!({ $($tt)+ });
     };
     (@object $object:ident op: $op:expr) => {
         $object.op = $op;
