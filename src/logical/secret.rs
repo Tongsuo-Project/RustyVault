@@ -1,15 +1,16 @@
 use std::{
-    sync::Arc,
     ops::{Deref, DerefMut},
-    time::{Duration}
+    sync::Arc,
+    time::Duration,
 };
-use serde::{Serialize, Deserialize};
-use serde_json::{Value, Map};
-use super::{Request, Response, Backend, lease::Lease};
-use crate::{errors::RvError};
 
-type SecretOperationHandler = dyn Fn(&dyn Backend, &mut Request)
-    -> Result<Option<Response>, RvError> + Send + Sync;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+
+use super::{lease::Lease, Backend, Request, Response};
+use crate::errors::RvError;
+
+type SecretOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretData {
@@ -49,11 +50,7 @@ impl Secret {
         lease.ttl = self.default_duration;
         lease.renewable = self.renewable();
 
-        let mut secret = SecretData {
-            lease: lease,
-            lease_id: String::new(),
-            internal_data: Map::new(),
-        };
+        let mut secret = SecretData { lease, lease_id: String::new(), internal_data: Map::new() };
 
         if internal.is_some() {
             secret.internal_data = internal.as_ref().unwrap().clone();

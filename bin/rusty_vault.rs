@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use clap::{Command};
+use clap::Command;
 use rusty_vault::cli;
 
 fn main() -> ExitCode {

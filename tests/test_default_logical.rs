@@ -1,14 +1,17 @@
-use std::env;
-use std::fs;
-use std::default::Default;
-use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
-use serde_json::{json, Value, Map};
+use std::{
+    collections::HashMap,
+    default::Default,
+    env, fs,
+    sync::{Arc, RwLock},
+};
+
 use go_defer::defer;
-use rusty_vault::storage::physical;
-use rusty_vault::storage::barrier_aes_gcm;
-use rusty_vault::core::{Core, SealConfig};
-use rusty_vault::logical::{Operation, Request};
+use rusty_vault::{
+    core::{Core, SealConfig},
+    logical::{Operation, Request},
+    storage::{barrier_aes_gcm, physical},
+};
+use serde_json::{json, Map, Value};
 
 fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool, expect: Option<Map<String, Value>>) {
     let mut req = Request::new(path);
@@ -66,7 +69,10 @@ fn test_default_secret(core: Arc<RwLock<Core>>, token: &str) {
     let kv_data = json!({
         "foo": "bar",
         "zip": "zap",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "secret/goo", true, Some(kv_data.clone()));
 
     // get secret
@@ -84,13 +90,19 @@ fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     // mount kv backend to path: kv/
     let mount_data = json!({
         "type": "kv",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/mounts/kv/", true, Some(mount_data));
 
     let kv_data = json!({
         "foo": "bar",
         "zip": "zap",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
 
     test_read_api(&core, token, "secret/foo", true, None);
 
@@ -108,7 +120,10 @@ fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     // update secret
     let kv_data = json!({
         "foo": "bar",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "kv/secret", true, Some(kv_data.clone()));
 
     // check whether the secret is updated successfully
@@ -117,7 +132,10 @@ fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     // add secret
     let kv_data = json!({
         "foo": "bar",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "kv/foo", true, Some(kv_data.clone()));
 
     // list secret
@@ -134,7 +152,10 @@ fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     let remount_data = json!({
         "from": "kv",
         "to": "vk",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/remount", true, Some(remount_data));
 
     // get secret from new mount path
@@ -165,7 +186,10 @@ fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     // test api: "mounts/kv" with valid type
     let mount_data = json!({
         "type": "kv",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/mounts/kv/", true, Some(mount_data.clone()));
 
     // test api: "mounts/kv" with path conflict
@@ -174,42 +198,60 @@ fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     // test api: "mounts/nope" with valid type
     let mount_data = json!({
         "type": "nope",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/mounts/nope/", false, Some(mount_data));
 
     // test api: "remount" with valid path
     let remount_data = json!({
         "from": "kv",
         "to": "vk",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/remount", true, Some(remount_data));
 
     // test api: "remount" with invalid path
     let remount_data = json!({
         "from": "unknow",
         "to": "vvk",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/remount", false, Some(remount_data));
 
     // test api: "remount" with dis-path conflict
     let remount_data = json!({
         "from": "vk",
         "to": "secret",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/remount", false, Some(remount_data));
 
     // test api: "remount" with protect path
     let remount_data = json!({
         "from": "sys",
         "to": "foo",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/remount", false, Some(remount_data));
 
     // test api: "remount" with default src-path
     let remount_data = json!({
         "from": "secret",
         "to": "bar",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/remount", true, Some(remount_data));
 }
 
@@ -231,7 +273,10 @@ fn test_sys_raw_api_feature(core: Arc<RwLock<Core>>, token: &str) {
     // test raw write
     let test_data = json!({
         "value": "my test data",
-    }).as_object().unwrap().clone();
+    })
+    .as_object()
+    .unwrap()
+    .clone();
     test_write_api(&core, token, "sys/raw/test", true, Some(test_data.clone()));
 
     // test raw read again
@@ -275,20 +320,13 @@ fn test_default_logical() {
 
     let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
-    let c = Arc::new(RwLock::new(Core {
-        physical: backend,
-        barrier: Arc::new(barrier),
-        ..Default::default()
-    }));
+    let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
 
     {
         let mut core = c.write().unwrap();
         assert!(core.config(Arc::clone(&c), None).is_ok());
 
-        let seal_config = SealConfig {
-            secret_shares: 10,
-            secret_threshold: 5,
-        };
+        let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
 
         let result = core.init(&seal_config);
         assert!(result.is_ok());

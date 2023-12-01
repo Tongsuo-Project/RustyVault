@@ -1,14 +1,11 @@
-use std::time::{SystemTime, Duration};
+use std::time::{Duration, SystemTime};
+
 use chrono::prelude::*;
-use rand::{Rng, thread_rng};
-use openssl::{
-    hash::{
-        MessageDigest,
-        Hasher,
-    }
-};
-use serde::{Serializer, Deserialize, Deserializer};
 use humantime::{format_rfc3339, parse_rfc3339};
+use openssl::hash::{Hasher, MessageDigest};
+use rand::{thread_rng, Rng};
+use serde::{Deserialize, Deserializer, Serializer};
+
 use crate::errors::RvError;
 
 pub mod cert;
@@ -20,11 +17,22 @@ pub fn generate_uuid() -> String {
 
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        buf[0], buf[1], buf[2], buf[3],
-        buf[4], buf[5],
-        buf[6], buf[7],
-        buf[8], buf[9],
-        buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]
+        buf[0],
+        buf[1],
+        buf[2],
+        buf[3],
+        buf[4],
+        buf[5],
+        buf[6],
+        buf[7],
+        buf[8],
+        buf[9],
+        buf[10],
+        buf[11],
+        buf[12],
+        buf[13],
+        buf[14],
+        buf[15]
     )
 }
 
@@ -58,14 +66,16 @@ where
 }
 
 pub fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
-    where S: serde::Serializer
+where
+    S: serde::Serializer,
 {
     let timestamp = duration.as_secs();
     serializer.serialize_i64(timestamp as i64)
 }
 
 pub fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-    where D: serde::Deserializer<'de>
+where
+    D: serde::Deserializer<'de>,
 {
     let timestamp = i64::deserialize(deserializer)?;
     Ok(Duration::from_secs(timestamp as u64))

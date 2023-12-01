@@ -1,18 +1,14 @@
-use std::{
-    time::{Duration},
-};
+use std::time::Duration;
+
 use humantime::parse_duration;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
+use super::PkiBackendInner;
 use crate::{
-    utils::{serialize_duration, deserialize_duration},
-    logical::{
-        Backend, Request, Response,
-    },
-    storage::StorageEntry,
     errors::RvError,
-};
-use super::{
-    PkiBackendInner,
+    logical::{Backend, Request, Response},
+    storage::StorageEntry,
+    utils::{deserialize_duration, serialize_duration},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,7 +86,7 @@ impl PkiBackendInner {
                 if key_bits != 2048 && key_bits != 3072 && key_bits != 4096 {
                     return Err(RvError::ErrPkiKeyBitsInvalid);
                 }
-            },
+            }
             "ec" => {
                 if key_bits == 0 {
                     key_bits = 256;
@@ -143,28 +139,28 @@ impl PkiBackendInner {
         let not_after = not_after_vale.as_str().unwrap().to_string();
 
         let role_entry = RoleEntry {
-            ttl: ttl,
-            max_ttl: max_ttl,
+            ttl,
+            max_ttl,
             key_type: key_type.to_string(),
             key_bits: key_bits as u32,
             signature_bits: signature_bits as u32,
-            allow_localhost: allow_localhost,
-            allow_bare_domains: allow_bare_domains,
-            allow_subdomains: allow_subdomains,
-            allow_any_name: allow_any_name,
-            allow_ip_sans: allow_ip_sans,
-            server_flag: server_flag,
-            client_flag: client_flag,
-            use_csr_sans: use_csr_sans,
-            use_csr_common_name: use_csr_common_name,
-            country: country,
-            province: province,
-            locality: locality,
-            organization: organization,
-            ou: ou,
-            no_store: no_store,
-            generate_lease: generate_lease,
-            not_after: not_after,
+            allow_localhost,
+            allow_bare_domains,
+            allow_subdomains,
+            allow_any_name,
+            allow_ip_sans,
+            server_flag,
+            client_flag,
+            use_csr_sans,
+            use_csr_common_name,
+            country,
+            province,
+            locality,
+            organization,
+            ou,
+            no_store,
+            generate_lease,
+            not_after,
         };
 
         let entry = StorageEntry::new(format!("role/{}", name).as_str(), &role_entry)?;

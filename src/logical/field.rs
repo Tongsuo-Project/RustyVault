@@ -1,10 +1,10 @@
-use std::fmt;
-use std::sync::Arc;
-use std::any::Any;
-use enum_map::{Enum};
-use strum::{Display, EnumString};
-use serde::{Serialize, Deserialize};
+use std::{any::Any, fmt, sync::Arc};
+
+use enum_map::Enum;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use strum::{Display, EnumString};
+
 use crate::errors::RvError;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, EnumString, Display, Enum, Serialize, Deserialize)]
@@ -69,8 +69,10 @@ impl fmt::Debug for Field {
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
+
+    use serde_json::{json, Number, Value};
+
     use super::*;
-    use serde_json::{json, Value, Number};
 
     #[test]
     fn test_field_get_default() {

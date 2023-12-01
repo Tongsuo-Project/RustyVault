@@ -1,7 +1,9 @@
-use std::any::Any;
-use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use std::{
+    any::Any,
+    cell::RefCell,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 pub struct Context {
     data_map: Mutex<HashMap<String, Arc<RefCell<dyn Any>>>>,
@@ -9,9 +11,7 @@ pub struct Context {
 
 impl Context {
     pub fn new() -> Self {
-        Self {
-            data_map: Mutex::new(HashMap::new()),
-        }
+        Self { data_map: Mutex::new(HashMap::new()) }
     }
 
     pub fn set(&self, key: &str, data: Arc<RefCell<dyn Any>>) {

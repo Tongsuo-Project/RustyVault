@@ -1,9 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::errors::RvError;
-use serde::{Serialize, Deserialize};
 
 pub mod barrier;
-pub mod barrier_view;
 pub mod barrier_aes_gcm;
+pub mod barrier_view;
 pub mod physical;
 
 pub trait Storage {
@@ -22,10 +23,7 @@ pub struct StorageEntry {
 
 impl Default for StorageEntry {
     fn default() -> Self {
-        Self {
-            key: String::new(),
-            value: Vec::new(),
-        }
+        Self { key: String::new(), value: Vec::new() }
     }
 }
 
@@ -33,9 +31,6 @@ impl StorageEntry {
     pub fn new(k: &str, v: &impl Serialize) -> Result<StorageEntry, RvError> {
         let data = serde_json::to_string(v)?;
 
-        Ok(StorageEntry {
-            key: k.to_string(),
-            value: data.into_bytes(),
-        })
+        Ok(StorageEntry { key: k.to_string(), value: data.into_bytes() })
     }
 }

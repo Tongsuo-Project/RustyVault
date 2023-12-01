@@ -1,5 +1,5 @@
-use crate::errors::RvError;
 use super::Storage;
+use crate::errors::RvError;
 
 pub const BARRIER_INIT_PATH: &str = "barrier/init";
 

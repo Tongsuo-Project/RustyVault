@@ -1,12 +1,7 @@
-use std::fmt;
-use std::sync::Arc;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt, sync::Arc};
+
+use super::{request::Request, response::Response, Backend, Field, Operation};
 use crate::errors::RvError;
-use super::request::Request;
-use super::response::Response;
-use super::Field;
-use super::Operation;
-use super::Backend;
 
 type PathOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
@@ -26,20 +21,13 @@ pub struct PathOperation {
 
 impl fmt::Debug for PathOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PathOperation")
-            .field("op", &self.op)
-            .finish()
+        f.debug_struct("PathOperation").field("op", &self.op).finish()
     }
 }
 
 impl Path {
     pub fn new(pattern: &str) -> Self {
-        Self {
-            pattern: pattern.to_string(),
-            fields: HashMap::new(),
-            operations: Vec::new(),
-            help: String::new(),
-        }
+        Self { pattern: pattern.to_string(), fields: HashMap::new(), operations: Vec::new(), help: String::new() }
     }
 
     pub fn get_field(&self, key: &str) -> Option<Arc<Field>> {
@@ -51,7 +39,9 @@ impl PathOperation {
     pub fn new() -> Self {
         Self {
             op: Operation::Read,
-            handler: Arc::new(|_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> { Ok(None) }),
+            handler: Arc::new(|_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> {
+                Ok(None)
+            }),
         }
     }
 
@@ -169,8 +159,7 @@ macro_rules! new_path_internal {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use super::super::FieldType;
+    use super::{super::FieldType, *};
 
     pub fn my_test_read_handler(_backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
