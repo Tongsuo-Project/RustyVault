@@ -1,17 +1,70 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    collections::HashMap,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use humantime::parse_duration;
 use openssl::{asn1::Asn1Time, x509::X509NameBuilder};
 use serde_json::{json, Map, Value};
 
-use super::PkiBackendInner;
+use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{Backend, Request, Response},
-    storage::StorageEntry,
+    logical::{
+        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
+    },
     utils,
-    utils::{cert, cert::CertBundle},
+    utils::{cert},
+    new_path, new_path_internal, new_fields, new_fields_internal,
 };
+
+impl PkiBackend {
+    pub fn issue_path(&self) -> Path {
+        let pki_backend_ref = Arc::clone(&self.inner);
+
+        let path = new_path!({
+            pattern: r"issue/(?P<role>\w[\w-]+\w)",
+            fields: {
+                "role": {
+                    field_type: FieldType::Str,
+                    description: "The desired role with configuration for this request"
+                },
+                "common_name": {
+                    field_type: FieldType::Str,
+                    description: r#"
+The requested common name; if you want more than one, specify the alternative names in the alt_names map"#
+                },
+                "alt_names": {
+                    required: false,
+                    field_type: FieldType::Str,
+                    description: r#"
+The requested Subject Alternative Names, if any, in a comma-delimited list"#
+                },
+                "ip_sans": {
+                    required: false,
+                    field_type: FieldType::Str,
+                    description: r#"The requested IP SANs, if any, in a common-delimited list"#
+                },
+                "ttl": {
+                    required: false,
+                    field_type: FieldType::Str,
+                    description: r#"Specifies requested Time To Live"#
+                }
+            },
+            operations: [
+                {op: Operation::Write, handler: pki_backend_ref.issue_cert}
+            ],
+            help: r#"
+This path allows requesting certificates to be issued according to the
+policy of the given role. The certificate will only be issued if the
+requested common name is allowed by the role policy.
+                "#
+        });
+
+        path
+    }
+}
 
 impl PkiBackendInner {
     pub fn issue_cert(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -56,7 +109,7 @@ impl PkiBackendInner {
             }
         }
 
-        let ca_bundle = self.fetch_ca_info(req)?;
+        let ca_bundle = self.fetch_ca_bundle(req)?;
         let not_before = SystemTime::now() - Duration::from_secs(10);
         let mut not_after = not_before + parse_duration("30d").unwrap();
 
@@ -112,12 +165,11 @@ impl PkiBackendInner {
             ..cert::Certificate::default()
         };
 
-        let cert_bundle = cert.to_cert_bundle(&ca_bundle.certificate, &ca_bundle.private_key)?;
+        let cert_bundle = cert.to_cert_bundle(Some(&ca_bundle.certificate), Some(&ca_bundle.private_key))?;
 
         if !role_entry.no_store {
             let serial_number_hex = cert_bundle.serial_number.replace(":", "-").to_lowercase();
-            let entry = StorageEntry::new(format!("certs/{}", serial_number_hex).as_str(), &cert_bundle)?;
-            req.storage_put(&entry)?;
+            self.store_cert(req, &serial_number_hex, &cert_bundle.certificate)?;
         }
 
         let cert_expiration = utils::asn1time_to_timestamp(cert_bundle.certificate.not_after().to_string().as_str())?;
@@ -131,6 +183,7 @@ impl PkiBackendInner {
 
         let resp_data = json!({
             "expiration": cert_expiration,
+            "issuing_ca": String::from_utf8_lossy(&ca_bundle.certificate.to_pem()?),
             "ca_chain": ca_chain_pem,
             "certificate": String::from_utf8_lossy(&cert_bundle.certificate.to_pem()?),
             "private_key": String::from_utf8_lossy(&cert_bundle.private_key.private_key_to_pem_pkcs8()?),
@@ -157,18 +210,5 @@ impl PkiBackendInner {
         } else {
             return Ok(Some(Response::data_response(Some(resp_data))));
         }
-    }
-
-    pub fn fetch_cert(&self, req: &Request) -> Result<CertBundle, RvError> {
-        let serial_number_value = req.get_data("serial")?;
-        let serial_number = serial_number_value.as_str().unwrap();
-        let serial_number_hex = serial_number.replace(":", "-").to_lowercase();
-        let entry = req.storage_get(format!("certs/{}", serial_number_hex).as_str())?;
-        if entry.is_none() {
-            return Err(RvError::ErrPkiCertNotFound);
-        }
-
-        let cert_bundle: CertBundle = serde_json::from_slice(entry.unwrap().value.as_slice())?;
-        Ok(cert_bundle)
     }
 }
