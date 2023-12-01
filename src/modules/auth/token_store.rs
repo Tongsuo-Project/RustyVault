@@ -17,7 +17,7 @@ use crate::{
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
-    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
+    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_fields, new_fields_internal,
     router::Router,
     storage::{Storage, StorageEntry},
     utils::{generate_uuid, is_str_subset, sha1},
