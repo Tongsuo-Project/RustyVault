@@ -8,8 +8,6 @@ RustyVault can be deployed in either cloud or physical environments. Depending o
 
 The core cryptographic module which provides cryptography functionality to RustVault can be configurable, for instance it could be [OpenSSL](https://github.com/openssl/openssl) or [Tongsuo](https://github.com/Tongsuo-Project/Tongsuo) project depending on the actual scenarios.
 
-The RustyVault is a subproject of [Tongsuo Project](https://github.com/Tongsuo-Project).
-
 ## Feature
 
 Part of the features provided by Rustyvault are as follows:
@@ -58,4 +56,4 @@ Part of the features provided by Rustyvault are as follows:
 
 ## Design
 
-Read the [design](.\/design.md) document. This currently is in Chinese only.
+Read the [design](.\/design.md) document.
