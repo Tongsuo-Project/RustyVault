@@ -2,7 +2,7 @@
 
 ## Overview
 
-RustyVault is a modern secret management system, written in Rust. RustyVault provides various features which support many scenarios including secure sotrage, cloud identity management, secret management, Kubernetes integration, PKI infrastructure, cryptographic computing, traditional key management, etc.
+RustyVault is a modern secret management system, written in Rust. RustyVault provides various features which support many scenarios including secure storage, cloud identity management, secret management, Kubernetes integration, PKI infrastructure, cryptographic computing, traditional key management, etc.
 
 RustyVault can be deployed in either cloud or physical environments. Depending on different requirements, RustyVault may run as standalone application with a set of RESTful APIs provided, and it can also be used as a crate thus you can easily integrate it into your own Rust application.
 
@@ -12,7 +12,7 @@ One of the goals of RustyVault is to replace Hashicorp Vault seamlessly if you a
 
 ## Feature
 
-Part of the features provided by Rustyvault are as follows:
+Part of the features provided by RustyVault are as follows:
 
 * Working Mode
   * standalone process w/HTTP APIs
