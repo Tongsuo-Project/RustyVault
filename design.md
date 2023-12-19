@@ -1,6 +1,6 @@
 # RustyVault Design
 
-As per: [RustyVault Requirements Document](.\/req-en.md). In this document we describe the architecture of RustyVault.
+As per: [RustyVault Requirements Document](./req.md). In this document we describe the architecture of RustyVault.
 
 # Architecture Diagram
 
