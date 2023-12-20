@@ -73,18 +73,18 @@ The value format should be given in UTC format YYYY-MM-ddTHH:MM:SSZ."#
             description: r#"If set, Province will be set to this value."#
         },
         "street_address": {
-            field_type: FieldType::Bool,
-            default: false,
+            required: false,
+            field_type: FieldType::Str,
             description: r#"If set, Street Address will be set to this value."#
         },
         "postal_code": {
-            field_type: FieldType::Bool,
-            default: false,
+            required: false,
+            field_type: FieldType::Str,
             description: r#"If set, Postal Code will be set to this value."#
         },
         "serial_number": {
-            field_type: FieldType::Bool,
-            default: false,
+            required: false,
+            field_type: FieldType::Str,
             description: r#"The Subject's requested serial number, if any.
 See RFC 4519 Section 2.31 'serialNumber' for a description of this field.
 If you want more than one, specify alternative names in the alt_names
