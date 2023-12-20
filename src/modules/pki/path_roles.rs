@@ -245,6 +245,18 @@ If set, Locality will be set to this value in certificates issued by this role."
                     description: r#"
 If set, Province will be set to this value in certificates issued by this role."#
                 },
+                "street_address": {
+                    required: false,
+                    field_type: FieldType::Str,
+                    description: r#"
+If set, Street Address will be set to this value."#
+                },
+                "postal_code": {
+                    required: false,
+                    field_type: FieldType::Str,
+                    description: r#"
+If set, Postal Code will be set to this value."#
+                },
                 "use_csr_common_name": {
                     field_type: FieldType::Bool,
                     default: true,
@@ -388,12 +400,18 @@ impl PkiBackendInner {
         let organization = organization_vale.as_str().unwrap().to_string();
         let ou_vale = req.get_data("ou")?;
         let ou = ou_vale.as_str().unwrap().to_string();
+        let street_address_vale = req.get_data("street_address")?;
+        let street_address = street_address_vale.as_str().unwrap().to_string();
+        let postal_code_vale = req.get_data("postal_code")?;
+        let postal_code = postal_code_vale.as_str().unwrap().to_string();
         let no_store_vale = req.get_data("no_store")?;
         let no_store = no_store_vale.as_bool().unwrap();
         let generate_lease_vale = req.get_data("generate_lease")?;
         let generate_lease = generate_lease_vale.as_bool().unwrap();
         let not_after_vale = req.get_data("not_after")?;
         let not_after = not_after_vale.as_str().unwrap().to_string();
+        let not_before_duration_vale = req.get_data("not_before_duration")?;
+        let not_before_duration = Duration::from_secs(not_before_duration_vale.as_u64().unwrap());
 
         let role_entry = RoleEntry {
             ttl,
@@ -418,6 +436,9 @@ impl PkiBackendInner {
             no_store,
             generate_lease,
             not_after,
+            not_before_duration,
+            street_address,
+            postal_code,
             ..Default::default()
         };
 

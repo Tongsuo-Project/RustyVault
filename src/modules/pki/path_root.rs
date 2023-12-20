@@ -20,7 +20,7 @@ impl PkiBackend {
         let pki_backend_ref = Arc::clone(&self.inner);
 
         let mut path = new_path!({
-            pattern: r"root/generate",
+            pattern: r"root/generate/(?P<exported>.+)",
             operations: [
                 {op: Operation::Write, handler: pki_backend_ref.generate_root}
             ],
@@ -52,7 +52,9 @@ impl PkiBackend {
 impl PkiBackendInner {
     pub fn generate_root(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut export_private_key = false;
-        if req.path.ends_with("/exported") {
+        let exported_vale = req.get_data("exported")?;
+        let exported = exported_vale.as_str().unwrap();
+        if exported == "exported" {
             export_private_key = true;
         }
 
