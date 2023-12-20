@@ -14,13 +14,13 @@ And compared to Hashicorp Vault, there is rare open source key/secret management
 
 The new project needs to fulfill most features the a traditional KMS has. It also needs to be a replacement for Hashicorp Vault, with the features that even are not included in the open source versions of Vault. As such, the new project should be:
 
-0. Written in Rust to achieve memory safe
-0. Fully compatible with Hashicorp Vault on APIs and data format
-1. Configurable underlying cryptograhpic module
-2. High performance on cryptography operations
-3. High availability
-4. Support for underlying cryptography hardware
-5. OSI-approved open-source license
+1. Written in Rust to achieve memory safe
+2. Fully compatible with Hashicorp Vault on APIs and data format
+3. Configurable underlying cryptographic module
+4. High performance on cryptography operations
+5. High availability
+6. Support for underlying cryptography hardware
+7. OSI-approved open-source license
 
 # Requirements List
 
@@ -54,7 +54,7 @@ Features:
       * Signature: RSA/ECDSA/EdDSA/SM2/Ring Signature
       * Encryption: RSA/SM2
   * Digest: SHA1/SHA2/SM3
-* Advanced Cryptography Algorihtm
+* Advanced Cryptography Algorithm
   * PHE: Paillier, EC-ElGamal
   * ZKP: Bulletproofs
   * Post Quantum Cryptography

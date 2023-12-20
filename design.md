@@ -1,6 +1,6 @@
 # RustyVault Design
 
-As per: [RustyVault Requirements Document](.\/req-en.md). In this document we describe the architecture of RustyVault.
+As per: [RustyVault Requirements Document](./req.md). In this document we describe the architecture of RustyVault.
 
 # Architecture Diagram
 
@@ -15,6 +15,6 @@ Detailed description:
 
 2. RustyVault depends on cryptography libraries (or cryptographic modules) to have the functionality such as encryption, signing, TLS connections and etc. Depending on the configuration, the cryptography library may be various, including native Rust crypto crates (ring, Rustls...), OpenSSL (via rust-openssl), Tongsuo...
 
-3. RustyVault is able to utilize many different cryptography hardware, such as HSMs or cryptography cards. But RustyVault doesn't talk to these hardware equipments directly, instead the underlying cryptography library sits between them and makes it more easy for RustyVault to reach the hardware ability.
+3. RustyVault is able to utilize many different cryptographic hardware, such as HSMs or cryptography cards. But RustyVault doesn't talk to these hardware equipments directly, instead the underlying cryptography library sits between them and makes it easier for RustyVault to reach the hardware ability.
 
-4. The sesitive data in RustyVault (such as secrets, credentials, password, keys...) can be stored in local storage or an external remote storage such as etcd. The external storage is necessary if RustyVault runs in cluster. Different storage method is managed by the Storage Manager in the RustyVault Core component. Thanks to this design, other modules of RustyVault don't need to deal with different types of storage.
+4. The sensitive data in RustyVault (such as secrets, credentials, password, keys...) can be stored in local storage or an external remote storage such as etcd. The external storage is necessary if RustyVault runs in cluster. Different storage method is managed by the Storage Manager in the RustyVault Core component. Thanks to this design, other modules of RustyVault don't need to deal with different types of storage.
