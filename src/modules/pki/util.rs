@@ -2,7 +2,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use humantime::parse_duration;
+use humantime::{parse_duration, parse_rfc3339};
 use openssl::{x509::X509NameBuilder};
 
 use super::{path_roles::RoleEntry};
@@ -125,13 +125,16 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
         }
 
         let not_before = SystemTime::now() - Duration::from_secs(10);
-        let mut not_after = not_before + parse_duration("30d").unwrap();
-        if role_entry.ttl != Duration::from_secs(0) {
-            not_after = not_before + role_entry.ttl;
-        }
+        let not_after: SystemTime;
         if role_entry.not_after.len() > 18 {
-            //TODO
-            //DateTime::parse_from_str(&role_entry.not_after, "%Y-%m-%dT%H:%M:%SZ")
+            let parsed_time = parse_rfc3339(&role_entry.not_after)?;
+            not_after = parsed_time.into();
+        } else {
+            if role_entry.ttl != Duration::from_secs(0) {
+                not_after = not_before + role_entry.ttl;
+            } else {
+                not_after = not_before + role_entry.max_ttl;
+            }
         }
 
         let mut subject_name = X509NameBuilder::new().unwrap();
