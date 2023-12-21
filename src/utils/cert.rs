@@ -12,8 +12,11 @@ use openssl::{
     pkey::{PKey, Private},
     rsa::Rsa,
     x509::{
-        extension::{AuthorityKeyIdentifier, BasicConstraints, KeyUsage, SubjectAlternativeName, SubjectKeyIdentifier},
-        X509Builder, X509Extension, X509Name, X509NameBuilder, X509,
+        extension::{
+            AuthorityKeyIdentifier, BasicConstraints, KeyUsage, ExtendedKeyUsage,
+            SubjectAlternativeName, SubjectKeyIdentifier
+        },
+        X509Builder, X509Extension, X509Name, X509NameBuilder, X509, X509Ref,
     },
 };
 use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
@@ -213,8 +216,8 @@ impl Default for Certificate {
 impl Certificate {
     pub fn to_x509(
         &mut self,
-        ca_cert: &X509,
-        ca_key: &PKey<Private>,
+        ca_cert: Option<&X509Ref>,
+        ca_key: Option<&PKey<Private>>,
         private_key: &PKey<Private>,
     ) -> Result<X509, RvError> {
         let mut builder = X509::builder()?;
@@ -222,7 +225,11 @@ impl Certificate {
         let serial_number = self.serial_number.to_asn1_integer()?;
         builder.set_serial_number(&serial_number)?;
         builder.set_subject_name(&self.subject)?;
-        builder.set_issuer_name(ca_cert.subject_name())?;
+        if ca_cert.is_some() {
+            builder.set_issuer_name(ca_cert.unwrap().subject_name())?;
+        } else {
+            builder.set_issuer_name(&self.subject)?;
+        }
         builder.set_pubkey(private_key)?;
 
         let not_before_dur = self.not_before.duration_since(UNIX_EPOCH)?;
@@ -252,7 +259,7 @@ impl Certificate {
             san_ext.uri(uri.as_str());
         }
 
-        builder.append_extension(san_ext.build(&builder.x509v3_context(Some(ca_cert), None))?)?;
+        builder.append_extension(san_ext.build(&builder.x509v3_context(ca_cert, None))?)?;
 
         for ext in &self.extensions {
             builder.append_extension2(ext)?;
@@ -260,27 +267,38 @@ impl Certificate {
 
         if self.is_ca {
             builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
+            builder.append_extension(
+                KeyUsage::new().critical().key_cert_sign().crl_sign().build()?,
+            )?;
+        } else {
+            builder.append_extension(BasicConstraints::new().critical().build()?)?;
+            builder.append_extension(
+                KeyUsage::new().critical().non_repudiation().digital_signature().key_encipherment().build()?,
+            )?;
+            builder.append_extension(
+                ExtendedKeyUsage::new().server_auth().client_auth().build()?,
+            )?;
         }
 
-        builder.append_extension(
-            KeyUsage::new().critical().non_repudiation().digital_signature().key_encipherment().build()?,
-        )?;
-
-        let subject_key_id = SubjectKeyIdentifier::new().build(&builder.x509v3_context(Some(ca_cert), None))?;
+        let subject_key_id = SubjectKeyIdentifier::new().build(&builder.x509v3_context(ca_cert, None))?;
         builder.append_extension(subject_key_id)?;
 
         let authority_key_id = AuthorityKeyIdentifier::new()
-            .keyid(false)
+            .keyid(true)
             .issuer(false)
-            .build(&builder.x509v3_context(Some(ca_cert), None))?;
+            .build(&builder.x509v3_context(ca_cert, None))?;
         builder.append_extension(authority_key_id)?;
 
-        builder.sign(ca_key, MessageDigest::sha256())?;
+        if ca_key.is_some() {
+            builder.sign(ca_key.as_ref().unwrap(), MessageDigest::sha256())?;
+        } else {
+            builder.sign(private_key, MessageDigest::sha256())?;
+        }
 
         Ok(builder.build())
     }
 
-    pub fn to_cert_bundle(&mut self, ca_cert: &X509, ca_key: &PKey<Private>) -> Result<CertBundle, RvError> {
+    pub fn to_cert_bundle(&mut self, ca_cert: Option<&X509Ref>, ca_key: Option<&PKey<Private>>) -> Result<CertBundle, RvError> {
         let key_bits = self.key_bits;
         let priv_key = match self.key_type.as_str() {
             "rsa" => {
@@ -322,13 +340,17 @@ impl Certificate {
             .collect::<Vec<String>>()
             .join(":");
 
-        let cert_bundle = CertBundle {
+        let mut cert_bundle = CertBundle {
             certificate: cert,
-            ca_chain: vec![ca_cert.clone()],
+            ca_chain: Vec::new(),
             private_key: priv_key.clone(),
             private_key_type: self.key_type.clone(),
             serial_number: serial_number_hex.to_lowercase(),
         };
+
+        if ca_cert.is_some() {
+            cert_bundle.ca_chain = vec![ca_cert.unwrap().to_owned()];
+        }
 
         Ok(cert_bundle)
     }
@@ -420,13 +442,49 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let rsa_key = Rsa::generate(2048).unwrap();
         let pkey = PKey::from_rsa(rsa_key).unwrap();
 
-        let x509 = cert.to_x509(&ca_cert, &ca_key, &pkey);
+        let x509 = cert.to_x509(Some(&ca_cert), Some(&ca_key), &pkey);
         assert!(x509.is_ok());
         let x509_pem = x509.unwrap().to_pem().unwrap();
         println!("x509_pem: \n{}", String::from_utf8_lossy(&x509_pem));
-        let cert_bundle = cert.to_cert_bundle(&ca_cert, &ca_key);
+        let cert_bundle = cert.to_cert_bundle(Some(&ca_cert), Some(&ca_key));
         assert!(cert_bundle.is_ok());
         let cert_bundle = cert_bundle.unwrap();
         assert!(cert_bundle.private_key.public_eq(&cert_bundle.certificate.public_key().unwrap()));
+    }
+
+    #[test]
+    fn test_create_ca() {
+        let not_before = SystemTime::now();
+        let not_after = not_before + parse_duration("360d").unwrap();
+        let mut subject_name = X509NameBuilder::new().unwrap();
+        subject_name.append_entry_by_text("C", "CN").unwrap();
+        subject_name.append_entry_by_text("ST", "ZJ").unwrap();
+        subject_name.append_entry_by_text("L", "HZ").unwrap();
+        subject_name.append_entry_by_text("O", "Ant-Group").unwrap();
+        subject_name.append_entry_by_text("CN", "www.testca.com").unwrap();
+        let subject = subject_name.build();
+
+        let mut cert = Certificate {
+            not_before,
+            not_after,
+            subject,
+            dns_sans: vec!["www.testca.com".to_string(), "testca.com".to_string()],
+            is_ca: true,
+            ..Certificate::default()
+        };
+
+        let rsa_key = Rsa::generate(2048).unwrap();
+        let pkey = PKey::from_rsa(rsa_key).unwrap();
+
+        let x509 = cert.to_x509(None, None, &pkey);
+        assert!(x509.is_ok());
+        let x509_pem = x509.unwrap().to_pem().unwrap();
+        println!("x509_pem: \n{}", String::from_utf8_lossy(&x509_pem));
+
+        let cert_bundle = cert.to_cert_bundle(None, None);
+        assert!(cert_bundle.is_ok());
+        let cert_bundle = cert_bundle.unwrap();
+        assert!(cert_bundle.private_key.public_eq(&cert_bundle.certificate.public_key().unwrap()));
+        println!("create ca result:\n{:?}", cert_bundle);
     }
 }
