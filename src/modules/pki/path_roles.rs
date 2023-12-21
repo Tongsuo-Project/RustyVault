@@ -18,6 +18,8 @@ use crate::{
     new_path, new_path_internal, new_fields, new_fields_internal,
 };
 
+const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365*24*60*60 as u64);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleEntry {
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
@@ -55,7 +57,7 @@ impl Default for RoleEntry {
     fn default() -> Self {
         Self {
             ttl: Duration::from_secs(0),
-            max_ttl: Duration::from_secs(0),
+            max_ttl: DEFAULT_MAX_TTL,
             not_before_duration: Duration::from_secs(0),
             key_type: "rsa".to_string(),
             key_bits: 2048,
