@@ -257,7 +257,7 @@ impl SystemBackend {
                 }
             ],
             root_paths: ["mounts/*", "auth/*", "remount", "policy", "policy/*", "audit", "audit/*", "seal", "raw/*", "revoke-prefix/*"],
-            help: SYSTEM_BACKEND_HELP
+            help: SYSTEM_BACKEND_HELP,
         });
 
         backend

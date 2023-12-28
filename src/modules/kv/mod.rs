@@ -90,7 +90,7 @@ impl KvBackend {
                 renew_handler: kv_backend_renew.handle_read,
                 revoke_handler: kv_backend_revoke.handle_noop,
             }],
-            help: KV_BACKEND_HELP
+            help: KV_BACKEND_HELP,
         });
 
         backend

@@ -241,7 +241,7 @@ impl TokenStore {
                 }
             ],
             root_paths: ["revoke-orphan/*"],
-            help: AUTH_TOKEN_HELP
+            help: AUTH_TOKEN_HELP,
         });
 
         backend

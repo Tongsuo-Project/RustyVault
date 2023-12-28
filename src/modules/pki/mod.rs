@@ -79,7 +79,7 @@ impl PkiBackend {
                 revoke_handler: pki_backend_ref1.revoke_secret_creds,
                 renew_handler: pki_backend_ref2.renew_secret_creds,
             }],
-            help: PKI_BACKEND_HELP
+            help: PKI_BACKEND_HELP,
         });
 
         backend.paths.push(Arc::new(self.roles_path()));
