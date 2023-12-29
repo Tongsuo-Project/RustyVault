@@ -13,19 +13,26 @@ use super::{
     Storage, StorageEntry,
 };
 use crate::errors::RvError;
+use zeroize::{Zeroize, Zeroizing};
 
 const EPOCH_SIZE: usize = 4;
 const KEY_EPOCH: u8 = 1;
 const AES_GCM_VERSION: u8 = 0x1;
 const AES_BLOCK_SIZE: usize = 16;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+// the BarrierInit structure contains the encryption key, so it's zeroized anyway
+// when it's dropped
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Zeroize)]
 #[serde(deny_unknown_fields)]
+#[zeroize(drop)]
 struct BarrierInit {
     version: u32,
     key: Vec<u8>,
 }
 
+// TODO: the BarrierInfo structure contains encryption key, so it's zeroized anyway
+// when it's dropped
+// it's not possible to use 'zeroize(drop)' due to trait bounds check
 struct BarrierInfo {
     sealed: bool,
     key: Option<Vec<u8>>,
@@ -96,9 +103,11 @@ impl SecurityBarrier for AESGCMBarrier {
         Ok(res.is_some())
     }
 
-    fn init(&self, key: &[u8]) -> Result<(), RvError> {
+    // kek stands for key encryption key, it's used to encrypt the actual
+    // encryption key, which is generated during the init() process.
+    fn init(&self, kek: &[u8]) -> Result<(), RvError> {
         let (min, max) = self.key_length_range();
-        if key.len() < min || key.len() > max {
+        if kek.len() < min || kek.len() > max {
             return Err(RvError::ErrBarrierKeyInvalid);
         }
 
@@ -108,13 +117,14 @@ impl SecurityBarrier for AESGCMBarrier {
             return Err(RvError::ErrBarrierAlreadyInit);
         }
 
-        let encrypt_key = self.generate_key()?;
+        // the encrypt_key variable will be zeroized automatically on drop
+        let encrypt_key = Zeroizing::new(self.generate_key()?);
 
-        let barrier_init = BarrierInit { version: 1, key: encrypt_key };
+        let barrier_init = BarrierInit { version: 1, key: encrypt_key.to_vec() };
 
         let serialized_barrier_init = serde_json::to_string(&barrier_init)?;
 
-        self.init_cipher(key)?;
+        self.init_cipher(kek)?;
 
         let value = self.encrypt(serialized_barrier_init.as_bytes())?;
 
@@ -129,6 +139,7 @@ impl SecurityBarrier for AESGCMBarrier {
 
     fn generate_key(&self) -> Result<Vec<u8>, RvError> {
         let key_size = 2 * AES_BLOCK_SIZE;
+        // TODO: zeroized on drop
         let mut buf = vec![0u8; key_size];
 
         thread_rng().fill(buf.as_mut_slice());
@@ -144,7 +155,7 @@ impl SecurityBarrier for AESGCMBarrier {
         Ok(barrier_info.sealed)
     }
 
-    fn unseal(&self, key: &[u8]) -> Result<(), RvError> {
+    fn unseal(&self, kek: &[u8]) -> Result<(), RvError> {
         let sealed = self.sealed()?;
         if !sealed {
             return Ok(());
@@ -155,7 +166,7 @@ impl SecurityBarrier for AESGCMBarrier {
             return Err(RvError::ErrBarrierNotInit);
         }
 
-        self.init_cipher(key)?;
+        self.init_cipher(kek)?;
 
         let value = self.decrypt(entry.unwrap().value.as_slice());
         if value.is_err() {
@@ -163,6 +174,7 @@ impl SecurityBarrier for AESGCMBarrier {
         }
         let barrier_init: BarrierInit = serde_json::from_slice(value.unwrap().as_slice())?;
 
+        // the barrier_init.key is the real encryption key generated in init().
         self.init_cipher(barrier_init.key.as_slice())?;
 
         let mut barrier_info = self.barrier_info.write()?;
@@ -220,18 +232,20 @@ impl AESGCMBarrier {
 
         let cipher = barrier_info.cipher.unwrap();
         let mut cipher_ctx = barrier_info.cipher_ctx.as_ref().unwrap().write()?;
-        let key = barrier_info.key.clone().unwrap();
+        // XXX: the cloned variable 'key' will be zeroized automatically on drop
+        let key = Zeroizing::new(barrier_info.key.clone().unwrap());
 
         // Assuming nonce size is the same as IV size
         let nonce_size = cipher.iv_length();
 
+        // TODO: should nonce be zeroized on drop?
         // Generate a random nonce
-        let mut nonce = vec![0u8; nonce_size];
+        let mut nonce = Zeroizing::new(vec![0u8; nonce_size]);
         thread_rng().fill(nonce.as_mut_slice());
 
         // Encrypt
         let mut ciphertext = vec![0u8; plaintext.len()];
-        cipher_ctx.encrypt_init(Some(cipher), Some(key.as_slice()), Some(nonce.as_slice()))?;
+        cipher_ctx.encrypt_init(Some(cipher), Some(key.to_vec().as_slice()), Some(nonce.as_slice()))?;
         cipher_ctx.set_padding(false);
         let len = cipher_ctx.cipher_update(plaintext, Some(&mut ciphertext))?;
         let _final_len = cipher_ctx.cipher_final(&mut ciphertext[len..])?;
@@ -264,7 +278,8 @@ impl AESGCMBarrier {
 
         let cipher = barrier_info.cipher.unwrap();
         let mut cipher_ctx = barrier_info.cipher_ctx.as_ref().unwrap().write()?;
-        let key = barrier_info.key.clone().unwrap();
+        // XXX: the cloned variable 'key' will be zeroized automatically on drop
+        let key = Zeroizing::new(barrier_info.key.clone().unwrap());
 
         let nonce_size = cipher.iv_length();
 
@@ -274,7 +289,7 @@ impl AESGCMBarrier {
 
         let nonce = &ciphertext[5..5 + nonce_size];
 
-        cipher_ctx.decrypt_init(Some(cipher), Some(key.as_slice()), Some(nonce))?;
+        cipher_ctx.decrypt_init(Some(cipher), Some(key.to_vec().as_slice()), Some(nonce))?;
         cipher_ctx.set_padding(false);
 
         let tag_size = cipher_ctx.tag_length();
