@@ -1,67 +1,70 @@
-# 动机
+# Motivation
 
-HashiCorp Vault是云原生领域被广泛使用的Secret Management产品，也是CNCF的项目。在实际使用中，Vault存在一些不足，例如：
+HashiCorp Vault is the most widely used secret management product in cloud native realm. But in practice, it has some disadvantages:
 
-1. 对中国商用密码算法合规性没有支持
-2. 存在一定的性能问题
-3. 对密码硬件的支持不佳
-4. 高级功能不开源
-5. ……
+1. Open-source license is not OSI-approved any more;
+2. Lack of cryptography compliance ability except FIPS, including:
+  * cryptography algorithms
+  * cryptography validations in other countries and regions
+3. Inadequate cryptography performance especially in  critical scenarios;
+4. Many useful features are not open-sourced
+5. ...
 
-且目前市面上除了Vault之外，也几乎没有比较靠谱的Key/Secret Management类的开源实现。基于此，我们计划启动一个新的开源项目来解决上述问题。
+And compared to Hashicorp Vault, there is rare open source key/secret management project available in the market. Thus, we started a new open source project to address the issues.
 
-这个新的项目需要覆盖传统密钥管理系统（KMS）的大部分功能，也可能需要兼顾云原生时代对身份、Secret等方面的管理。因此，该系统可能存在如下需求纲领：
+The new project needs to fulfill most features the a traditional KMS has. It also needs to be a replacement for Hashicorp Vault, with the features that even are not included in the open source versions of Vault. As such, the new project should be:
 
-1. 支持国产密码学算法
-2. 性能
-3. 高可用
-4. 底层硬件利用
-5. 内存安全
+1. Written in Rust to achieve memory safe
+2. Fully compatible with Hashicorp Vault on APIs and data format
+3. Configurable underlying cryptographic module
+4. High performance on cryptography operations
+5. High availability
+6. Support for underlying cryptography hardware
+7. OSI-approved open-source license
 
-# 需求列表
+# Requirements List
 
-语言：Rust
+Language: Rust
 
-名字：RustyVault
+Project Name: RustyVault
 
-功能：
+Features:
 
 * API
   * RESTful
-     * 可考虑一定程度兼容Vault的API，降低迁移成本（待定）
-  * gRPC （低优先级）
-* 用户和认证
-  * 基于数字证书的用户身份认证
-  * 基于用户名和口令的用户身份认证
-  * 基本的访问控制规则
-  * 基于用户的密钥管理体系
-* 配置方式
-  * 配置文件
-  * 支持热重启
-* 公钥基础设施（PKI）CA能力
-  * X.509证书签发：RSA/ECC/SM2
-  * X.509证书吊销：OCSP, CRL
-* 密钥管理
-  * 对称密钥：生成/存储/轮转
-  * 非对称密钥：RSA/ECC/SM2
-* 传统密码学算法支持
-  * 对称加密算法：AES, SM4
-  * 公钥密码算法：
-      * 签名算法：RSA/ECDSA/EdDSA/SM2/环签名
-      * 加密算法：RSA/SM2
-  * 哈希算法：SHA1/SHA2/SM3
-  * 随机数生成：国密合规的随机数生成算法
-* 前沿密码学算法支持
-  * 半同态算法：Paillier, EC-ElGamal
-  * 零知识证明：Bulletproofs
-  * 后量子密码学算法（待定）
-* 硬件适配
-  * 通过指令集、加速卡等进行密码算法性能优化
-  * 通过加密卡、加密机等进行密钥保护和密钥管理
-* 集群和高可用
-  * 全主模式（多读多写）
-* 存储能力
-  * 本地加密存储
-  * etcd等中心化存储
-* 日志和监控
-  * 文件日志
+     * Compatible with Hashicorp Vault
+  * gRPC (low priority)
+* User and Authentication
+  * X.509 based authentication
+  * Password based authentication
+  * Basic ACL
+  * Role based secret management
+* Configuration
+  * Support configuration file
+  * Dynamic reload
+* PKI/CA
+  * X.509 issuing: RSA/ECC/SM2
+  * X.509 revocation: OCSP, CRL
+* Key Management
+  * Symmetric: generation/storage/rotation
+  * Public key type: RSA/ECC/SM2
+* Cryptography Algorithm
+  * Symmetric ciphers: AES, SM4
+  * Public key algorithms:
+      * Signature: RSA/ECDSA/EdDSA/SM2/Ring Signature
+      * Encryption: RSA/SM2
+  * Digest: SHA1/SHA2/SM3
+* Advanced Cryptography Algorithm
+  * PHE: Paillier, EC-ElGamal
+  * ZKP: Bulletproofs
+  * Post Quantum Cryptography
+* Hardware Support
+  * Acceleration card or CPU instruction sets
+  * HSMs
+* Cluster and HA
+  * Active - Active mode
+* Storage
+  * local disk
+  * etcd/consul...
+* Logging and Audit
+  * TBD
