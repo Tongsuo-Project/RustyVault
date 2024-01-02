@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, RwLock},
+    ops::{Deref, DerefMut},
 };
 
 use as_any::Downcast;
@@ -26,6 +27,8 @@ use crate::{
     },
 };
 
+use zeroize::Zeroizing;
+
 pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Core>>) -> Result<Arc<dyn Backend>, RvError> + Send + Sync;
 
 pub const SEAL_CONFIG_PATH: &str = "core/seal-config";
@@ -46,9 +49,9 @@ impl SealConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InitResult {
-    pub secret_shares: Vec<Vec<u8>>,
+    pub secret_shares: Zeroizing<Vec<Vec<u8>>>,
     pub root_token: String,
 }
 
@@ -128,21 +131,22 @@ impl Core {
 
         let barrier = Arc::clone(&self.barrier);
         // Generate a master key
+        // The newly generated master key will be zeroized on drop.
         let master_key = barrier.generate_key()?;
 
         // Initialize the barrier
-        barrier.init(master_key.as_slice())?;
+        barrier.init(master_key.deref().as_slice())?;
 
-        let mut init_result = InitResult { secret_shares: Vec::new(), root_token: String::new() };
+        let mut init_result = InitResult { secret_shares: Zeroizing::new(Vec::new()), root_token: String::new() };
 
         if seal_config.secret_shares == 1 {
-            init_result.secret_shares.push(master_key.clone());
+            init_result.secret_shares.deref_mut().push(master_key.deref().clone());
         } else {
             init_result.secret_shares =
-                ShamirSecret::split(&master_key, seal_config.secret_shares, seal_config.secret_threshold)?;
+                ShamirSecret::split(master_key.deref().as_slice(), seal_config.secret_shares, seal_config.secret_threshold)?;
         }
 
-        log::debug!("master_key: {}", hex::encode(&master_key));
+        log::debug!("master_key: {}", hex::encode(master_key.deref()));
         log::debug!("seal config: {:?}", seal_config);
         log::debug!("secret_shares:");
         for key in init_result.secret_shares.iter() {
@@ -150,7 +154,7 @@ impl Core {
         }
 
         // Unseal the barrier
-        barrier.unseal(master_key.as_slice())?;
+        barrier.unseal(master_key.deref().as_slice())?;
 
         defer! (
             // Ensure the barrier is re-sealed

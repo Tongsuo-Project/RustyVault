@@ -1,4 +1,5 @@
 use std::sync::{Arc, RwLock};
+use std::ops::{Deref, DerefMut};
 
 use openssl::{
     cipher::{Cipher, CipherRef},
@@ -30,9 +31,6 @@ struct BarrierInit {
     key: Vec<u8>,
 }
 
-// TODO: the BarrierInfo structure contains encryption key, so it's zeroized anyway
-// when it's dropped
-// it's not possible to use 'zeroize(drop)' due to trait bounds check
 struct BarrierInfo {
     sealed: bool,
     key: Option<Vec<u8>>,
@@ -105,6 +103,7 @@ impl SecurityBarrier for AESGCMBarrier {
 
     // kek stands for key encryption key, it's used to encrypt the actual
     // encryption key, which is generated during the init() process.
+    // The kek's zerization is handled in the caller.
     fn init(&self, kek: &[u8]) -> Result<(), RvError> {
         let (min, max) = self.key_length_range();
         if kek.len() < min || kek.len() > max {
@@ -118,7 +117,7 @@ impl SecurityBarrier for AESGCMBarrier {
         }
 
         // the encrypt_key variable will be zeroized automatically on drop
-        let encrypt_key = Zeroizing::new(self.generate_key()?);
+        let encrypt_key = self.generate_key()?;
 
         let barrier_init = BarrierInit { version: 1, key: encrypt_key.to_vec() };
 
@@ -137,12 +136,12 @@ impl SecurityBarrier for AESGCMBarrier {
         Ok(())
     }
 
-    fn generate_key(&self) -> Result<Vec<u8>, RvError> {
+    fn generate_key(&self) -> Result<Zeroizing<Vec<u8>>, RvError> {
         let key_size = 2 * AES_BLOCK_SIZE;
-        // TODO: zeroized on drop
-        let mut buf = vec![0u8; key_size];
+        // will be zeroized on drop
+        let mut buf = Zeroizing::new(vec![0u8; key_size]);
 
-        thread_rng().fill(buf.as_mut_slice());
+        thread_rng().fill(buf.deref_mut().as_mut_slice());
         Ok(buf)
     }
 
@@ -175,6 +174,8 @@ impl SecurityBarrier for AESGCMBarrier {
         let barrier_init: BarrierInit = serde_json::from_slice(value.unwrap().as_slice())?;
 
         // the barrier_init.key is the real encryption key generated in init().
+        // the whole barrier_init will be zeroized on drop, so there is no special
+        // zeroizing logic on barrier_init.key.
         self.init_cipher(barrier_init.key.as_slice())?;
 
         let mut barrier_info = self.barrier_info.write()?;
@@ -219,6 +220,8 @@ impl AESGCMBarrier {
 
     fn reset_cipher(&self) -> Result<(), RvError> {
         let mut barrier_info = self.barrier_info.write()?;
+        // Zeroize it explicitly
+        barrier_info.key.zeroize();
         barrier_info.key = None;
         barrier_info.cipher = None;
         barrier_info.cipher_ctx = None;
@@ -238,14 +241,13 @@ impl AESGCMBarrier {
         // Assuming nonce size is the same as IV size
         let nonce_size = cipher.iv_length();
 
-        // TODO: should nonce be zeroized on drop?
         // Generate a random nonce
         let mut nonce = Zeroizing::new(vec![0u8; nonce_size]);
-        thread_rng().fill(nonce.as_mut_slice());
+        thread_rng().fill(nonce.deref_mut().as_mut_slice());
 
         // Encrypt
         let mut ciphertext = vec![0u8; plaintext.len()];
-        cipher_ctx.encrypt_init(Some(cipher), Some(key.to_vec().as_slice()), Some(nonce.as_slice()))?;
+        cipher_ctx.encrypt_init(Some(cipher), Some(key.deref().as_slice()), Some(nonce.deref().as_slice()))?;
         cipher_ctx.set_padding(false);
         let len = cipher_ctx.cipher_update(plaintext, Some(&mut ciphertext))?;
         let _final_len = cipher_ctx.cipher_final(&mut ciphertext[len..])?;
@@ -259,7 +261,7 @@ impl AESGCMBarrier {
 
         out[3] = KEY_EPOCH;
         out[4] = AES_GCM_VERSION;
-        out[5..5 + nonce_size].copy_from_slice(nonce.as_slice());
+        out[5..5 + nonce_size].copy_from_slice(nonce.deref().as_slice());
         out[5 + nonce_size..5 + nonce_size + ciphertext.len()].copy_from_slice(ciphertext.as_slice());
         out[5 + nonce_size + ciphertext.len()..size].copy_from_slice(tag.as_slice());
 
