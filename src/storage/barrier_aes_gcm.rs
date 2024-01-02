@@ -291,7 +291,7 @@ impl AESGCMBarrier {
 
         let nonce = &ciphertext[5..5 + nonce_size];
 
-        cipher_ctx.decrypt_init(Some(cipher), Some(key.to_vec().as_slice()), Some(nonce))?;
+        cipher_ctx.decrypt_init(Some(cipher), Some(key.deref().as_slice()), Some(nonce))?;
         cipher_ctx.set_padding(false);
 
         let tag_size = cipher_ctx.tag_length();
