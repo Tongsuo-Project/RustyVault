@@ -1,6 +1,8 @@
 use rand::{thread_rng, RngCore};
 
 use crate::errors::RvError;
+use zeroize::Zeroizing;
+use std::ops::DerefMut;
 
 static GF256_EXP: [u8; 256] = [
     0x01, 0xe5, 0x4c, 0xb5, 0xfb, 0x9f, 0xfc, 0x12, 0x03, 0x34, 0xd4, 0xc4, 0x16, 0xba, 0x1f, 0x36, 0x05, 0x5c, 0x67,
@@ -128,16 +130,16 @@ impl ShamirSecret {
         Some(mysecretdata)
     }
 
-    pub fn split(secret: &[u8], part: u8, threshold: u8) -> Result<Vec<Vec<u8>>, RvError> {
+    pub fn split(secret: &[u8], part: u8, threshold: u8) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
         if part < threshold || threshold < 2 {
             return Err(RvError::ErrShamirShareCountInvalid);
         }
 
         let secret_data = ShamirSecret::with_secret(secret, threshold);
-        let mut out: Vec<Vec<u8>> = vec![];
+        let mut out: Zeroizing<Vec<Vec<u8>>> = Zeroizing::new(vec![]);
         for i in 1..(part + 1) {
             let shared = secret_data.get_share(i)?;
-            out.push(shared);
+            out.deref_mut().push(shared);
         }
         Ok(out)
     }
