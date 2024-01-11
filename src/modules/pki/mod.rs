@@ -7,14 +7,11 @@ use std::{
 use crate::{
     core::Core,
     errors::RvError,
-    logical::{
-        secret::Secret, Backend, LogicalBackend, Request, Response,
-    },
+    logical::{secret::Secret, Backend, LogicalBackend, Request, Response},
     modules::Module,
     new_logical_backend, new_logical_backend_internal, new_secret, new_secret_internal,
 };
 
-pub mod util;
 pub mod field;
 pub mod path_config_ca;
 pub mod path_config_crl;
@@ -24,6 +21,7 @@ pub mod path_keys;
 pub mod path_revoke;
 pub mod path_roles;
 pub mod path_root;
+pub mod util;
 
 static PKI_BACKEND_HELP: &str = r#"
 The PKI backend dynamically generates X509 server and client certificates.
@@ -153,7 +151,7 @@ mod test {
     };
 
     use go_defer::defer;
-    use openssl::{asn1::Asn1Time, ec::EcKey, pkey::PKey, rsa::Rsa, x509::X509, nid::Nid};
+    use openssl::{asn1::Asn1Time, ec::EcKey, nid::Nid, pkey::PKey, rsa::Rsa, x509::X509};
     use serde_json::{json, Map, Value};
 
     use super::*;
@@ -1499,12 +1497,7 @@ xxxxxxxxxxxxxx
     fn test_pki_delete_root(core: Arc<RwLock<Core>>, token: &str, is_ok: bool) {
         let core = core.read().unwrap();
 
-        let resp = test_delete_api(
-            &core,
-            token,
-            "pki/root",
-            is_ok
-        );
+        let resp = test_delete_api(&core, token, "pki/root", is_ok);
         if !is_ok {
             return;
         }

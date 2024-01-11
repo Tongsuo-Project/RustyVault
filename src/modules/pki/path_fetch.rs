@@ -1,19 +1,15 @@
-use std::{
-    sync::Arc,
-    collections::HashMap,
-};
+use std::{collections::HashMap, sync::Arc};
+
+use openssl::x509::X509;
 use serde_json::json;
-use openssl::{x509::X509};
 
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    utils::cert::CertBundle,
-    logical::{
-        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
-    },
+    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
-    new_path, new_path_internal, new_fields, new_fields_internal,
+    utils::cert::CertBundle,
 };
 
 impl PkiBackend {
@@ -174,10 +170,7 @@ impl PkiBackendInner {
 
     pub fn store_cert(&self, req: &Request, serial_number: &str, cert: &X509) -> Result<(), RvError> {
         let value = cert.to_der()?;
-        let entry = StorageEntry {
-            key: format!("certs/{}", serial_number),
-            value: value
-        };
+        let entry = StorageEntry { key: format!("certs/{}", serial_number), value };
         req.storage_put(&entry)?;
         Ok(())
     }
