@@ -3,6 +3,7 @@ use as_any::AsAny;
 use crate::{core::Core, errors::RvError};
 
 pub mod auth;
+pub mod credential;
 pub mod kv;
 pub mod pki;
 pub mod system;

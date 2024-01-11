@@ -39,6 +39,7 @@ as-any = "0.3.1"
 pem = "3.0"
 chrono = "0.4"
 zeroize = { version = "1.4.0", features= ["derive"] }
+bcrypt = "0.15"
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5"
