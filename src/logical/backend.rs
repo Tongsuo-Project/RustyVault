@@ -66,9 +66,8 @@ impl Backend for LogicalBackend {
         match req.operation {
             Operation::Renew | Operation::Revoke => {
                 return self.handle_revoke_renew(req);
-            },
-            _ => {
             }
+            _ => {}
         }
 
         if req.path == "" && req.operation == Operation::Help {
@@ -138,18 +137,17 @@ impl LogicalBackend {
             if let Some(secret_type) = raw_secret_type.as_str() {
                 if let Some(secret) = self.secret(secret_type) {
                     match req.operation {
-                        Operation::Renew=> {
+                        Operation::Renew => {
                             return secret.renew(self, req);
-                        },
+                        }
                         Operation::Revoke => {
                             return secret.revoke(self, req);
-                        },
+                        }
                         _ => {
                             log::error!("invalid operation for revoke/renew: {}", req.operation);
                             return Ok(None);
                         }
                     }
-
                 }
             }
         }
@@ -241,7 +239,7 @@ mod test {
     use super::*;
     use crate::{
         logical::{Field, FieldType, PathOperation},
-        new_path, new_path_internal, new_secret, new_secret_internal, new_fields, new_fields_internal,
+        new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal,
         storage::{barrier_aes_gcm::AESGCMBarrier, physical},
     };
 
