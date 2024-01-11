@@ -1,19 +1,15 @@
-use std::{
-    sync::Arc,
-    collections::HashMap,
-};
+use std::{collections::HashMap, sync::Arc};
+
 use openssl::{ec::EcKey, rsa::Rsa};
 use serde_json::{json, Value};
 
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{
-        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
-    },
+    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
     utils::key::KeyBundle,
-    new_path, new_path_internal, new_fields, new_fields_internal,
 };
 
 const PKI_CONFIG_KEY_PREFIX: &str = "config/key/";

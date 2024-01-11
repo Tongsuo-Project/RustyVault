@@ -15,7 +15,8 @@ use crate::{
         secret::Secret, Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
     modules::Module,
-    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_secret, new_secret_internal, new_fields, new_fields_internal,
+    new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
+    new_secret, new_secret_internal,
     storage::StorageEntry,
 };
 

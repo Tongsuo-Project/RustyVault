@@ -1,18 +1,12 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use serde_json::{json, Value};
 
-use super::{util, field, PkiBackend, PkiBackendInner};
+use super::{field, util, PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{
-        Backend, Operation, Path, PathOperation, Request, Response,
-    },
-    new_path, new_path_internal,
-    utils,
+    logical::{Backend, Operation, Path, PathOperation, Request, Response},
+    new_path, new_path_internal, utils,
 };
 
 impl PkiBackend {
@@ -81,10 +75,13 @@ impl PkiBackendInner {
         .clone();
 
         if export_private_key {
-            resp_data.insert("private_key".to_string(),
-                             Value::String(String::from_utf8_lossy(&cert_bundle.private_key.private_key_to_pem_pkcs8()?).to_string()));
-            resp_data.insert("private_key_type".to_string(),
-                             Value::String(cert_bundle.private_key_type.clone()));
+            resp_data.insert(
+                "private_key".to_string(),
+                Value::String(
+                    String::from_utf8_lossy(&cert_bundle.private_key.private_key_to_pem_pkcs8()?).to_string(),
+                ),
+            );
+            resp_data.insert("private_key_type".to_string(), Value::String(cert_bundle.private_key_type.clone()));
         }
 
         Ok(Some(Response::data_response(Some(resp_data))))
