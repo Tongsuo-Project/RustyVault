@@ -311,12 +311,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "key_type": "rsa",
             "key_bits": 4096,
             "country": "CN",
-            "province": "ZJ",
-            "locality": "HZ",
-            "organization": "ANT-Group",
-            "ou": "Big-Security",
-            "street_address": "Xixi Road",
-            "postal_code": "30010",
+            "province": "Beijing",
+            "locality": "Beijing",
+            "organization": "OpenAtom",
             "no_store": false,
         })
         .as_object()
@@ -339,12 +336,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert_eq!(role_data["key_type"].as_str().unwrap(), "rsa");
         assert_eq!(role_data["key_bits"].as_u64().unwrap(), 4096);
         assert_eq!(role_data["country"].as_str().unwrap(), "CN");
-        assert_eq!(role_data["province"].as_str().unwrap(), "ZJ");
-        assert_eq!(role_data["locality"].as_str().unwrap(), "HZ");
-        assert_eq!(role_data["organization"].as_str().unwrap(), "ANT-Group");
-        assert_eq!(role_data["ou"].as_str().unwrap(), "Big-Security");
-        assert_eq!(role_data["street_address"].as_str().unwrap(), "Xixi Road");
-        assert_eq!(role_data["postal_code"].as_str().unwrap(), "30010");
+        assert_eq!(role_data["province"].as_str().unwrap(), "Beijing");
+        assert_eq!(role_data["locality"].as_str().unwrap(), "Beijing");
+        assert_eq!(role_data["organization"].as_str().unwrap(), "OpenAtom");
         assert_eq!(role_data["no_store"].as_bool().unwrap(), false);
     }
 
