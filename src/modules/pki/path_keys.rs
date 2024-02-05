@@ -232,7 +232,7 @@ impl PkiBackendInner {
             return Err(RvError::ErrPkiKeyNameAlreadyExist);
         }
 
-        let mut key_bundle = KeyBundle::new(key_name, key_type, key_bits as u32);
+        let mut key_bundle = KeyBundle::new(key_name, key_type.to_lowercase().as_str(), key_bits as u32);
         key_bundle.generate()?;
 
         self.write_key(req, &key_bundle)?;
@@ -284,7 +284,7 @@ impl PkiBackendInner {
             return Err(RvError::ErrPkiKeyNameAlreadyExist);
         }
 
-        let mut key_bundle = KeyBundle::new(key_name, key_type, 0);
+        let mut key_bundle = KeyBundle::new(key_name, key_type.to_lowercase().as_str(), 0);
 
         match pem_bundle_value {
             Ok(pem_bundle_val) => {
