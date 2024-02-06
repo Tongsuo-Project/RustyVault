@@ -176,10 +176,15 @@ pub enum RvError {
         #[from]
         source: hcl::Error,
     },
-    #[error("Some humantime error happened, {:?}", .source)]
-    Humantime {
+    #[error("Some humantime duration error happened, {:?}", .source)]
+    HumantimeDuration {
         #[from]
         source: humantime::DurationError,
+    },
+    #[error("Some humantime timestamp error happened, {:?}", .source)]
+    HumantimeTimestamp {
+        #[from]
+        source: humantime::TimestampError,
     },
     #[error("Some system_time error happened, {:?}", .source)]
     SystemTimeError {
