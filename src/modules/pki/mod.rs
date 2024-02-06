@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     ops::Deref,
     sync::{atomic::AtomicU64, Arc, RwLock},
     time::Duration,
@@ -9,12 +8,14 @@ use crate::{
     core::Core,
     errors::RvError,
     logical::{
-        secret::Secret, Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response,
+        secret::Secret, Backend, LogicalBackend, Request, Response,
     },
     modules::Module,
-    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_secret, new_secret_internal,
+    new_logical_backend, new_logical_backend_internal, new_secret, new_secret_internal,
 };
 
+pub mod util;
+pub mod field;
 pub mod path_config_ca;
 pub mod path_config_crl;
 pub mod path_fetch;
@@ -22,6 +23,7 @@ pub mod path_issue;
 pub mod path_keys;
 pub mod path_revoke;
 pub mod path_roles;
+pub mod path_root;
 
 static PKI_BACKEND_HELP: &str = r#"
 The PKI backend dynamically generates X509 server and client certificates.
@@ -68,529 +70,35 @@ impl PkiBackend {
     pub fn new_backend(&self) -> LogicalBackend {
         let pki_backend_ref1 = Arc::clone(&self.inner);
         let pki_backend_ref2 = Arc::clone(&self.inner);
-        let pki_backend_ref3 = Arc::clone(&self.inner);
-        let pki_backend_ref4 = Arc::clone(&self.inner);
-        let pki_backend_ref5 = Arc::clone(&self.inner);
-        let pki_backend_ref6 = Arc::clone(&self.inner);
-        let pki_backend_ref7 = Arc::clone(&self.inner);
-        let pki_backend_ref8 = Arc::clone(&self.inner);
-        let pki_backend_ref9 = Arc::clone(&self.inner);
-        let pki_backend_ref10 = Arc::clone(&self.inner);
-        let pki_backend_ref11 = Arc::clone(&self.inner);
-        let pki_backend_ref12 = Arc::clone(&self.inner);
-        let pki_backend_ref13 = Arc::clone(&self.inner);
-        let pki_backend_ref14 = Arc::clone(&self.inner);
-        let pki_backend_ref15 = Arc::clone(&self.inner);
-        let pki_backend_ref16 = Arc::clone(&self.inner);
-        let pki_backend_ref17 = Arc::clone(&self.inner);
-        let pki_backend_ref18 = Arc::clone(&self.inner);
-        let pki_backend_ref19 = Arc::clone(&self.inner);
-        let pki_backend_ref20 = Arc::clone(&self.inner);
-        let pki_backend_ref21 = Arc::clone(&self.inner);
 
-        let backend = new_logical_backend!({
+        let mut backend = new_logical_backend!({
             root_paths: ["config/*", "revoke/*", "crl/rotate"],
             unauth_paths: ["cert/*", "ca/pem", "ca", "crl", "crl/pem"],
-            paths: [
-                {
-                    pattern: r"roles/(?P<name>\w[\w-]+\w)",
-                    fields: {
-                        "name": {
-                            field_type: FieldType::Str,
-                            required: true,
-                            description: r#"Name of the role."#
-                        },
-                        "ttl": {
-                            field_type: FieldType::Str,
-                            description: r#"
-The lease duration (validity period of the certificate) if no specific lease
- duration is requested. The lease duration controls the expiration of certificates
-issued by this backend. defaults to the system default value or the value of
-max_ttl, whichever is shorter."#
-                        },
-                        "max_ttl": {
-                            field_type: FieldType::Str,
-                            required: true,
-                            description: r#"
-        The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
-                        },
-                        "allow_localhost": {
-                            field_type: FieldType::Bool,
-                            default: true,
-                            description: r#"
-Whether to allow "localhost" and "localdomain" as a valid common name in a request,
-independent of allowed_domains value."#
-                        },
-                        "allowed_domains": {
-                            field_type: FieldType::Str,
-                            description: r#"
-Specifies the domains this role is allowed to issue certificates for.
-This is used with the allow_bare_domains, allow_subdomains, and allow_glob_domains
-to determine matches for the common name, DNS-typed SAN entries, and Email-typed
-SAN entries of certificates. See the documentation for more information.
-This parameter accepts a comma-separated string or list of domains."#
-                        },
-                        "allow_bare_domains": {
-                            field_type: FieldType::Bool,
-                            default: false,
-                            description: r#"
-If set, clients can request certificates for the base domains themselves,
-e.g. "example.com" of domains listed in allowed_domains. This is a separate
-option as in some cases this can be considered a security threat.
-See the documentation for more information."#
-                        },
-                        "allow_subdomains": {
-                            field_type: FieldType::Bool,
-                            default: false,
-                            description: r#"
-If set, clients can request certificates for subdomains of domains listed in
-allowed_domains, including wildcard subdomains. See the documentation for more information."#
-                        },
-                        "allow_any_name": {
-                            field_type: FieldType::Bool,
-                            default: false,
-                            description: r#"
-If set, clients can request certificates for any domain, regardless of allowed_domains restrictions.
-See the documentation for more information."#
-                        },
-                        "allow_ip_sans": {
-                            field_type: FieldType::Bool,
-                            default: true,
-                            description: r#"
-        If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
-                        },
-                        "server_flag": {
-                            field_type: FieldType::Bool,
-                            default: true,
-                            description: r#"
-        If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
-                        },
-                        "client_flag": {
-                            field_type: FieldType::Bool,
-                            default: true,
-                            description: r#"
-        If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
-                        },
-                        "code_signing_flag": {
-                            field_type: FieldType::Bool,
-                            description: r#"
-        If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
-                        },
-                        "key_type": {
-                            field_type: FieldType::Str,
-                            default: "rsa",
-                            description: r#"
-        The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
-                        },
-                        "key_bits": {
-                            field_type: FieldType::Int,
-                            default: 0,
-                            description: r#"
-The number of bits to use. Allowed values are 0 (universal default); with rsa
- key_type: 2048 (default), 3072, or 4096; with ec key_type: 224, 256 (default),
-384, or 521; ignored with ed25519."#
-                        },
-                        "signature_bits": {
-                            field_type: FieldType::Int,
-                            default: 0,
-                            description: r#"
-The number of bits to use in the signature algorithm; accepts 256 for SHA-2-256,
-384 for SHA-2-384, and 512 for SHA-2-512. defaults to 0 to automatically detect
- based on key length (SHA-2-256 for RSA keys, and matching the curve size for NIST P-Curves)."#
-                        },
-                        "not_before_duration": {
-                            field_type: FieldType::Int,
-                            default: 30,
-                            description: r#"
-        The duration before now which the certificate needs to be backdated by."#
-                        },
-                        "not_after": {
-                            field_type: FieldType::Str,
-                            default: "",
-                            description: r#"
-Set the not after field of the certificate with specified date value.
-The value format should be given in UTC format YYYY-MM-ddTHH:MM:SSZ."#
-                        },
-                        "ou": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"
-        If set, OU (OrganizationalUnit) will be set to this value in certificates issued by this role."#
-                        },
-                        "organization": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"
-        If set, O (Organization) will be set to this value in certificates issued by this role."#
-                        },
-                        "country": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"
-        If set, Country will be set to this value in certificates issued by this role."#
-                        },
-                        "locality": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"
-        If set, Locality will be set to this value in certificates issued by this role."#
-                        },
-                        "province": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"
-        If set, Province will be set to this value in certificates issued by this role."#
-                        },
-                        "use_csr_common_name": {
-                            field_type: FieldType::Bool,
-                            default: true,
-                            description: r#"
-If set, when used with a signing profile, the common name in the CSR will be used. This
-does *not* include any requested Subject Alternative Names; use use_csr_sans for that. defaults to true."#
-                        },
-                        "use_csr_sans": {
-                            field_type: FieldType::Bool,
-                            default: true,
-                            description: r#"
-If set, when used with a signing profile, the SANs in the CSR will be used. This does *not*
-include the Common Name (cn); use use_csr_common_name for that. defaults to true."#
-                        },
-                        "generate_lease": {
-                            field_type: FieldType::Bool,
-                            default: false,
-                            description: r#"
-If set, certificates issued/signed against this role will have RustyVault leases
-attached to them. Defaults to "false". Certificates can be added to the CRL by
-"vault revoke <lease_id>" when certificates are associated with leases.  It can
-also be done using the "pki/revoke" endpoint. However, when lease generation is
-disabled, invoking "pki/revoke" would be the only way to add the certificates
-to the CRL.  When large number of certificates are generated with long
-lifetimes, it is recommended that lease generation be disabled, as large amount of
-leases adversely affect the startup time of RustyVault."#
-                        },
-                        "no_store": {
-                            field_type: FieldType::Bool,
-                            default: false,
-                            description: r#"
-If set, certificates issued/signed against this role will not be stored in the
-storage backend. This can improve performance when issuing large numbers of
-certificates. However, certificates issued in this way cannot be enumerated
-or revoked, so this option is recommended only for certificates that are
-non-sensitive, or extremely short-lived. This option implies a value of "false"
-for "generate_lease"."#
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Read, handler: pki_backend_ref1.read_path_role},
-                        {op: Operation::Write, handler: pki_backend_ref2.create_path_role},
-                        {op: Operation::Delete, handler: pki_backend_ref3.delete_path_role}
-                    ],
-                    help: "This path lets you manage the roles that can be created with this backend."
-                },
-                {
-                    pattern: "config/ca",
-                    fields: {
-                        "pem_bundle": {
-                            field_type: FieldType::Str,
-                            description: "PEM-format, concatenated unencrypted secret key and certificate"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref4.write_path_ca}
-                    ],
-                    help: r#"
-This configures the CA information used for credentials
-generated by this backend. This must be a PEM-format, concatenated
-unencrypted secret key and certificate.
-
-For security reasons, you can only view the certificate when reading this endpoint
-                        "#
-                },
-                {
-                    pattern: "config/crl",
-                    fields: {
-                        "expiry": {
-                            field_type: FieldType::Str,
-                            default: "72h",
-                            description: "The amount of time the generated CRL should be valid; defaults to 72 hours"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Read, handler: pki_backend_ref5.read_path_crl},
-                        {op: Operation::Write, handler: pki_backend_ref6.write_path_crl}
-                    ],
-                    help: r#"
-This endpoint allows configuration of the CRL lifetime.
-                        "#
-                },
-                {
-                    pattern: "ca(/pem)?",
-                    operations: [
-                        {op: Operation::Read, handler: pki_backend_ref7.read_path_fetch_ca}
-                    ],
-                    help: r#"
-This allows certificates to be fetched. If using the fetch/ prefix any non-revoked certificate can be fetched.
-Using "ca" or "crl" as the value fetches the appropriate information in DER encoding. Add "/pem" to either to get PEM encoding.
-                        "#
-                },
-                {
-                    pattern: "crl(/pem)?",
-                    operations: [
-                        {op: Operation::Read, handler: pki_backend_ref8.read_path_fetch_crl}
-                    ],
-                    help: r#"
-This allows certificates to be fetched. If using the fetch/ prefix any non-revoked certificate can be fetched.
-Using "ca" or "crl" as the value fetches the appropriate information in DER encoding. Add "/pem" to either to get PEM encoding.
-                        "#
-                },
-                {
-                    pattern: r"cert/(?P<serial>[0-9A-Fa-f-:]+)",
-                    fields: {
-                        "serial": {
-                            field_type: FieldType::Str,
-                            default: "72h",
-                            description: "Certificate serial number, in colon- or hyphen-separated octal"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Read, handler: pki_backend_ref9.read_path_fetch_cert}
-                    ],
-                    help: r#"
-This allows certificates to be fetched. If using the fetch/ prefix any non-revoked certificate can be fetched.
-Using "ca" or "crl" as the value fetches the appropriate information in DER encoding. Add "/pem" to either to get PEM encoding.
-                        "#
-                },
-                {
-                    pattern: "cert/crl",
-                    operations: [
-                        {op: Operation::Read, handler: pki_backend_ref10.read_path_fetch_cert_crl}
-                    ],
-                    help: r#"
-This allows certificates to be fetched. If using the fetch/ prefix any non-revoked certificate can be fetched.
-Using "ca" or "crl" as the value fetches the appropriate information in DER encoding. Add "/pem" to either to get PEM encoding.
-                        "#
-                },
-                {
-                    pattern: r"issue/(?P<role>\w[\w-]+\w)",
-                    fields: {
-                        "role": {
-                            field_type: FieldType::Str,
-                            description: "The desired role with configuration for this request"
-                        },
-                        "common_name": {
-                            field_type: FieldType::Str,
-                            description: r#"
-        The requested common name; if you want more than one, specify the alternative names in the alt_names map"#
-                        },
-                        "alt_names": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"
-        The requested Subject Alternative Names, if any, in a comma-delimited list"#
-                        },
-                        "ip_sans": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"The requested IP SANs, if any, in a common-delimited list"#
-                        },
-                        "ttl": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: r#"Specifies requested Time To Live"#
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref11.issue_cert}
-                    ],
-                    help: r#"
-This path allows requesting certificates to be issued according to the
-policy of the given role. The certificate will only be issued if the
-requested common name is allowed by the role policy.
-                        "#
-                },
-                {
-                    pattern: "revoke",
-                    fields: {
-                        "serial_number": {
-                            field_type: FieldType::Str,
-                            description: "Certificate serial number, in colon- or hyphen-separated octal"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref12.revoke_cert}
-                    ],
-                    help: r#"
-This allows certificates to be revoked using its serial number. A root token is required.
-                        "#
-                },
-                {
-                    pattern: "crl/rotate",
-                    operations: [
-                        {op: Operation::Read, handler: pki_backend_ref13.read_rotate_crl}
-                    ],
-                    help: r#"
-Force a rebuild of the CRL. This can be used to remove expired certificates from it if no certificates have been revoked. A root token is required.
-                        "#
-                },
-                {
-                    pattern: r"keys/generate/(exported|internal)",
-                    fields: {
-                        "key_name": {
-                            field_type: FieldType::Str,
-                            description: "key name"
-                        },
-                        "key_bits": {
-                            required: true,
-                            field_type: FieldType::Int,
-                            description: r#"
-The number of bits to use. Allowed values are 0 (universal default); with rsa
-key_type: 2048 (default), 3072, or 4096; with ec key_type: 224, 256 (default),
-384, or 521; ignored with ed25519."#
-                        },
-                        "key_type": {
-                            field_type: FieldType::Str,
-                            default: "rsa",
-                            description: r#"The type of key to use; defaults to RSA. "rsa""#
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref16.generate_key}
-                    ],
-                    help: r#"
-This endpoint will generate a new key pair of the specified type (internal, exported)
-used for sign,verify,encrypt,decrypt.
-                        "#
-                },
-                {
-                    pattern: r"keys/import",
-                    fields: {
-                        "key_name": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "key name"
-                        },
-                        "key_type": {
-                            field_type: FieldType::Str,
-                            default: "rsa",
-                            description: r#"The type of key to use; defaults to RSA. "rsa""#
-                        },
-                        "pem_bundle": {
-                            field_type: FieldType::Str,
-                            description: "PEM-format, unencrypted secret"
-                        },
-                        "hex_bundle": {
-                            field_type: FieldType::Str,
-                            description: "Hex-format, unencrypted secret"
-                        },
-                        "iv": {
-                            field_type: FieldType::Str,
-                            description: "IV for aes-gcm/aes-cbc"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref17.import_key}
-                    ],
-                    help: "Import the specified key."
-                },
-                {
-                    pattern: r"keys/sign",
-                    fields: {
-                        "key_name": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "key name"
-                        },
-                        "data": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "Data that needs to be signed"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref18.key_sign}
-                    ],
-                    help: "Data Signatures."
-                },
-                {
-                    pattern: r"keys/verify",
-                    fields: {
-                        "key_name": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "key name"
-                        },
-                        "data": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "Data that needs to be verified"
-                        },
-                        "signature": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "Signature data"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref19.key_verify}
-                    ],
-                    help: "Data verification."
-                },
-                {
-                    pattern: r"keys/encrypt",
-                    fields: {
-                        "key_name": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "key name"
-                        },
-                        "data": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "Data that needs to be encrypted"
-                        },
-                        "aad": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: "Additional Authenticated Data can be provided for aes-gcm/cbc encryption"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref20.key_encrypt}
-                    ],
-                    help: "Data encryption."
-                },
-                {
-                    pattern: r"keys/decrypt",
-                    fields: {
-                        "key_name": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "key name"
-                        },
-                        "data": {
-                            required: true,
-                            field_type: FieldType::Str,
-                            description: "Data that needs to be decrypted"
-                        },
-                        "aad": {
-                            required: false,
-                            field_type: FieldType::Str,
-                            description: "Additional Authenticated Data can be provided for aes-gcm/cbc decryption"
-                        }
-                    },
-                    operations: [
-                        {op: Operation::Write, handler: pki_backend_ref21.key_decrypt}
-                    ],
-                    help: "Data decryption."
-                }
-            ],
             secrets: [{
                 secret_type: "pki",
-                revoke_handler: pki_backend_ref14.revoke_secret_creds,
-                renew_handler: pki_backend_ref15.renew_secret_creds,
+                revoke_handler: pki_backend_ref1.revoke_secret_creds,
+                renew_handler: pki_backend_ref2.renew_secret_creds,
             }],
             help: PKI_BACKEND_HELP
         });
+
+        backend.paths.push(Arc::new(self.roles_path()));
+        backend.paths.push(Arc::new(self.config_ca_path()));
+        backend.paths.push(Arc::new(self.root_generate_path()));
+        backend.paths.push(Arc::new(self.root_delete_path()));
+        backend.paths.push(Arc::new(self.fetch_ca_path()));
+        backend.paths.push(Arc::new(self.fetch_crl_path()));
+        backend.paths.push(Arc::new(self.fetch_cert_path()));
+        backend.paths.push(Arc::new(self.fetch_cert_crl_path()));
+        backend.paths.push(Arc::new(self.issue_path()));
+        backend.paths.push(Arc::new(self.revoke_path()));
+        backend.paths.push(Arc::new(self.crl_rotate_path()));
+        backend.paths.push(Arc::new(self.keys_generate_path()));
+        backend.paths.push(Arc::new(self.keys_import_path()));
+        backend.paths.push(Arc::new(self.keys_sign_path()));
+        backend.paths.push(Arc::new(self.keys_verify_path()));
+        backend.paths.push(Arc::new(self.keys_encrypt_path()));
+        backend.paths.push(Arc::new(self.keys_decrypt_path()));
 
         backend
     }
@@ -645,7 +153,7 @@ mod test {
     };
 
     use go_defer::defer;
-    use openssl::{asn1::Asn1Time, ec::EcKey, pkey::PKey, rsa::Rsa, x509::X509};
+    use openssl::{asn1::Asn1Time, ec::EcKey, pkey::PKey, rsa::Rsa, x509::X509, nid::Nid};
     use serde_json::{json, Map, Value};
 
     use super::*;
@@ -731,7 +239,6 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         resp
     }
 
-    /*
     fn test_delete_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
         let mut req = Request::new(path);
         req.operation = Operation::Delete;
@@ -741,6 +248,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         resp
     }
 
+    /*
     fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
         let mut req = Request::new(path);
         req.operation = Operation::List;
@@ -803,10 +311,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "key_type": "rsa",
             "key_bits": 4096,
             "country": "CN",
-            "province": "ZJ",
-            "locality": "HZ",
-            "organization": "ANT-Group",
-            "ou": "Big-Security",
+            "province": "Beijing",
+            "locality": "Beijing",
+            "organization": "OpenAtom",
             "no_store": false,
         })
         .as_object()
@@ -822,15 +329,16 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let data = resp.unwrap().data;
         assert!(data.is_some());
         let role_data = data.unwrap();
+        println!("role_data: {:?}", role_data);
         assert_eq!(role_data["ttl"].as_u64().unwrap(), 60 * 24 * 60 * 60);
         assert_eq!(role_data["max_ttl"].as_u64().unwrap(), 365 * 24 * 60 * 60);
+        assert_eq!(role_data["not_before_duration"].as_u64().unwrap(), 30);
         assert_eq!(role_data["key_type"].as_str().unwrap(), "rsa");
         assert_eq!(role_data["key_bits"].as_u64().unwrap(), 4096);
         assert_eq!(role_data["country"].as_str().unwrap(), "CN");
-        assert_eq!(role_data["province"].as_str().unwrap(), "ZJ");
-        assert_eq!(role_data["locality"].as_str().unwrap(), "HZ");
-        assert_eq!(role_data["organization"].as_str().unwrap(), "ANT-Group");
-        assert_eq!(role_data["ou"].as_str().unwrap(), "Big-Security");
+        assert_eq!(role_data["province"].as_str().unwrap(), "Beijing");
+        assert_eq!(role_data["locality"].as_str().unwrap(), "Beijing");
+        assert_eq!(role_data["organization"].as_str().unwrap(), "OpenAtom");
         assert_eq!(role_data["no_store"].as_bool().unwrap(), false);
     }
 
@@ -898,6 +406,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             format!("pki/cert/{}", serial_number_hex.to_uppercase().as_str()).as_str(),
             true,
         );
+        println!("resp_uppercase: {:?}", resp_uppercase);
         let resp_lowercase_cert_data = resp_lowercase.unwrap().unwrap().data.unwrap();
         let resp_uppercase_cert_data = resp_uppercase.unwrap().unwrap().data.unwrap();
         assert!(resp_lowercase_cert_data.get("private_key").is_none());
@@ -1916,6 +1425,161 @@ xxxxxxxxxxxxxx
         test_pki_encrypt_decrypt(&core, token, "aes-ecb-256-import", "rusty_vault test".as_bytes(), true);
     }
 
+    fn test_pki_generate_root(core: Arc<RwLock<Core>>, token: &str, exported: bool, is_ok: bool) {
+        let core = core.read().unwrap();
+
+        let key_type = "rsa";
+        let key_bits = 4096;
+        let common_name = "test-ca";
+        let req_data = json!({
+            "common_name": common_name,
+            "ttl": "365d",
+            "country": "cn",
+            "key_type": key_type,
+            "key_bits": key_bits,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        println!("generate root req_data: {:?}, is_ok: {}", req_data, is_ok);
+        let resp = test_write_api(
+            &core,
+            token,
+            format!("pki/root/generate/{}", if exported { "exported" } else { "internal" }).as_str(),
+            is_ok,
+            Some(req_data),
+        );
+        if !is_ok {
+            return;
+        }
+        let resp_body = resp.unwrap();
+        assert!(resp_body.is_some());
+        let data = resp_body.unwrap().data;
+        assert!(data.is_some());
+        let key_data = data.unwrap();
+        println!("generate root result: {:?}", key_data);
+
+        let resp_ca_pem = test_read_api(&core, token, "pki/ca/pem", true);
+        let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
+
+        let ca_cert = X509::from_pem(resp_ca_pem_cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
+        let subject = ca_cert.subject_name();
+        let cn = subject.entries_by_nid(Nid::COMMONNAME).next().unwrap();
+        assert_eq!(cn.data().as_slice(), common_name.as_bytes());
+
+        let not_after = Asn1Time::days_from_now(365).unwrap();
+        let ttl_diff = ca_cert.not_after().diff(&not_after);
+        assert!(ttl_diff.is_ok());
+        let ttl_diff = ttl_diff.unwrap();
+        assert_eq!(ttl_diff.days, 0);
+
+        if exported {
+            assert!(key_data["private_key_type"].as_str().is_some());
+            assert_eq!(key_data["private_key_type"].as_str().unwrap(), key_type);
+            assert!(key_data["private_key"].as_str().is_some());
+            let private_key_pem = key_data["private_key"].as_str().unwrap();
+            match key_type {
+                "rsa" => {
+                    let rsa_key = Rsa::private_key_from_pem(private_key_pem.as_bytes());
+                    assert!(rsa_key.is_ok());
+                    assert_eq!(rsa_key.unwrap().size() * 8, key_bits);
+                }
+                "ec" => {
+                    let ec_key = EcKey::private_key_from_pem(private_key_pem.as_bytes());
+                    assert!(ec_key.is_ok());
+                    assert_eq!(ec_key.unwrap().group().degree(), key_bits);
+                }
+                _ => {}
+            }
+        } else {
+            assert!(key_data.get("private_key").is_none());
+        }
+    }
+
+    fn test_pki_delete_root(core: Arc<RwLock<Core>>, token: &str, is_ok: bool) {
+        let core = core.read().unwrap();
+
+        let resp = test_delete_api(
+            &core,
+            token,
+            "pki/root",
+            is_ok
+        );
+        if !is_ok {
+            return;
+        }
+        assert!(resp.is_ok());
+
+        let resp_ca_pem = test_read_api(&core, token, "pki/ca/pem", false);
+        assert_eq!(resp_ca_pem.unwrap_err(), RvError::ErrPkiCaNotConfig);
+    }
+
+    fn test_pki_issue_cert_by_generate_root(core: Arc<RwLock<Core>>, token: &str) {
+        let core = core.read().unwrap();
+
+        let dns_sans = vec!["test.com", "a.test.com", "b.test.com"];
+        let issue_data = json!({
+            "ttl": "10d",
+            "common_name": "test.com",
+            "alt_names": "a.test.com,b.test.com",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        // issue cert
+        let resp = test_write_api(&core, token, "pki/issue/test", true, Some(issue_data));
+        assert!(resp.is_ok());
+        let resp_body = resp.unwrap();
+        assert!(resp_body.is_some());
+        let data = resp_body.unwrap().data;
+        assert!(data.is_some());
+        let cert_data = data.unwrap();
+        let cert = X509::from_pem(cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
+        let alt_names = cert.subject_alt_names();
+        assert!(alt_names.is_some());
+        let alt_names = alt_names.unwrap();
+        assert_eq!(alt_names.len(), dns_sans.len());
+        for alt_name in alt_names {
+            assert!(dns_sans.contains(&alt_name.dnsname().unwrap()));
+        }
+        assert_eq!(cert_data["private_key_type"].as_str().unwrap(), "rsa");
+        let priv_key = PKey::private_key_from_pem(cert_data["private_key"].as_str().unwrap().as_bytes()).unwrap();
+        assert_eq!(priv_key.bits(), 4096);
+        assert!(priv_key.public_eq(&cert.public_key().unwrap()));
+        let serial_number = cert.serial_number().to_bn().unwrap();
+        let serial_number_hex = serial_number.to_hex_str().unwrap();
+        assert_eq!(
+            cert_data["serial_number"].as_str().unwrap().replace(":", "").to_lowercase().as_str(),
+            serial_number_hex.to_lowercase().as_str()
+        );
+        let expiration_time = Asn1Time::from_unix(cert_data["expiration"].as_i64().unwrap()).unwrap();
+        let ttl_compare = cert.not_after().compare(&expiration_time);
+        assert!(ttl_compare.is_ok());
+        assert_eq!(ttl_compare.unwrap(), std::cmp::Ordering::Equal);
+        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let expiration_ttl = cert_data["expiration"].as_u64().unwrap();
+        let ttl = expiration_ttl - now_timestamp;
+        let expect_ttl = 10 * 24 * 60 * 60;
+        assert!(ttl <= expect_ttl);
+        assert!((ttl + 10) > expect_ttl);
+
+        let authority_key_id = cert.authority_key_id();
+        assert!(authority_key_id.is_some());
+
+        println!("authority_key_id: {:?}", authority_key_id.unwrap().as_slice());
+
+        let resp_ca_pem = test_read_api(&core, token, "pki/ca/pem", true);
+        let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
+
+        let ca_cert = X509::from_pem(resp_ca_pem_cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
+        let subject = ca_cert.subject_name();
+        let cn = subject.entries_by_nid(Nid::COMMONNAME).next().unwrap();
+        assert_eq!(cn.data().as_slice(), "test-ca".as_bytes());
+        println!("ca subject_key_id: {:?}", ca_cert.subject_key_id().unwrap().as_slice());
+        assert_eq!(ca_cert.subject_key_id().unwrap().as_slice(), authority_key_id.unwrap().as_slice());
+    }
+
     #[test]
     fn test_pki_module() {
         let dir = env::temp_dir().join("rusty_vault_pki_module");
@@ -1967,6 +1631,10 @@ xxxxxxxxxxxxxx
             test_pki_issue_cert(Arc::clone(&c), &root_token);
             test_pki_generate_key(Arc::clone(&c), &root_token);
             test_pki_import_key(Arc::clone(&c), &root_token);
+            test_pki_generate_root(Arc::clone(&c), &root_token, true, true);
+            test_pki_generate_root(Arc::clone(&c), &root_token, false, true);
+            test_pki_issue_cert_by_generate_root(Arc::clone(&c), &root_token);
+            test_pki_delete_root(Arc::clone(&c), &root_token, true);
         }
     }
 }
