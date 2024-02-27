@@ -97,6 +97,24 @@ impl Request {
         return field.get_default();
     }
 
+    pub fn clear_data(&mut self, key: &str) {
+        if self.data.is_some() {
+            if let Some(secret_str) = self.data.as_mut().unwrap().get_mut(key) {
+                if let Value::String(ref mut s) = *secret_str {
+                    *s = "".to_owned();
+                }
+            }
+        }
+
+        if self.body.is_some() {
+            if let Some(secret_str) = self.body.as_mut().unwrap().get_mut(key) {
+                if let Value::String(ref mut s) = *secret_str {
+                    *s = "".to_owned();
+                }
+            }
+        }
+    }
+
     pub fn storage_list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
         if self.storage.is_none() {
             return Err(RvError::ErrRequestNotReady);

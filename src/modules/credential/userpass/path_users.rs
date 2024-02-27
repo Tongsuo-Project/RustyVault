@@ -49,7 +49,7 @@ impl UserPassBackend {
                     description: "Username of the user."
                 },
                 "password": {
-                    field_type: FieldType::Str,
+                    field_type: FieldType::SecretStr,
                     required: false,
                     description: "Password for this user."
                 },

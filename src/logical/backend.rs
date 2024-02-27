@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use regex::Regex;
 use serde_json::{Map, Value};
 
-use super::{path::Path, request::Request, response::Response, secret::Secret, Backend, Operation};
+use super::{path::Path, request::Request, response::Response, secret::Secret, FieldType, Backend, Operation};
 use crate::errors::RvError;
 
 type BackendOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
@@ -86,7 +86,9 @@ impl Backend for LogicalBackend {
             req.match_path = Some(path.clone());
             for operation in &path.operations {
                 if operation.op == req.operation {
-                    return operation.handle_request(self, req);
+                    let ret = operation.handle_request(self, req);
+                    self.clear_secret_field(req);
+                    return ret;
                 }
             }
 
@@ -177,6 +179,16 @@ impl LogicalBackend {
 
         None
     }
+
+    fn clear_secret_field(&self, req: &mut Request) {
+        for path in &self.paths {
+            for (key, field) in &path.fields {
+                if field.field_type == FieldType::SecretStr {
+                    req.clear_data(key);
+                }
+            }
+        }
+    }
 }
 
 #[macro_export]
@@ -235,6 +247,7 @@ mod test {
     use std::{collections::HashMap, env, fs, sync::Arc, time::Duration};
 
     use go_defer::defer;
+    use serde_json::json;
 
     use super::*;
     use crate::{
@@ -310,6 +323,10 @@ mod test {
                         "mypath": {
                             field_type: FieldType::Str,
                             description: "hehe"
+                        },
+                        "mypassword": {
+                            field_type: FieldType::SecretStr,
+                            description: "password"
                         }
                     },
                     operations: [
@@ -408,8 +425,17 @@ mod test {
 
         assert!(logical_backend.handle_request(&mut req).is_err());
 
+        let body: Map<String, Value> = json!({
+            "mytype": 1,
+            "mypath": "/pp",
+            "mypassword": "123qwe",
+        }).as_object().unwrap().clone();
+        req.body = Some(body);
         req.storage = Some(Arc::new(barrier));
         assert!(logical_backend.handle_request(&mut req).is_ok());
+        let mypassword = req.body.as_ref().unwrap().get("mypassword");
+        assert!(mypassword.is_some());
+        assert_eq!(mypassword.unwrap(), "");
 
         let unauth_paths = logical_backend.get_unauth_paths();
         assert!(unauth_paths.is_some());
