@@ -20,7 +20,7 @@ impl UserPassBackend {
                     description: "Username of the user."
                 },
                 "password": {
-                    field_type: FieldType::Str,
+                    field_type: FieldType::SecretStr,
                     required: true,
                     description: "Password for this user."
                 }
@@ -38,10 +38,10 @@ impl UserPassBackend {
 impl UserPassBackendInner {
     pub fn login(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let err_info = "invalid username or password";
-        let username_vale = req.get_data("username")?;
-        let username = username_vale.as_str().unwrap().to_lowercase();
-        let password_vale = req.get_data("password")?;
-        let password = password_vale.as_str().unwrap();
+        let username_value = req.get_data("username")?;
+        let username = username_value.as_str().unwrap().to_lowercase();
+        let password_value = req.get_data("password")?;
+        let password = password_value.as_str().unwrap();
 
         let user = self.get_user(req, &username)?;
         if user.is_none() {

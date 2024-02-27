@@ -90,10 +90,11 @@ async fn sys_init_get_request_handler(
 
 async fn sys_init_put_request_handler(
     _req: HttpRequest,
-    body: web::Bytes,
+    mut body: web::Bytes,
     core: web::Data<Arc<RwLock<Core>>>,
 ) -> Result<HttpResponse, RvError> {
     let payload = serde_json::from_slice::<InitRequest>(&body)?;
+    body.clear();
     let seal_config = SealConfig { secret_shares: payload.secret_shares, secret_threshold: payload.secret_threshold };
 
     let mut core = core.write()?;
@@ -125,11 +126,12 @@ async fn sys_seal_request_handler(
 
 async fn sys_unseal_request_handler(
     _req: HttpRequest,
-    body: web::Bytes,
+    mut body: web::Bytes,
     core: web::Data<Arc<RwLock<Core>>>,
 ) -> Result<HttpResponse, RvError> {
     // TODO
     let payload = serde_json::from_slice::<UnsealRequest>(&body)?;
+    body.clear();
     let key = hex::decode(payload.key)?;
 
     {
@@ -154,11 +156,12 @@ async fn sys_list_mounts_request_handler(
 async fn sys_mount_request_handler(
     req: HttpRequest,
     path: web::Path<String>,
-    body: web::Bytes,
+    mut body: web::Bytes,
     core: web::Data<Arc<RwLock<Core>>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<MountRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
+    body.clear();
     let mount_path = path.into_inner();
     if mount_path.len() == 0 {
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
@@ -191,11 +194,12 @@ async fn sys_unmount_request_handler(
 
 async fn sys_remount_request_handler(
     req: HttpRequest,
-    body: web::Bytes,
+    mut body: web::Bytes,
     core: web::Data<Arc<RwLock<Core>>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<RemountRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
+    body.clear();
 
     let mut r = request_auth(&req);
     r.operation = Operation::Write;
@@ -218,11 +222,12 @@ async fn sys_list_auth_mounts_request_handler(
 async fn sys_auth_enable_request_handler(
     req: HttpRequest,
     path: web::Path<String>,
-    body: web::Bytes,
+    mut body: web::Bytes,
     core: web::Data<Arc<RwLock<Core>>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<MountRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
+    body.clear();
     let mount_path = path.into_inner();
     if mount_path.len() == 0 {
         return Ok(response_error(StatusCode::NOT_FOUND, ""));

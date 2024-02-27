@@ -47,7 +47,7 @@ impl Default for LogicalResponse {
 
 async fn logical_request_handler(
     req: HttpRequest,
-    body: web::Bytes,
+    mut body: web::Bytes,
     method: Method,
     path: web::Path<String>,
     core: web::Data<Arc<RwLock<Core>>>,
@@ -67,6 +67,7 @@ async fn logical_request_handler(
             if body.len() > 0 {
                 let payload = serde_json::from_slice(&body)?;
                 r.body = Some(payload);
+                body.clear();
             }
         }
         Method::DELETE => {
