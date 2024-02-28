@@ -113,7 +113,7 @@ then the next renew will cause the lease to expire.
                     description: "Username of the user."
                 },
                 "password": {
-                    field_type: FieldType::Str,
+                    field_type: FieldType::SecretStr,
                     required: true,
                     description: "Password for this user."
                 }
@@ -211,7 +211,7 @@ impl UserPassBackendInner {
     }
 
     pub fn list_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let users = req.storage_list(format!("user/").as_str())?;
+        let users = req.storage_list("user/")?;
         let resp = Response::list_response(&users);
         Ok(Some(resp))
     }
