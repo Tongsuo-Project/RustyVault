@@ -205,6 +205,26 @@ pub enum RvError {
     ErrRwLockReadPoison,
     #[error("RwLock was poisoned (writing)")]
     ErrRwLockWritePoison,
+    
+    /// Database Errors Begin
+    ///
+    #[error("Database type is not support now. Please try postgressql or mysql again.")]
+    ErrDatabaseTypeInvalid,
+    #[error("Database connection pool ocurrs errors when creating， {:?}", .source)]
+    ErrConnectionPoolCreate {
+        #[from]
+        source: r2d2::Error,
+    },
+    #[error("Database connection info is invalid.")]
+    ErrDatabaseConnectionInfoInvalid,
+    #[error("Failed to execute entry with database, {:?}", .source)]
+    ErrDatabaseExecuteEntry {
+        #[from]
+        source: diesel::result::Error,
+    },
+    ///
+    /// Database Errors End
+
     #[error(transparent)]
     ErrOther(#[from] anyhow::Error),
     #[error("Unknown error.")]
