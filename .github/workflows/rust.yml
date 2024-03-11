@@ -38,7 +38,7 @@ jobs:
         # MYSQL_DATABASE - name for the default database that is created
         mysql database: vault
         # MYSQL_USER - create the specified user with superuser power for created database
-        mysql user: root 
+        mysql user: vault
         # MYSQL_PASSWORD - specified superuser password which user is power for created database
         mysql password: password
     - name: Build
@@ -79,7 +79,7 @@ jobs:
         # MYSQL_DATABASE - name for the default database that is created
         mysql database: vault
         # MYSQL_USER - create the specified user with superuser power for created database
-        mysql user: root 
+        mysql user: vault
         # MYSQL_PASSWORD - specified superuser password which user is power for created database
         mysql password: password
     - name: Build
