@@ -10,12 +10,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  unix-test:
+  macos-test:
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+    runs-on: ${{matix.os}}
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+      
+  linux-test:
     strategy:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
     runs-on: ${{matrix.os}}
 
     steps:
