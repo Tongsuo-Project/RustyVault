@@ -23,15 +23,38 @@ jobs:
   #   - name: Run tests
   #     run: cargo test --verbose
 
-  linux-test:
+  # linux-test:
+  #   strategy:
+  #     matrix:
+  #       os:
+  #         - ubuntu-latest
+  #   runs-on: ${{matrix.os}}
+
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - uses: shogo82148/actions-setup-mysql@v1
+  #     with:
+  #       mysql-version: "5.7"
+  #       root-password: "password"
+  #       my-cnf: |
+  #         skip-ssl
+  #         port=3306
+  #   - run: mysql -uroot -ppassword -h localhost -P 3306 -e "CREATE DATABASE IF NOT EXISTS vault;"
+  #   - name: Build
+  #     run: cargo build --verbose
+  #   - name: Run tests
+  #     run: cargo test --verbose
+  windows-test:
     strategy:
       matrix:
         os:
-          - ubuntu-latest
+          - windows-latest
     runs-on: ${{matrix.os}}
 
     steps:
     - uses: actions/checkout@v3
+    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: vcpkg install openssl:x64-windows-static-md
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
@@ -40,27 +63,12 @@ jobs:
           skip-ssl
           port=3306
     - run: mysql -uroot -ppassword -h localhost -P 3306 -e "CREATE DATABASE IF NOT EXISTS vault;"
+    - run: setx MYSQLCLIENT_LIB_DIR "./tests/mysql_ini/mysqlclient.lib"
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-  # windows-test:
-  #   strategy:
-  #     matrix:
-  #       os:
-  #         - windows-latest
-  #   runs-on: ${{matrix.os}}
-
-  #   steps:
-  #   - uses: actions/checkout@v3
-  #   - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-  #   - run: vcpkg install openssl:x64-windows-static-md
-  #   - run: setx MYSQLCLIENT_LIB_DIR "./tests/mysql_ini/mysqlclient.lib"
-  #   - name: Setup Rust
-  #     uses: actions-rs/toolchain@v1
-  #     with:
-  #       toolchain: stable
-  #   - name: Build
-  #     run: cargo build --verbose
-  #   - name: Run tests
-  #     run: cargo test --verbose
