@@ -33,7 +33,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./tests/mysql_ini/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
-    - run: echo "show databases;" | docker exec -i mysql57 mysql -uroot -ppassword -h 127.0.0.1
+  # - run: echo "show databases;" | docker exec -i mysql57 mysql -uroot -ppassword -h 127.0.0.1
   #  - run: docker exec -i mysql57 mysql -uroot -ppassword vault < ./src/storage/mysql/vault.sql
     - name: Build
       run: cargo build --verbose
