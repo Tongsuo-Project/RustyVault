@@ -39,7 +39,7 @@ jobs:
         my-cnf: |
           skip-ssl
           port=3306
-    - run: mysql -uroot -ppassword -h localhost:3306 -e "CREATE DATABASE IF NOT EXISTS vault;"
+    - run: mysql -uroot -ppassword -h localhost -P 3306 -e "CREATE DATABASE IF NOT EXISTS vault;"
     - name: Build
       run: cargo build --verbose
     - name: Run tests
