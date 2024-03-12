@@ -49,8 +49,15 @@ jobs:
     - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
     - name: install openssl
       run: vcpkg install openssl:x64-windows-static-md
-    - name: install mysqlclient
-      run: vcpkg install mysqlclient:x64-windows
+    # - name: install mysqlclient
+    #   run: vcpkg install mysqlclient:x64-windows
+    - name: Download MySQL Connector/C
+      run: |
+        Invoke-WebRequest -Uri "https://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.11-winx64.msi" -OutFile "mysql-connector.msi"
+    - name: Install MySQL Connector/C
+      run: |
+        Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait
+
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
