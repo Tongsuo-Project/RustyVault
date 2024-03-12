@@ -39,7 +39,10 @@ jobs:
         my-cnf: |
           skip-ssl
           port=3306
-    - run: mysql -uroot -ppassword -h localhost -P 3306 -e "CREATE DATABASE IF NOT EXISTS vault;"
+    - name: install diesel_cli
+      run: cargo install diesel_cli --no-default-features --features mysql
+    - name: init database
+      run: diesel setup --database-url mysql://root:password@localhost:3306/vault
     - name: Build
       run: cargo build --verbose
     - name: Run tests
