@@ -32,22 +32,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-  # - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./tests/mysql_ini/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
-  # - run: echo "show databases;" | docker exec -i mysql57 mysql -uroot -ppassword -h 127.0.0.1
-  # - run: docker exec -i mysql57 mysql -uroot -ppassword vault < ./src/storage/mysql/vault.sql
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
         root-password: "password"
         my-cnf: |
           skip-ssl
-    - run: mysql -uroot -ppassword -e "CREATE DATABASE IF NOT EXISTS vault;"
+          port=3306
+    - run: mysql -uroot -ppassword -h localhost:3306 -e "CREATE DATABASE IF NOT EXISTS vault;"
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-    # - run: docker stop mysql57
-    # - run: docker rm mysql57
   # windows-test:
   #   strategy:
   #     matrix:
