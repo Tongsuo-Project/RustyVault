@@ -42,7 +42,7 @@ jobs:
     - name: install diesel_cli
       run: cargo install diesel_cli --no-default-features --features mysql
     - name: init database
-      run: diesel setup --database-url mysql://root:password@localhost:3306/vault
+      run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
     - name: Build
       run: cargo build --verbose
     - name: Run tests
