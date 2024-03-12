@@ -59,6 +59,7 @@ jobs:
       run: echo "MYSQLCLIENT_LIB_DIR=$env:MYSQL_HOME\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
     - run: echo "$env:MYSQLCLIENT_LIB_DIR"
     - run: setx MYSQLCLIENT_LIB_DIR $env:MYSQL_HOME\lib\
+    - run: dir $env:MYSQLCLIENT_LIB_DIR
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
