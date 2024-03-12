@@ -35,6 +35,7 @@ jobs:
     - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
     - name: Build
       run: cargo build --verbose
+    - run: docker exec -i mysql57 mysql -uroot -ppassword vault < show grants for 'root'@'localhost';
     - name: Run tests
       run: cargo test --verbose
     - run: docker stop mysql57
