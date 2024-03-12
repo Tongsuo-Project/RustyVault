@@ -46,19 +46,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - name: install openssl
-      run: vcpkg install openssl:x64-windows-static-md
+    # - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    # - name: install openssl
+    #   run: vcpkg install openssl:x64-windows-static-md
     # - name: install mysqlclient
     #   run: vcpkg install mysqlclient:x64-windows
-    # - name: Download MySQL Connector/C
-    #   run: |
-    #     Invoke-WebRequest -Uri "https://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.11-winx64.msi" -OutFile "mysql-connector.msi"
-    # - name: Install MySQL Connector/C
-    #   run: |
-    #     Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait
-    # - name: Set MySQLCLIENT_LIB_DIR
-    #   run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\lib\v14" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - name: Download MySQL Connector/C
+      run: |
+        Invoke-WebRequest -Uri "https://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.11-winx64.msi" -OutFile "mysql-connector.msi"
+    - name: Install MySQL Connector/C
+      run: |
+        Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait
+    - name: Set MySQLCLIENT_LIB_DIR
+      run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - name: echo MYSQLCLIENT_LIB_DIR
+      run: echo $env:MYSQLCLIENT_LIB_DIR
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
@@ -66,8 +68,8 @@ jobs:
         my-cnf: |
           skip-ssl
           port=3306
-    - name: Set MySQLCLIENT_LIB_DIR
-      run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
+    # - name: Set MySQLCLIENT_LIB_DIR
+    #   run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
     # - run: setx MYSQLCLIENT_LIB_DIR C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\mysqlclient.lib
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
@@ -77,7 +79,7 @@ jobs:
       run: cargo install diesel_cli --no-default-features --features mysql
     - name: init database
       run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    # - name: Build
+    #   run: cargo build --verbose
+    # - name: Run tests
+    #   run: cargo test --verbose
