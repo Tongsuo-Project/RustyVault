@@ -47,7 +47,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: vcpkg install openssl:x64-windows-static-md
+    - name: install openssl
+      run: vcpkg install openssl:x64-windows-static-md
+    - name: install mysqlclient
+      run: vcpkg install mysqlclient:x64-windows-static-md
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
@@ -55,9 +58,9 @@ jobs:
         my-cnf: |
           skip-ssl
           port=3306
-    - name: Set MySQLCLIENT_LIB_DIR
-      run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\mysqlclient.lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: setx MYSQLCLIENT_LIB_DIR C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\mysqlclient.lib
+    # - name: Set MySQLCLIENT_LIB_DIR
+    #   run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\mysqlclient.lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+    # - run: setx MYSQLCLIENT_LIB_DIR C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\mysqlclient.lib
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
