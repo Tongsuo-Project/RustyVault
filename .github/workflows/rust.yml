@@ -50,7 +50,7 @@ jobs:
     - name: install openssl
       run: vcpkg install openssl:x64-windows-static-md
     - name: install mysqlclient
-      run: vcpkg install mysqlclient:x64-windows-static-md
+      run: vcpkg install mysqlclient:x64-windows
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
