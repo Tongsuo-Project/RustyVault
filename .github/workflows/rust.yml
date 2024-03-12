@@ -58,10 +58,10 @@ jobs:
       run: |
         Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait
     - name: Set MySQLCLIENT_LIB_DIR
-      run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+      run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\livs14" | Out-File -FilePath $env:GITHUB_ENV -Append
     - name: dir MYSQLCLIENT_LIB_DIR
       run: dir $env:MYSQLCLIENT_LIB_DIR
-    - run: dir $env:MYSQLCLIENT_LIB_DIR\v14
+    - run: dir $env:MYSQLCLIENT_LIB_DIR\vs14
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
