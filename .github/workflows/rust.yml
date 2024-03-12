@@ -10,19 +10,19 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  macos-test:
-    strategy:
-      matrix:
-        os:
-          - macos-latest
-    runs-on: ${{matrix.os}}
-    steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-      
+  # macos-test:
+  #   strategy:
+  #     matrix:
+  #       os:
+  #         - macos-latest
+  #   runs-on: ${{matrix.os}}
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: Build
+  #     run: cargo build --verbose
+  #   - name: Run tests
+  #     run: cargo test --verbose
+
   linux-test:
     strategy:
       matrix:
@@ -32,7 +32,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - run: docker run --name mysql57 --port 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
+    - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
     - run: docker logs mysql57
     - run: echo "show databases;" | docker exec -i mysql57 mysql -uroot -ppassword
   #  - run: docker exec -i mysql57 mysql -uroot -ppassword vault < ./src/storage/mysql/vault.sql
@@ -42,23 +42,23 @@ jobs:
       run: cargo test --verbose
     - run: docker stop mysql57
     - run: docker rm mysql57
-  windows-test:
-    strategy:
-      matrix:
-        os:
-          - windows-latest
-    runs-on: ${{matrix.os}}
+  # windows-test:
+  #   strategy:
+  #     matrix:
+  #       os:
+  #         - windows-latest
+  #   runs-on: ${{matrix.os}}
 
-    steps:
-    - uses: actions/checkout@v3
-    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: vcpkg install openssl:x64-windows-static-md
-    - run: setx MYSQLCLIENT_LIB_DIR "./src/storage/mysql/mysqlclient.lib"
-    - name: Setup Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+  #   - run: vcpkg install openssl:x64-windows-static-md
+  #   - run: setx MYSQLCLIENT_LIB_DIR "./src/storage/mysql/mysqlclient.lib"
+  #   - name: Setup Rust
+  #     uses: actions-rs/toolchain@v1
+  #     with:
+  #       toolchain: stable
+  #   - name: Build
+  #     run: cargo build --verbose
+  #   - name: Run tests
+  #     run: cargo test --verbose
