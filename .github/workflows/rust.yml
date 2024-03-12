@@ -32,7 +32,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
+    - run: docker run --name mysql57 --port 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
+    - run: docker logs mysql57
     - run: echo "show databases;" | docker exec -i mysql57 mysql -uroot -ppassword
   #  - run: docker exec -i mysql57 mysql -uroot -ppassword vault < ./src/storage/mysql/vault.sql
     - name: Build
