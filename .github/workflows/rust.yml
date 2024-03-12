@@ -32,8 +32,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
-    - run: docker logs mysql57
+    - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./tests/mysql_ini/my.cnf:/etc/mysql/conf.d/my.cnf -v /var/run/mysqld/:/var/run/mysqld/ -d mysql:5.7
     - run: echo "show databases;" | docker exec -i mysql57 mysql -uroot -ppassword
   #  - run: docker exec -i mysql57 mysql -uroot -ppassword vault < ./src/storage/mysql/vault.sql
     - name: Build
@@ -53,7 +52,7 @@ jobs:
   #   - uses: actions/checkout@v3
   #   - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
   #   - run: vcpkg install openssl:x64-windows-static-md
-  #   - run: setx MYSQLCLIENT_LIB_DIR "./src/storage/mysql/mysqlclient.lib"
+  #   - run: setx MYSQLCLIENT_LIB_DIR "./tests/mysql_ini/mysqlclient.lib"
   #   - name: Setup Rust
   #     uses: actions-rs/toolchain@v1
   #     with:
