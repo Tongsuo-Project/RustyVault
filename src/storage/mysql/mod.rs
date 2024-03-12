@@ -60,7 +60,7 @@ mod test {
     #[test]
     fn test_establish_mysql_connection() {
         let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("address".to_string(), Value::String("localhost:3306".to_string()));
+        conf.insert("address".to_string(), Value::String("127.0.0.1:3306".to_string()));
         conf.insert("username".to_string(), Value::String("root".to_string()));
         conf.insert("password".to_string(), Value::String("password".to_string()));
 
