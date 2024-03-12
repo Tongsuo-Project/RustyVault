@@ -32,8 +32,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - run: ls ./src/storage/mysql/
-    - run: docker run --name mysql57 -e MYSQL_ROOT_PASSWORD=password -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
+    - run: docker run --name mysql57 -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=vault -v ./src/storage/mysql/my.cnf:/etc/mysql/conf.d/my.cnf -d mysql:5.7
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -56,27 +55,6 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-    - name: Start MySQL
-      uses: samin/mysql-action@v1.3
-      with:
-        # The port of host
-        host port: 3306
-        # The port of container
-        container port: 3306
-        # --character-set-server - The character set of MySQL server
-        character set server: utf8mb4
-        # --collation-server - The character collation of MySQL server
-        collation server: utf8mb4_general_ci
-        # Version of MySQL to use
-        mysql version: 5.7
-        # MYSQL_ROOT_PASSWORD - root superuser password
-        mysql root password: password
-        # MYSQL_DATABASE - name for the default database that is created
-        mysql database: vault
-        # MYSQL_USER - create the specified user with superuser power for created database
-        mysql user: vault
-        # MYSQL_PASSWORD - specified superuser password which user is power for created database
-        mysql password: password
     - name: Build
       run: cargo build --verbose
     - name: Run tests
