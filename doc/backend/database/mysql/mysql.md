@@ -20,10 +20,12 @@ Firstly, define the `MYSQLCLIENT_LIB_DIR` environment variable. The process vari
     setx MYSQLCLIENT_LIB_DIR "your path to mysqlclient.lib"
     ```
 
-- **GitHub Actions**:
+- **GitHub Actions on Windows**:
     ```shell
-    - run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\mysqlclient.lib" | Out-File -FilePath $env:GITHUB_ENV -Append
     ```
+
+> Note: If you do not only set the `mysqlclient.lib` file, it may result in duplicate library errors during compilation.
 
 ### Step 2: Install Diesel CLI
 Install `diesel_cli` using the `cargo` command:
