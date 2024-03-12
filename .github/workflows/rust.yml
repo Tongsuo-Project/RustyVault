@@ -38,8 +38,10 @@ jobs:
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
+        root-password: "password"
         my-cnf: |
           skip-ssl
+    - run: mysql -uroot -e "CREATE DATABASE IF NOT EXISTS vault;"
     - name: Build
       run: cargo build --verbose
     - name: Run tests
