@@ -48,27 +48,16 @@ jobs:
     - uses: actions/checkout@v3
   #   - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
   #   - run: vcpkg install openssl:x64-windows-static-md
-    # - uses: shogo82148/actions-setup-mysql@v1
-    #   with:
-    #     mysql-version: "5.7"
-    #     root-password: "password"
-    #     my-cnf: |
-    #       skip-ssl
-    #       port=3306
-    # - name: Set MySQLCLIENT_LIB_DIR
-    #   run: echo "LIBMYSQL_PATH=$env:MYSQL_HOME\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
-    # - name: Setup Rust
-    #   uses: actions-rs/toolchain@v1
-    #   with:
-    #     toolchain: stable
-    # - name: install diesel_cli
-    #   run: cargo install diesel_cli --no-default-features --features mysql
-    - name: Download MySQL Connector/C
-      run: |
-        Invoke-WebRequest -Uri "https://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.11-win32.zip" -OutFile "mysql-connector.zip"
-        Expand-Archive -Path "mysql-connector.zip" -DestinationPath "C:\mysql-connector"
-    - name: Set LIBMYSQL_PATH
-      run: echo "MYSQLCLIENT_LIB_DIR=C:\mysql-connector\mysql-connector-c-6.1.11-win32\lib\mysqlclient.lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - uses: shogo82148/actions-setup-mysql@v1
+      with:
+        mysql-version: "5.7"
+        root-password: "password"
+        my-cnf: |
+          skip-ssl
+          port=3306
+    - name: Set MySQLCLIENT_LIB_DIR
+      run: echo "MYSQLCLIENT_LIB_DIR=$env:MYSQL_HOME\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: echo "$env:MYSQLCLIENT_LIB_DIR"
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
