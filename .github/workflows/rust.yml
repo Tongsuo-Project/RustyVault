@@ -41,7 +41,7 @@ jobs:
         root-password: "password"
         my-cnf: |
           skip-ssl
-    - run: mysql -uroot -e "CREATE DATABASE IF NOT EXISTS vault;"
+    - run: mysql -uroot -ppassword -e "CREATE DATABASE IF NOT EXISTS vault;"
     - name: Build
       run: cargo build --verbose
     - name: Run tests
