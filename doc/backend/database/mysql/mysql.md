@@ -1,32 +1,42 @@
-diesel_cli is a orm-framework, now we can use diesel_cli to ouput struct & dsl with sql files.
+# MySQL Optimization with Diesel CLI in Rust
 
-# 1. Setup Env
+This document outlines the process of setting up and using `diesel_cli` with MySQL in Rust, and discusses potential areas for optimization.
 
-we need to define mysqlclient.lib in the ENV. 
+## Using Diesel CLI with MySQL in Rust
 
-example in linux:
-``` shell
-export MYSQLCLIENT_LIB_DIR="your path to mysqlclient.lib"
-```
+`diesel_cli` is an ORM (Object-Relational Mapping) framework that enables the generation of structs and DSL (Domain Specific Language) from SQL files. The following steps guide you through setting up and using `diesel_cli` with MySQL in your Rust project.
 
-example in windows:
-``` shell
-setx MYSQLCLIENT_LIB_DIR "your path to mysqlclient.lib"
-```
+### Step 1: Environment Setup
 
-# 2. Install diesel_cli
+Firstly, define the `MYSQLCLIENT_LIB_DIR` environment variable. The process varies depending on your platform:
 
-now we can use cargo to install diesel_cli, if you will not use the client to output sql structs, then skip this step.
+- **Linux**:
+    ```shell
+    export MYSQLCLIENT_LIB_DIR="your path to mysqlclient.lib"
+    ```
 
-``` shell
+- **Windows**:
+    ```shell
+    setx MYSQLCLIENT_LIB_DIR "your path to mysqlclient.lib"
+    ```
+
+- **GitHub Actions**:
+    ```shell
+    - run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
+    ```
+
+### Step 2: Install Diesel CLI
+Install `diesel_cli` using the `cargo` command:
+
+```shell
 cargo install diesel_cli --no-default-features --features mysql
 ```
 
-# 3. Import diesel into the project
+### Step 3: Import Diesel into the Project
 
-open the cargo.toml and add dependencies like this:
+Add the following dependencies to your `Cargo.toml`:
 
-```
+```toml
 [dependencies]
 # other dependencies
 diesel = { version = "2.1.4", features = ["mysql", "r2d2"] }
@@ -34,22 +44,20 @@ r2d2 = "0.8.9"
 r2d2-diesel = "1.0.0"
 ```
 
-Now you can use diesel to run this project.
+### Step 4: Generate Structs with Diesel CLI
 
-if you need to edit sql or structs. maybe you need step 4
+Use `diesel_cli` to set up your database and generate migrations:
 
-# 4. Use diesel_cli to output structs with sql
-
-``` shell
+```shell
 cd /path/to/project/root
 diesel setup --database-url="mysql://[username:[password]]@[host:[port]]/[database]"
 diesel migration generate your_sql_summary --database-url="mysql://[username:[password]]@[host:[port]]/[database]"
-diesel migration run "mysql://[username:[password]]@[host:[port]]/[database]
+diesel migration run "mysql://[username:[password]]@[host:[port]]/[database]"
 ```
 
-then run the unit test with mysqlbackend
+Run the unit test with `mysqlbackend`.
 
-# Issues still need to optimize
+## Potential Optimization Areas
 
-- tlsconnection to mysql
-- connection to postgre
+- Establishing a TLS connection to MySQL
+- Connecting to PostgreSQL
