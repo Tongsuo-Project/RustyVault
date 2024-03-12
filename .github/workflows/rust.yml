@@ -68,7 +68,7 @@ jobs:
         Invoke-WebRequest -Uri "https://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.11-win32.zip" -OutFile "mysql-connector.zip"
         Expand-Archive -Path "mysql-connector.zip" -DestinationPath "C:\mysql-connector"
     - name: Set LIBMYSQL_PATH
-      run: echo "LIBMYSQL_PATH=C:\mysql-connector\mysql-connector-c-6.1.11-win32\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+      run: echo "MYSQLCLIENT_LIB_DIR=C:\mysql-connector\mysql-connector-c-6.1.11-win32\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
