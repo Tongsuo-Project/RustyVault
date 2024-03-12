@@ -46,8 +46,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-  #   - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-  #   - run: vcpkg install openssl:x64-windows-static-md
+    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: vcpkg install openssl:x64-windows-static-md
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
@@ -57,18 +57,18 @@ jobs:
           port=3306
     - name: Set MySQLCLIENT_LIB_DIR
       run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: echo "$env:MYSQLCLIENT_LIB_DIR"
-    - run: setx MYSQLCLIENT_LIB_DIR C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\
-    - run: dir $env:MYSQLCLIENT_LIB_DIR
+    # - run: echo "$env:MYSQLCLIENT_LIB_DIR"
+    # - run: setx MYSQLCLIENT_LIB_DIR C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\
+    # - run: dir $env:MYSQLCLIENT_LIB_DIR
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
     - name: install diesel_cli
       run: cargo install diesel_cli --no-default-features --features mysql
-  #   - name: init database
-  #     run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
-  #   - name: Build
-  #     run: cargo build --verbose
-  #   - name: Run tests
-  #     run: cargo test --verbose
+    - name: init database
+      run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
