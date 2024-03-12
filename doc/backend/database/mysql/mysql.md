@@ -22,7 +22,7 @@ Firstly, define the `MYSQLCLIENT_LIB_DIR` environment variable. The process vari
 
 - **GitHub Actions on Windows**:
     ```shell
-    - run: echo "MYSQLCLIENT_LIB_DIR=C:\hostedtoolcache\windows\mysql\5.7.44\x64\lib\mysqlclient.lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\lib\vs14" | Out-File -FilePath $env:GITHUB_ENV -Append
     ```
 
 > Note: If you do not only set the `mysqlclient.lib` file, it may result in duplicate library errors during compilation.

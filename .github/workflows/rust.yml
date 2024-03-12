@@ -10,31 +10,31 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # unix-test:
-  #   strategy:
-  #     matrix:
-  #       os:
-  #         - ubuntu-latest
-  #         - macos-latest
-  #   runs-on: ${{matrix.os}}
+  unix-test:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{matrix.os}}
 
-  #   steps:
-  #   - uses: actions/checkout@v3
-  #   - uses: shogo82148/actions-setup-mysql@v1
-  #     with:
-  #       mysql-version: "5.7"
-  #       root-password: "password"
-  #       my-cnf: |
-  #         skip-ssl
-  #         port=3306
-  #   - name: install diesel_cli
-  #     run: cargo install diesel_cli --no-default-features --features mysql
-  #   - name: init database
-  #     run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
-  #   - name: Build
-  #     run: cargo build --verbose
-  #   - name: Run tests
-  #     run: cargo test --verbose
+    steps:
+    - uses: actions/checkout@v3
+    - uses: shogo82148/actions-setup-mysql@v1
+      with:
+        mysql-version: "5.7"
+        root-password: "password"
+        my-cnf: |
+          skip-ssl
+          port=3306
+    - name: install diesel_cli
+      run: cargo install diesel_cli --no-default-features --features mysql
+    - name: init database
+      run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
 
 
   windows-test:
