@@ -56,7 +56,8 @@ jobs:
           skip-ssl
           port=3306
     - name: Set MySQLCLIENT_LIB_DIR
-      run: echo "MYSQLCLIENT_LIB_DIR=$env:MYSQL_HOME\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+      run: echo "MYSQLCLIENT_LIB_DIR=$env:MYSQL_HOME\lib\mysqlclient.lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+    # - run: echo "$env:MYSQL_HOME\lib\mysqlclient.lib"
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
