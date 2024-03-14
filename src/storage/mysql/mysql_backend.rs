@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    ops::Index,
     sync::{Arc, Mutex},
 };
 
