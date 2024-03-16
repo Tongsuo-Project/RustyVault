@@ -97,6 +97,7 @@ impl Request {
         return field.get_default();
     }
 
+    //TODO: the sensitive data is still in the memory. Need to totally resolve this in `serde_json` someday.
     pub fn clear_data(&mut self, key: &str) {
         if self.data.is_some() {
             if let Some(secret_str) = self.data.as_mut().unwrap().get_mut(key) {
