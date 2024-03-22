@@ -85,7 +85,7 @@ impl AuthModule {
                 return Err(RvError::ErrMountPathProtected);
             }
 
-            if entry.logical_type == "type" {
+            if entry.logical_type == "token" {
                 return Err(RvError::ErrMountFailed);
             }
 
@@ -101,7 +101,7 @@ impl AuthModule {
                 return Err(RvError::ErrMountPathExist);
             }
 
-            let backend_new_func = self.get_backend(&entry.logical_type)?;
+            let backend_new_func = self.get_auth_backend(&entry.logical_type)?;
             let backend = backend_new_func(Arc::clone(&self.core))?;
 
             entry.uuid = generate_uuid();
@@ -201,7 +201,7 @@ impl AuthModule {
             let entry = mount_entry.read()?;
             let barrier_path = format!("{}{}/", AUTH_BARRIER_PREFIX, &entry.uuid);
 
-            let backend_new_func = self.get_backend(&entry.logical_type)?;
+            let backend_new_func = self.get_auth_backend(&entry.logical_type)?;
             let backend = backend_new_func(Arc::clone(&self.core))?;
 
             let view = BarrierView::new(Arc::clone(&self.barrier), &barrier_path);
@@ -217,7 +217,7 @@ impl AuthModule {
         Ok(())
     }
 
-    pub fn get_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
+    pub fn get_auth_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
         let backends = self.backends.lock().unwrap();
         if let Some(backend) = backends.get(logical_type) {
             Ok(backend.clone())
@@ -226,7 +226,7 @@ impl AuthModule {
         }
     }
 
-    pub fn add_backend(&self, logical_type: &str, backend: Arc<LogicalBackendNewFunc>) -> Result<(), RvError> {
+    pub fn add_auth_backend(&self, logical_type: &str, backend: Arc<LogicalBackendNewFunc>) -> Result<(), RvError> {
         let mut backends = self.backends.lock().unwrap();
         if backends.contains_key(logical_type) {
             return Err(RvError::ErrCoreLogicalBackendExist);
@@ -235,7 +235,7 @@ impl AuthModule {
         Ok(())
     }
 
-    pub fn delete_backend(&self, logical_type: &str) -> Result<(), RvError> {
+    pub fn delete_auth_backend(&self, logical_type: &str) -> Result<(), RvError> {
         let mut backends = self.backends.lock().unwrap();
         backends.remove(logical_type);
         Ok(())
@@ -270,7 +270,7 @@ impl Module for AuthModule {
             Ok(Arc::new(backend))
         };
 
-        self.add_backend("token", Arc::new(token_backend_new_func))?;
+        self.add_auth_backend("token", Arc::new(token_backend_new_func))?;
         self.load_auth()?;
         self.setup_auth()?;
         self.expiration.restore()?;
@@ -283,7 +283,7 @@ impl Module for AuthModule {
     fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
         core.delete_handler(Arc::clone(&self.token_store) as Arc<dyn Handler>)?;
 
-        self.delete_backend("token")?;
+        self.delete_auth_backend("token")?;
         self.teardown_auth()?;
         Ok(())
     }

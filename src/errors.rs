@@ -201,6 +201,11 @@ pub enum RvError {
         #[from]
         source: delay_timer::error::TaskError,
     },
+    #[error("Some bcrypt error happened, {:?}", .source)]
+    BcryptError {
+        #[from]
+        source: bcrypt::BcryptError,
+    },
     #[error("RwLock was poisoned (reading)")]
     ErrRwLockReadPoison,
     #[error("RwLock was poisoned (writing)")]

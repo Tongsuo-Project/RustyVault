@@ -1,7 +1,5 @@
-use std::{
-    sync::Arc,
-    collections::HashMap,
-};
+use std::{collections::HashMap, sync::Arc};
+
 use openssl::{
     pkey::{Id, PKey},
     x509::X509,
@@ -11,12 +9,10 @@ use pem;
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{
-        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
-    },
+    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
     utils::{cert, cert::CertBundle},
-    new_path, new_path_internal, new_fields, new_fields_internal,
 };
 
 impl PkiBackend {
@@ -104,10 +100,7 @@ impl PkiBackendInner {
 
         self.store_ca_bundle(req, &cert_bundle)?;
 
-        let entry = StorageEntry {
-            key: "crl".to_string(),
-            value: Vec::new(),
-        };
+        let entry = StorageEntry { key: "crl".to_string(), value: Vec::new() };
 
         req.storage_put(&entry)?;
 

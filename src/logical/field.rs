@@ -11,6 +11,8 @@ use crate::errors::RvError;
 pub enum FieldType {
     #[strum(to_string = "string")]
     Str,
+    #[strum(to_string = "secret_string")]
+    SecretStr,
     #[strum(to_string = "int")]
     Int,
     #[strum(to_string = "bool")]
@@ -40,6 +42,7 @@ impl Field {
     pub fn get_default(&self) -> Result<Value, RvError> {
         match &self.field_type {
             FieldType::Str => self.cast_value::<String>(),
+            FieldType::SecretStr => self.cast_value::<String>(),
             FieldType::Int => self.cast_value::<i32>(),
             FieldType::Bool => self.cast_value::<bool>(),
             FieldType::Map => self.cast_value::<Value>(),

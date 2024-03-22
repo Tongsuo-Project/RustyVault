@@ -1,15 +1,10 @@
-use std::{
-    sync::Arc,
-    collections::HashMap,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{
-        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
-    },
-    new_path, new_path_internal, new_fields, new_fields_internal,
+    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    new_fields, new_fields_internal, new_path, new_path_internal,
 };
 
 impl PkiBackend {

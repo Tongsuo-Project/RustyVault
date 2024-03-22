@@ -15,7 +15,8 @@ use crate::{
         secret::Secret, Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
     modules::Module,
-    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_secret, new_secret_internal, new_fields, new_fields_internal,
+    new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
+    new_secret, new_secret_internal,
     storage::StorageEntry,
 };
 
@@ -90,7 +91,7 @@ impl KvBackend {
                 renew_handler: kv_backend_renew.handle_read,
                 revoke_handler: kv_backend_revoke.handle_noop,
             }],
-            help: KV_BACKEND_HELP
+            help: KV_BACKEND_HELP,
         });
 
         backend
