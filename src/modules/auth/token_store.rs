@@ -17,7 +17,7 @@ use crate::{
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
-    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_fields, new_fields_internal,
+    new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
     router::Router,
     storage::{Storage, StorageEntry},
     utils::{generate_uuid, is_str_subset, sha1},
@@ -241,7 +241,7 @@ impl TokenStore {
                 }
             ],
             root_paths: ["revoke-orphan/*"],
-            help: AUTH_TOKEN_HELP
+            help: AUTH_TOKEN_HELP,
         });
 
         backend
@@ -697,6 +697,18 @@ impl Handler for TokenStore {
             if auth.ttl > MAX_LEASE_DURATION_SECS {
                 auth.ttl = MAX_LEASE_DURATION_SECS;
             }
+
+            let mut te = TokenEntry {
+                path: req.path.clone(),
+                meta: auth.metadata.clone(),
+                display_name: auth.display_name.clone(),
+                ttl: auth.ttl.as_secs(),
+                ..Default::default()
+            };
+
+            self.create(&mut te)?;
+
+            auth.client_token = te.id.clone();
 
             self.expiration.register_auth(&req.path, auth)?;
         }

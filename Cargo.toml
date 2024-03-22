@@ -38,7 +38,8 @@ delay_timer = "0.11"
 as-any = "0.3.1"
 pem = "3.0"
 chrono = "0.4"
-zeroize = { version = "1.4.0", features= ["derive"] }
+zeroize = { version = "1.7.0", features= ["zeroize_derive"] }
+bcrypt = "0.15"
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5"

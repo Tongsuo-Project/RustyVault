@@ -1,8 +1,4 @@
-use std::{
-    sync::Arc,
-    collections::HashMap,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use humantime::parse_duration;
 use serde::{Deserialize, Serialize};
@@ -10,15 +6,13 @@ use serde::{Deserialize, Serialize};
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{
-        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
-    },
+    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
     utils::{deserialize_duration, serialize_duration},
-    new_path, new_path_internal, new_fields, new_fields_internal,
 };
 
-const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365*24*60*60 as u64);
+const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleEntry {
@@ -112,13 +106,13 @@ max_ttl, whichever is shorter."#
                     field_type: FieldType::Str,
                     required: true,
                     description: r#"
-The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
+        The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
                 },
                 "use_pss": {
                     field_type: FieldType::Bool,
                     default: false,
                     description: r#"
-Whether or not to use PSS signatures when using a RSA key-type issuer. Defaults to false."#
+        Whether or not to use PSS signatures when using a RSA key-type issuer. Defaults to false."#
                 },
                 "allow_localhost": {
                     field_type: FieldType::Bool,
@@ -163,30 +157,30 @@ See the documentation for more information."#
                     field_type: FieldType::Bool,
                     default: true,
                     description: r#"
-If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
+        If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
                 },
                 "server_flag": {
                     field_type: FieldType::Bool,
                     default: true,
                     description: r#"
-If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
+        If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
                 },
                 "client_flag": {
                     field_type: FieldType::Bool,
                     default: true,
                     description: r#"
-If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
+        If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
                 },
                 "code_signing_flag": {
                     field_type: FieldType::Bool,
                     description: r#"
-If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
+        If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
                 },
                 "key_type": {
                     field_type: FieldType::Str,
                     default: "rsa",
                     description: r#"
-The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
+        The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
                 },
                 "key_bits": {
                     field_type: FieldType::Int,
@@ -208,7 +202,7 @@ based on key length (SHA-2-256 for RSA keys, and matching the curve size for NIS
                     field_type: FieldType::Int,
                     default: 30,
                     description: r#"
-The duration before now which the certificate needs to be backdated by."#
+        The duration before now which the certificate needs to be backdated by."#
                 },
                 "not_after": {
                     field_type: FieldType::Str,
@@ -221,43 +215,43 @@ The value format should be given in UTC format YYYY-MM-ddTHH:MM:SSZ."#
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-If set, OU (OrganizationalUnit) will be set to this value in certificates issued by this role."#
+        If set, OU (OrganizationalUnit) will be set to this value in certificates issued by this role."#
                 },
                 "organization": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-If set, O (Organization) will be set to this value in certificates issued by this role."#
+        If set, O (Organization) will be set to this value in certificates issued by this role."#
                 },
                 "country": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-If set, Country will be set to this value in certificates issued by this role."#
+        If set, Country will be set to this value in certificates issued by this role."#
                 },
                 "locality": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-If set, Locality will be set to this value in certificates issued by this role."#
+        If set, Locality will be set to this value in certificates issued by this role."#
                 },
                 "province": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-If set, Province will be set to this value in certificates issued by this role."#
+        If set, Province will be set to this value in certificates issued by this role."#
                 },
                 "street_address": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-If set, Street Address will be set to this value."#
+        If set, Street Address will be set to this value."#
                 },
                 "postal_code": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-If set, Postal Code will be set to this value."#
+        If set, Postal Code will be set to this value."#
                 },
                 "use_csr_common_name": {
                     field_type: FieldType::Bool,

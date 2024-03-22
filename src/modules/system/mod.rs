@@ -13,7 +13,7 @@ use crate::{
     logical::{Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response},
     modules::{auth::AuthModule, Module},
     mount::MountEntry,
-    new_logical_backend, new_logical_backend_internal, new_path, new_path_internal, new_fields, new_fields_internal,
+    new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
     storage::StorageEntry,
 };
 
@@ -257,7 +257,7 @@ impl SystemBackend {
                 }
             ],
             root_paths: ["mounts/*", "auth/*", "remount", "policy", "policy/*", "audit", "audit/*", "seal", "raw/*", "revoke-prefix/*"],
-            help: SYSTEM_BACKEND_HELP
+            help: SYSTEM_BACKEND_HELP,
         });
 
         backend

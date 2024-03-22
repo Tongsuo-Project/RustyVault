@@ -1,6 +1,6 @@
 use std::{
-    sync::Arc,
     collections::HashMap,
+    sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -11,12 +11,9 @@ use serde_json::{json, Map, Value};
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
     errors::RvError,
-    logical::{
-        Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response,
-    },
-    utils,
-    utils::{cert},
-    new_path, new_path_internal, new_fields, new_fields_internal,
+    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    new_fields, new_fields_internal, new_path, new_path_internal, utils,
+    utils::cert,
 };
 
 impl PkiBackend {
@@ -33,13 +30,13 @@ impl PkiBackend {
                 "common_name": {
                     field_type: FieldType::Str,
                     description: r#"
-The requested common name; if you want more than one, specify the alternative names in the alt_names map"#
+        The requested common name; if you want more than one, specify the alternative names in the alt_names map"#
                 },
                 "alt_names": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-The requested Subject Alternative Names, if any, in a comma-delimited list"#
+        The requested Subject Alternative Names, if any, in a comma-delimited list"#
                 },
                 "ip_sans": {
                     required: false,

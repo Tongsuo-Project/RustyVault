@@ -3,8 +3,10 @@ use std::{collections::HashMap, sync::Arc};
 use regex::Regex;
 use serde_json::{Map, Value};
 
-use super::{path::Path, request::Request, response::Response, secret::Secret, Backend, Operation};
+use super::{path::Path, request::Request, response::Response, secret::Secret, FieldType, Backend, Operation};
 use crate::errors::RvError;
+
+type BackendOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
 #[derive(Clone)]
 pub struct LogicalBackend {
@@ -14,6 +16,7 @@ pub struct LogicalBackend {
     pub unauth_paths: Arc<Vec<String>>,
     pub help: String,
     pub secrets: Vec<Arc<Secret>>,
+    pub auth_renew_handler: Option<Arc<BackendOperationHandler>>,
 }
 
 impl Backend for LogicalBackend {
@@ -60,6 +63,13 @@ impl Backend for LogicalBackend {
             return Err(RvError::ErrRequestNotReady);
         }
 
+        match req.operation {
+            Operation::Renew | Operation::Revoke => {
+                return self.handle_revoke_renew(req);
+            }
+            _ => {}
+        }
+
         if req.path == "" && req.operation == Operation::Help {
             return self.handle_root_help(req);
         }
@@ -76,7 +86,9 @@ impl Backend for LogicalBackend {
             req.match_path = Some(path.clone());
             for operation in &path.operations {
                 if operation.op == req.operation {
-                    return operation.handle_request(self, req);
+                    let ret = operation.handle_request(self, req);
+                    self.clear_secret_field(req);
+                    return ret;
                 }
             }
 
@@ -100,7 +112,50 @@ impl LogicalBackend {
             unauth_paths: Arc::new(Vec::new()),
             help: String::new(),
             secrets: Vec::new(),
+            auth_renew_handler: None,
         }
+    }
+
+    pub fn handle_auth_renew(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+        if self.auth_renew_handler.is_none() {
+            log::error!("this auth type doesn't support renew");
+            return Err(RvError::ErrLogicalOperationUnsupported);
+        }
+
+        (self.auth_renew_handler.as_ref().unwrap())(self, req)
+    }
+
+    pub fn handle_revoke_renew(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+        if req.operation == Operation::Renew && req.auth.is_some() {
+            return self.handle_auth_renew(req);
+        }
+
+        if req.secret.is_none() {
+            log::error!("request has no secret");
+            return Ok(None);
+        }
+
+        if let Some(raw_secret_type) = req.secret.as_ref().unwrap().internal_data.get("secret_type") {
+            if let Some(secret_type) = raw_secret_type.as_str() {
+                if let Some(secret) = self.secret(secret_type) {
+                    match req.operation {
+                        Operation::Renew => {
+                            return secret.renew(self, req);
+                        }
+                        Operation::Revoke => {
+                            return secret.revoke(self, req);
+                        }
+                        _ => {
+                            log::error!("invalid operation for revoke/renew: {}", req.operation);
+                            return Ok(None);
+                        }
+                    }
+                }
+            }
+        }
+
+        log::error!("secret is unsupported by this backend");
+        return Ok(None);
     }
 
     pub fn handle_root_help(&self, _req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -124,6 +179,16 @@ impl LogicalBackend {
 
         None
     }
+
+    fn clear_secret_field(&self, req: &mut Request) {
+        for path in &self.paths {
+            for (key, field) in &path.fields {
+                if field.field_type == FieldType::SecretStr {
+                    req.clear_data(key);
+                }
+            }
+        }
+    }
 }
 
 #[macro_export]
@@ -136,34 +201,42 @@ macro_rules! new_logical_backend {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! new_logical_backend_internal {
-    (@object $object:ident paths: [$($path:tt),*]) => {
+    (@object $object:ident () {}) => {
+    };
+    (@object $object:ident () {paths: [$($path:tt),*], $($rest:tt)*}) => {
         $(
             $object.paths.push(Arc::new(new_path!($path)));
         )*
+        new_logical_backend_internal!(@object $object () {$($rest)*});
     };
-    (@object $object:ident unauth_paths: [$($unauth:expr),*]) => {
+    (@object $object:ident () {unauth_paths: [$($unauth:expr),*], $($rest:tt)*}) => {
         $object.unauth_paths = Arc::new(vec![$($unauth.to_string()),*]);
+        new_logical_backend_internal!(@object $object () {$($rest)*});
     };
-    (@object $object:ident root_paths: [$($root:expr),*]) => {
+    (@object $object:ident () {root_paths: [$($root:expr),*], $($rest:tt)*}) => {
         $object.root_paths = Arc::new(vec![$($root.to_string()),*]);
+        new_logical_backend_internal!(@object $object () {$($rest)*});
     };
-    (@object $object:ident help: $help:expr) => {
+    (@object $object:ident () {help: $help:expr, $($rest:tt)*}) => {
         $object.help = $help.to_string();
+        new_logical_backend_internal!(@object $object () {$($rest)*});
     };
-    (@object $object:ident secrets: [$($secrets:tt),* $(,)?]) => {
+    (@object $object:ident () {secrets: [$($secrets:tt),* $(,)?], $($rest:tt)*}) => {
         $(
             $object.secrets.push(Arc::new(new_secret!($secrets)));
         )*
+        new_logical_backend_internal!(@object $object () {$($rest)*});
     };
-    (@object $object:ident () $($key:ident: $value:tt),*) => {
-        $(
-            new_logical_backend_internal!(@object $object $key: $value);
-        )*
+    (@object $object:ident () {auth_renew_handler: $handler_obj:ident$(.$handler_method:ident)*, $($rest:tt)*}) => {
+        $object.auth_renew_handler = Some(Arc::new(move |backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
+            $handler_obj$(.$handler_method)*(backend, req)
+        }));
+        new_logical_backend_internal!(@object $object () {$($rest)*});
     };
     ({ $($tt:tt)+ }) => {
         {
             let mut backend = LogicalBackend::new();
-            new_logical_backend_internal!(@object backend () $($tt)+);
+            new_logical_backend_internal!(@object backend () {$($tt)+});
             backend
         }
     };
@@ -174,13 +247,26 @@ mod test {
     use std::{collections::HashMap, env, fs, sync::Arc, time::Duration};
 
     use go_defer::defer;
+    use serde_json::json;
 
     use super::*;
     use crate::{
         logical::{Field, FieldType, PathOperation},
-        new_path, new_path_internal, new_secret, new_secret_internal, new_fields, new_fields_internal,
+        new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal,
         storage::{barrier_aes_gcm::AESGCMBarrier, physical},
     };
+
+    struct MyTest;
+
+    impl MyTest {
+        pub fn new() -> Self {
+            MyTest
+        }
+
+        pub fn noop(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+            Ok(None)
+        }
+    }
 
     #[test]
     fn test_logical_backend_match_path() {
@@ -216,6 +302,8 @@ mod test {
             assert!(fs::remove_dir_all(&dir).is_ok());
         );
 
+        let t = MyTest::new();
+
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
@@ -235,6 +323,10 @@ mod test {
                         "mypath": {
                             field_type: FieldType::Str,
                             description: "hehe"
+                        },
+                        "mypassword": {
+                            field_type: FieldType::SecretStr,
+                            description: "password"
                         }
                     },
                     operations: [
@@ -280,9 +372,10 @@ mod test {
                 renew_handler: renew_noop_handler,
                 revoke_handler: revoke_noop_handler,
             }],
+            auth_renew_handler: t.noop,
             unauth_paths: ["/login"],
             root_paths: ["/"],
-            help: "help content"
+            help: "help content",
         });
 
         let mut req = Request::new("/");
@@ -319,6 +412,8 @@ mod test {
         assert_eq!(&logical_backend.root_paths[0], "/");
         assert_eq!(&logical_backend.help, "help content");
 
+        assert!(logical_backend.auth_renew_handler.is_some());
+
         assert_eq!(logical_backend.paths_re.len(), 0);
 
         assert!(logical_backend.init().is_ok());
@@ -330,8 +425,17 @@ mod test {
 
         assert!(logical_backend.handle_request(&mut req).is_err());
 
+        let body: Map<String, Value> = json!({
+            "mytype": 1,
+            "mypath": "/pp",
+            "mypassword": "123qwe",
+        }).as_object().unwrap().clone();
+        req.body = Some(body);
         req.storage = Some(Arc::new(barrier));
         assert!(logical_backend.handle_request(&mut req).is_ok());
+        let mypassword = req.body.as_ref().unwrap().get("mypassword");
+        assert!(mypassword.is_some());
+        assert_eq!(mypassword.unwrap(), "");
 
         let unauth_paths = logical_backend.get_unauth_paths();
         assert!(unauth_paths.is_some());

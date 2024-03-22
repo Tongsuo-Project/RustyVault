@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     logical::{Field, FieldType},
@@ -14,7 +11,7 @@ pub fn ca_common_fields() -> HashMap<String, Arc<Field>> {
             field_type: FieldType::Str,
             required: false,
             description: r#"The requested Subject Alternative Names, if any,
-in a comma-delimited list. May contain both DNS names and email addresses."#
+    in a comma-delimited list. May contain both DNS names and email addresses."#
         },
         "common_name": {
             field_type: FieldType::Str,
@@ -38,7 +35,7 @@ CA cert, not when generating a CSR for an intermediate CA.
             field_type: FieldType::Int,
             default: 30,
             description: r#"
-The duration before now which the certificate needs to be backdated by."#
+    The duration before now which the certificate needs to be backdated by."#
         },
         "not_after": {
             field_type: FieldType::Str,
@@ -110,7 +107,7 @@ chance to retrieve the private key!"#
             field_type: FieldType::Str,
             default: "rsa",
             description: r#"The type of key to use; defaults to RSA. "rsa" "ec",
-"ed25519" and "any" are the only valid values."#
+    "ed25519" and "any" are the only valid values."#
         },
         "key_bits": {
             field_type: FieldType::Int,
@@ -131,7 +128,7 @@ the curve size for NIST P-Curves)."#
             field_type: FieldType::Bool,
             default: false,
             description: r#"Whether or not to use PSS signatures when using a
-RSA key-type issuer. Defaults to false."#
+    RSA key-type issuer. Defaults to false."#
         }
     });
 
