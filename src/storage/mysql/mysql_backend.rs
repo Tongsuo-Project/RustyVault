@@ -23,16 +23,9 @@ pub struct MysqlBackend {
     pool: Arc<Mutex<Pool<ConnectionManager<MysqlConnection>>>>,
 }
 
-#[derive(Queryable, PartialEq, Debug)]
+#[derive(Insertable, Queryable, PartialEq, Debug, Deserialize)]
 #[diesel(table_name = vault)]
 pub struct MysqlBackendEntry {
-    pub vault_key: String,
-    pub vault_value: Vec<u8>,
-}
-
-#[derive(Insertable, Deserialize)]
-#[diesel(table_name = vault)]
-pub struct NewMysqlBackendEntry {
     pub vault_key: String,
     pub vault_value: Vec<u8>,
 }
@@ -100,7 +93,7 @@ impl Backend for MysqlBackend {
 
         let conn: &mut MysqlConnection = &mut self.pool.lock().unwrap().get().unwrap();
 
-        let new_entry = NewMysqlBackendEntry { vault_key: entry.key.clone(), vault_value: entry.value.clone() };
+        let new_entry = MysqlBackendEntry { vault_key: entry.key.clone(), vault_value: entry.value.clone() };
 
         match diesel::replace_into(vault).values(&new_entry).execute(conn) {
             Ok(_) => return Ok(()),

@@ -39,13 +39,11 @@ fn establish_mysql_connection(conf: &HashMap<String, Value>) -> Result<MysqlDbPo
     // now this can not support ssl connection yet. Still need to improve it.
     let database_url = format!("mysql://{}:{}@{}/{}", username, password, address, database);
 
-    println!("database_url: {}", database_url);
-    println!();
     let manager = ConnectionManager::<MysqlConnection>::new(database_url);
     match r2d2::Pool::builder().build(manager) {
         Ok(pool) => Ok(pool),
         Err(e) => {
-            println!("Error: {:?}", e);
+            log::error!("Error: {:?}", e);
             Err(RvError::ErrConnectionPoolCreate { source: (e) })
         },
     }
