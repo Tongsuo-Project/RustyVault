@@ -13,10 +13,10 @@ use openssl::{
     rsa::Rsa,
     x509::{
         extension::{
-            AuthorityKeyIdentifier, BasicConstraints, KeyUsage, ExtendedKeyUsage,
-            SubjectAlternativeName, SubjectKeyIdentifier
+            AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
+            SubjectKeyIdentifier,
         },
-        X509Builder, X509Extension, X509Name, X509NameBuilder, X509, X509Ref,
+        X509Builder, X509Extension, X509Name, X509NameBuilder, X509Ref, X509,
     },
 };
 use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
@@ -267,26 +267,20 @@ impl Certificate {
 
         if self.is_ca {
             builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
-            builder.append_extension(
-                KeyUsage::new().critical().key_cert_sign().crl_sign().build()?,
-            )?;
+            builder.append_extension(KeyUsage::new().critical().key_cert_sign().crl_sign().build()?)?;
         } else {
             builder.append_extension(BasicConstraints::new().critical().build()?)?;
             builder.append_extension(
                 KeyUsage::new().critical().non_repudiation().digital_signature().key_encipherment().build()?,
             )?;
-            builder.append_extension(
-                ExtendedKeyUsage::new().server_auth().client_auth().build()?,
-            )?;
+            builder.append_extension(ExtendedKeyUsage::new().server_auth().client_auth().build()?)?;
         }
 
         let subject_key_id = SubjectKeyIdentifier::new().build(&builder.x509v3_context(ca_cert, None))?;
         builder.append_extension(subject_key_id)?;
 
-        let authority_key_id = AuthorityKeyIdentifier::new()
-            .keyid(true)
-            .issuer(false)
-            .build(&builder.x509v3_context(ca_cert, None))?;
+        let authority_key_id =
+            AuthorityKeyIdentifier::new().keyid(true).issuer(false).build(&builder.x509v3_context(ca_cert, None))?;
         builder.append_extension(authority_key_id)?;
 
         if ca_key.is_some() {
@@ -298,7 +292,11 @@ impl Certificate {
         Ok(builder.build())
     }
 
-    pub fn to_cert_bundle(&mut self, ca_cert: Option<&X509Ref>, ca_key: Option<&PKey<Private>>) -> Result<CertBundle, RvError> {
+    pub fn to_cert_bundle(
+        &mut self,
+        ca_cert: Option<&X509Ref>,
+        ca_key: Option<&PKey<Private>>,
+    ) -> Result<CertBundle, RvError> {
         let key_bits = self.key_bits;
         let priv_key = match self.key_type.as_str() {
             "rsa" => {

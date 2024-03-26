@@ -14,7 +14,7 @@ use crate::{
     handler::Handler,
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
-    modules::{auth::AuthModule, pki::PkiModule},
+    modules::{auth::AuthModule, credential::userpass::UserPassModule, pki::PkiModule},
     mount::MountTable,
     router::Router,
     shamir::{ShamirSecret, SHAMIR_OVERHEAD},
@@ -103,6 +103,10 @@ impl Core {
         // add pki_module
         let pki_module = PkiModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(pki_module))))?;
+
+        // add credential module: userpass
+        let userpass_module = UserPassModule::new(self);
+        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(userpass_module))))?;
 
         Ok(())
     }

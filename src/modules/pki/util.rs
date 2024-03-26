@@ -1,18 +1,10 @@
-use std::{
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 use humantime::{parse_duration, parse_rfc3339};
-use openssl::{x509::X509NameBuilder};
+use openssl::x509::X509NameBuilder;
 
-use super::{path_roles::RoleEntry};
-use crate::{
-    errors::RvError,
-    logical::{
-        Request,
-    },
-    utils::cert::Certificate,
-};
+use super::path_roles::RoleEntry;
+use crate::{errors::RvError, logical::Request, utils::cert::Certificate};
 
 pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
     let ttl_vale = req.get_data("ttl")?;
@@ -93,80 +85,80 @@ pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
 }
 
 pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result<Certificate, RvError> {
-        let mut common_names = Vec::new();
+    let mut common_names = Vec::new();
 
-        let common_name_value = req.get_data("common_name")?;
-        let common_name = common_name_value.as_str().unwrap();
-        if common_name != "" {
-            common_names.push(common_name.to_string());
-        }
+    let common_name_value = req.get_data("common_name")?;
+    let common_name = common_name_value.as_str().unwrap();
+    if common_name != "" {
+        common_names.push(common_name.to_string());
+    }
 
-        let alt_names_value = req.get_data("alt_names");
-        if alt_names_value.is_ok() {
-            let alt_names_val = alt_names_value.unwrap();
-            let alt_names = alt_names_val.as_str().unwrap();
-            if alt_names != "" {
-                for v in alt_names.split(',') {
-                    common_names.push(v.to_string());
-                }
+    let alt_names_value = req.get_data("alt_names");
+    if alt_names_value.is_ok() {
+        let alt_names_val = alt_names_value.unwrap();
+        let alt_names = alt_names_val.as_str().unwrap();
+        if alt_names != "" {
+            for v in alt_names.split(',') {
+                common_names.push(v.to_string());
             }
         }
+    }
 
-        let mut ip_sans = Vec::new();
-        let ip_sans_value = req.get_data("ip_sans");
-        if ip_sans_value.is_ok() {
-            let ip_sans_val = ip_sans_value.unwrap();
-            let ip_sans_str = ip_sans_val.as_str().unwrap();
-            if ip_sans_str != "" {
-                for v in ip_sans_str.split(',') {
-                    ip_sans.push(v.to_string());
-                }
+    let mut ip_sans = Vec::new();
+    let ip_sans_value = req.get_data("ip_sans");
+    if ip_sans_value.is_ok() {
+        let ip_sans_val = ip_sans_value.unwrap();
+        let ip_sans_str = ip_sans_val.as_str().unwrap();
+        if ip_sans_str != "" {
+            for v in ip_sans_str.split(',') {
+                ip_sans.push(v.to_string());
             }
         }
+    }
 
-        let not_before = SystemTime::now() - Duration::from_secs(10);
-        let not_after: SystemTime;
-        if role_entry.not_after.len() > 18 {
-            let parsed_time = parse_rfc3339(&role_entry.not_after)?;
-            not_after = parsed_time.into();
+    let not_before = SystemTime::now() - Duration::from_secs(10);
+    let not_after: SystemTime;
+    if role_entry.not_after.len() > 18 {
+        let parsed_time = parse_rfc3339(&role_entry.not_after)?;
+        not_after = parsed_time.into();
+    } else {
+        if role_entry.ttl != Duration::from_secs(0) {
+            not_after = not_before + role_entry.ttl;
         } else {
-            if role_entry.ttl != Duration::from_secs(0) {
-                not_after = not_before + role_entry.ttl;
-            } else {
-                not_after = not_before + role_entry.max_ttl;
-            }
+            not_after = not_before + role_entry.max_ttl;
         }
+    }
 
-        let mut subject_name = X509NameBuilder::new().unwrap();
-        if role_entry.country.len() > 0 {
-            subject_name.append_entry_by_text("C", &role_entry.country).unwrap();
-        }
-        if role_entry.province.len() > 0 {
-            subject_name.append_entry_by_text("ST", &role_entry.province).unwrap();
-        }
-        if role_entry.locality.len() > 0 {
-            subject_name.append_entry_by_text("L", &role_entry.locality).unwrap();
-        }
-        if role_entry.organization.len() > 0 {
-            subject_name.append_entry_by_text("O", &role_entry.organization).unwrap();
-        }
-        if role_entry.ou.len() > 0 {
-            subject_name.append_entry_by_text("OU", &role_entry.ou).unwrap();
-        }
-        if common_name != "" {
-            subject_name.append_entry_by_text("CN", common_name).unwrap();
-        }
-        let subject = subject_name.build();
+    let mut subject_name = X509NameBuilder::new().unwrap();
+    if role_entry.country.len() > 0 {
+        subject_name.append_entry_by_text("C", &role_entry.country).unwrap();
+    }
+    if role_entry.province.len() > 0 {
+        subject_name.append_entry_by_text("ST", &role_entry.province).unwrap();
+    }
+    if role_entry.locality.len() > 0 {
+        subject_name.append_entry_by_text("L", &role_entry.locality).unwrap();
+    }
+    if role_entry.organization.len() > 0 {
+        subject_name.append_entry_by_text("O", &role_entry.organization).unwrap();
+    }
+    if role_entry.ou.len() > 0 {
+        subject_name.append_entry_by_text("OU", &role_entry.ou).unwrap();
+    }
+    if common_name != "" {
+        subject_name.append_entry_by_text("CN", common_name).unwrap();
+    }
+    let subject = subject_name.build();
 
-        let cert = Certificate {
-            not_before,
-            not_after,
-            subject,
-            dns_sans: common_names,
-            ip_sans,
-            key_bits: role_entry.key_bits,
-            ..Default::default()
-        };
+    let cert = Certificate {
+        not_before,
+        not_after,
+        subject,
+        dns_sans: common_names,
+        ip_sans,
+        key_bits: role_entry.key_bits,
+        ..Default::default()
+    };
 
-        Ok(cert)
+    Ok(cert)
 }
