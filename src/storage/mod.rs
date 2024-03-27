@@ -6,6 +6,7 @@ pub mod barrier;
 pub mod barrier_aes_gcm;
 pub mod barrier_view;
 pub mod physical;
+pub mod mysql;
 
 pub trait Storage {
     fn list(&self, prefix: &str) -> Result<Vec<String>, RvError>;
