@@ -5,6 +5,9 @@ use serde_json::Value;
 
 use crate::errors::RvError;
 
+use super::mysql::mysql_backend::MysqlBackend;
+
+
 pub mod file;
 pub mod mock;
 
@@ -27,14 +30,18 @@ pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Bac
         "file" => {
             let backend = file::FileBackend::new(conf)?;
             Ok(Arc::new(backend))
-        }
+        },
+        "mysql" => {
+            let backend = MysqlBackend::new(conf)?;
+            Ok(Arc::new(backend))
+        },
         "mock" => Ok(Arc::new(mock::MockBackend::new())),
         _ => Err(RvError::ErrPhysicalTypeInvalid),
     }
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use std::{collections::HashMap, env, fs};
 
     use go_defer::defer;

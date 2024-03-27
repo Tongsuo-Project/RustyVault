@@ -20,10 +20,23 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: shogo82148/actions-setup-mysql@v1
+      with:
+        mysql-version: "5.7"
+        root-password: "password"
+        my-cnf: |
+          skip-ssl
+          port=3306
+    - name: install diesel_cli
+      run: cargo install diesel_cli --no-default-features --features mysql
+    - name: init database
+      run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+
   windows-test:
     strategy:
       matrix:
@@ -34,11 +47,31 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: vcpkg install openssl:x64-windows-static-md
+    - name: install openssl
+      run: vcpkg install openssl:x64-windows-static-md
+    - name: Download MySQL Connector/C
+      run: |
+        Invoke-WebRequest -Uri "https://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.11-winx64.msi" -OutFile "mysql-connector.msi"
+    - name: Install MySQL Connector/C
+      run: |
+        Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait
+    - name: Set MySQLCLIENT_LIB_DIR
+      run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\lib\vs14" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - uses: shogo82148/actions-setup-mysql@v1
+      with:
+        mysql-version: "5.7"
+        root-password: "password"
+        my-cnf: |
+          skip-ssl
+          port=3306
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
+    - name: install diesel_cli
+      run: cargo install diesel_cli --no-default-features --features mysql
+    - name: init database
+      run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
     - name: Build
       run: cargo build --verbose
     - name: Run tests

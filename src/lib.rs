@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate diesel;
+
 pub mod cli;
 pub mod context;
 pub mod core;
@@ -12,6 +15,7 @@ pub mod router;
 pub mod shamir;
 pub mod storage;
 pub mod utils;
+pub mod schema;
 
 /// Exit ok
 pub const EXIT_CODE_OK: sysexits::ExitCode = sysexits::ExitCode::Ok;
