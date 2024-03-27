@@ -1,12 +1,19 @@
 use std::{
     default::Default,
     env, fs,
+    fs::File,
+    io::Read,
     path::Path,
     sync::{Arc, RwLock},
 };
 
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use anyhow::format_err;
 use clap::ArgMatches;
+use openssl::{
+    ssl::{SslAcceptor, SslFiletype, SslMethod, SslOptions, SslVerifyMode, SslVersion},
+    x509::X509,
+};
 use sysexits::ExitCode;
 
 use crate::{
@@ -37,7 +44,7 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
     let (_, storage) = config.storage.iter().next().unwrap();
     let (_, listener) = config.listener.iter().next().unwrap();
 
-    let addr = listener.address.clone();
+    let listener = listener.clone();
 
     let mut work_dir = WORK_DIR_PATH_DEFAULT.to_string();
     if !config.work_dir.is_empty() {
@@ -122,9 +129,56 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
     })
     .on_connect(http::request_on_connect_handler);
 
-    log::info!("start listen, addr: {}", addr);
+    log::info!(
+        "start listen, addr: {}, tls_disable: {}, tls_disable_client_certs: {}",
+        listener.address,
+        listener.tls_disable,
+        listener.tls_disable_client_certs
+    );
 
-    http_server = http_server.bind(addr)?;
+    if listener.tls_disable {
+        http_server = http_server.bind(listener.address)?;
+    } else {
+        let cert_file: &Path = Path::new(&listener.tls_cert_file);
+        let key_file: &Path = Path::new(&listener.tls_key_file);
+
+        let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
+        builder
+            .set_private_key_file(key_file, SslFiletype::PEM)
+            .map_err(|err| format_err!("unable to read proxy key {} - {}", key_file.display(), err))?;
+        builder
+            .set_certificate_chain_file(cert_file)
+            .map_err(|err| format_err!("unable to read proxy cert {} - {}", cert_file.display(), err))?;
+        builder.check_private_key()?;
+
+        builder.set_min_proto_version(Some(listener.tls_min_version))?;
+        builder.set_max_proto_version(Some(listener.tls_max_version))?;
+
+        log::info!("tls_cipher_suites: {}", listener.tls_cipher_suites);
+        builder.set_cipher_list(&listener.tls_cipher_suites)?;
+
+        if listener.tls_max_version == SslVersion::TLS1_3 {
+            builder.clear_options(SslOptions::NO_TLSV1_3);
+            builder.set_ciphersuites("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256")?;
+        }
+
+        if listener.tls_require_and_verify_client_cert {
+            builder.set_verify_callback(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT, move |p, _x| {
+                return p;
+            });
+
+            if listener.tls_client_ca_file.len() > 0 {
+                let mut client_ca_file = File::open(&listener.tls_client_ca_file)?;
+                let mut client_ca_file_bytes = Vec::new();
+                client_ca_file.read_to_end(&mut client_ca_file_bytes)?;
+                let client_ca_x509 = X509::from_pem(&client_ca_file_bytes)?;
+
+                builder.add_client_ca(client_ca_x509.as_ref())?;
+            }
+        }
+
+        http_server = http_server.bind_openssl(listener.address, builder)?;
+    }
 
     log::info!("rusty_vault server starts, waiting for request...");
 
