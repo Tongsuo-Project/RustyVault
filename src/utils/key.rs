@@ -179,6 +179,22 @@ impl KeyBundle {
 
                 Ok(encrypt(cipher, &self.key, None, data)?)
             }
+            "rsa" => {
+                let rsa = Rsa::private_key_from_pem(&self.key)?;
+                if data.len() >= rsa.size() as usize {
+                    return Err(RvError::ErrPkiInternal);
+                }
+
+                let mut buf: Vec<u8> = vec![0; rsa.size() as usize];
+
+                if aad.unwrap_or("0".as_bytes())[0] != b'1' {
+                    let _ = rsa.private_encrypt(data, &mut buf, Padding::PKCS1)?;
+                } else {
+                    let _ = rsa.public_encrypt(data, &mut buf, Padding::PKCS1)?;
+                }
+
+                return Ok(buf);
+            }
             _ => {
                 return Err(RvError::ErrPkiKeyOperationInvalid);
             }
@@ -223,6 +239,29 @@ impl KeyBundle {
 
                 Ok(decrypt(cipher, &self.key, None, data)?)
             }
+            "rsa" => {
+                let rsa = Rsa::private_key_from_pem(&self.key)?;
+                if data.len() > rsa.size() as usize {
+                    return Err(RvError::ErrPkiInternal);
+                }
+
+                let mut buf: Vec<u8> = vec![0; rsa.size() as usize];
+
+                if aad.unwrap_or("0".as_bytes())[0] != b'1' {
+                    let rsa_pub_der = rsa.public_key_to_der()?;
+                    let rsa_pub = Rsa::public_key_from_der(&rsa_pub_der)?;
+                    let _ = rsa_pub.public_decrypt(data, &mut buf, Padding::PKCS1)?;
+                } else {
+                    let rsa_pri_der = rsa.private_key_to_der()?;
+                    let rsa_pri = Rsa::private_key_from_der(&rsa_pri_der)?;
+                    let _ = rsa_pri.private_decrypt(data, &mut buf, Padding::PKCS1)?;
+                }
+
+                let pos = buf.iter().position(|&x| x == 0).ok_or(RvError::ErrPkiInternal)?;
+                buf.truncate(pos);
+
+                return Ok(buf);
+            }
             _ => {
                 return Err(RvError::ErrPkiKeyOperationInvalid);
             }
@@ -261,10 +300,18 @@ mod test {
     fn test_rsa_key_operation() {
         let mut key_bundle = KeyBundle::new("rsa-2048", "rsa", 2048);
         test_key_sign_verify(&mut key_bundle);
+        test_key_encrypt_decrypt(&mut key_bundle, None);
+        test_key_encrypt_decrypt(&mut key_bundle, Some("1".as_bytes()));
+
         let mut key_bundle = KeyBundle::new("rsa-3072", "rsa", 3072);
         test_key_sign_verify(&mut key_bundle);
+        test_key_encrypt_decrypt(&mut key_bundle, None);
+        test_key_encrypt_decrypt(&mut key_bundle, Some("1".as_bytes()));
+
         let mut key_bundle = KeyBundle::new("rsa-4096", "rsa", 4096);
         test_key_sign_verify(&mut key_bundle);
+        test_key_encrypt_decrypt(&mut key_bundle, None);
+        test_key_encrypt_decrypt(&mut key_bundle, Some("1".as_bytes()));
     }
 
     #[test]
