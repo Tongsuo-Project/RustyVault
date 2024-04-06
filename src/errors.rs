@@ -89,6 +89,8 @@ pub enum RvError {
     ErrRequestClientTokenMissing,
     #[error("Request field is not found.")]
     ErrRequestFieldNotFound,
+    #[error("Request field is invalid.")]
+    ErrRequestFieldInvalid,
     #[error("Handler is default.")]
     ErrHandlerDefault,
     #[error("Module kv data field is missing.")]
@@ -143,6 +145,8 @@ pub enum RvError {
     ErrPkiInternal,
     #[error("Credentail is invalid.")]
     ErrCredentailInvalid,
+    #[error("Credentail is not config.")]
+    ErrCredentailNotConfig,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -208,11 +212,16 @@ pub enum RvError {
         #[from]
         source: bcrypt::BcryptError,
     },
+    #[error("Some ureq error happened, {:?}", .source)]
+    UreqError {
+        #[from]
+        source: ureq::Error,
+    },
     #[error("RwLock was poisoned (reading)")]
     ErrRwLockReadPoison,
     #[error("RwLock was poisoned (writing)")]
     ErrRwLockWritePoison,
-    
+
     /// Database Errors Begin
     ///
     #[error("Database type is not support now. Please try postgressql or mysql again.")]
@@ -234,6 +243,10 @@ pub enum RvError {
 
     #[error(transparent)]
     ErrOther(#[from] anyhow::Error),
+    #[error("Some error happend, response text: {0}")]
+    ErrResponse(String),
+    #[error("Some error happend, status: {0}, response text: {1}")]
+    ErrResponseStatus(u16, String),
     #[error("Unknown error.")]
     ErrUnknown,
 }
@@ -278,6 +291,7 @@ impl PartialEq for RvError {
             | (RvError::ErrRequestInvalid, RvError::ErrRequestInvalid)
             | (RvError::ErrRequestClientTokenMissing, RvError::ErrRequestClientTokenMissing)
             | (RvError::ErrRequestFieldNotFound, RvError::ErrRequestFieldNotFound)
+            | (RvError::ErrRequestFieldInvalid, RvError::ErrRequestFieldInvalid)
             | (RvError::ErrHandlerDefault, RvError::ErrHandlerDefault)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
             | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
@@ -311,6 +325,7 @@ impl PartialEq for RvError {
             | (RvError::ErrPkiRoleNotFound, RvError::ErrPkiRoleNotFound)
             | (RvError::ErrPkiInternal, RvError::ErrPkiInternal)
             | (RvError::ErrCredentailInvalid, RvError::ErrCredentailInvalid)
+            | (RvError::ErrCredentailNotConfig, RvError::ErrCredentailNotConfig)
             | (RvError::ErrUnknown, RvError::ErrUnknown) => true,
             _ => false,
         }

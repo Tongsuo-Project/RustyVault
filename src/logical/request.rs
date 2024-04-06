@@ -75,20 +75,25 @@ impl Request {
         if field.is_none() {
             return Err(RvError::ErrRequestNoDataField);
         }
+        let field = field.unwrap();
 
         if self.data.is_some() {
             if let Some(data) = self.data.as_ref().unwrap().get(key) {
+                if !field.check_data_type(&data) {
+                    return Err(RvError::ErrRequestFieldInvalid);
+                }
                 return Ok(data.clone());
             }
         }
 
         if self.body.is_some() {
             if let Some(data) = self.body.as_ref().unwrap().get(key) {
+                if !field.check_data_type(&data) {
+                    return Err(RvError::ErrRequestFieldInvalid);
+                }
                 return Ok(data.clone());
             }
         }
-
-        let field = field.unwrap();
 
         if field.required {
             return Err(RvError::ErrRequestFieldNotFound);

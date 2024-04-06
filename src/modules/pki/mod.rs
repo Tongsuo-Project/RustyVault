@@ -232,7 +232,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         req.body = data;
 
         let resp = core.handle_request(&mut req);
-        println!("path: {}, resp: {:?}", path, resp);
+        println!("path: {}, req.body: {:?}, resp: {:?}", path, req.body, resp);
         assert_eq!(resp.is_ok(), is_ok);
         resp
     }

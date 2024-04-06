@@ -18,7 +18,7 @@ use crate::{
     core::Core,
     errors::RvError,
     http::{request_auth, response_error, response_json_ok, response_ok, Connection},
-    logical::{Operation, Response},
+    logical::{Operation, Connection as ReqConnection, Response},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,8 +55,15 @@ async fn logical_request_handler(
     let conn = req.conn_data::<Connection>().unwrap();
     log::debug!("logical request, connection info: {:?}, method: {:?}, path: {:?}", conn, method, path);
 
+    let mut req_conn = ReqConnection::default();
+    req_conn.peer_addr = conn.peer.to_string();
+    if conn.tls.is_some() {
+        req_conn.peer_tls_cert = conn.tls.as_ref().unwrap().client_cert_chain.clone();
+    }
+
     let mut r = request_auth(&req);
     r.path = path.into_inner().clone();
+    r.connection = Some(req_conn);
 
     match method {
         Method::GET => {
