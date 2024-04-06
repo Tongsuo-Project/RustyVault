@@ -251,7 +251,7 @@ mod test {
 
     use super::*;
     use crate::{
-        logical::{Field, FieldType, PathOperation},
+        logical::{Field, field::FieldTrait, FieldType, PathOperation},
         new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal,
         storage::{barrier_aes_gcm::AESGCMBarrier, physical},
     };
@@ -455,5 +455,287 @@ mod test {
         assert!(logical_backend.secret("test_no").is_none());
         assert!(logical_backend.secret("kv").unwrap().renew(&logical_backend, &mut req).is_ok());
         assert!(logical_backend.secret("kv").unwrap().revoke(&logical_backend, &mut req).is_ok());
+    }
+
+    #[test]
+    fn test_logical_path_field() {
+        let dir = env::temp_dir().join("rusty_vault_test_logical_path_field");
+        assert!(fs::create_dir(&dir).is_ok());
+        defer! (
+            assert!(fs::remove_dir_all(&dir).is_ok());
+        );
+
+        let mut conf: HashMap<String, Value> = HashMap::new();
+        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
+
+        let backend = physical::new_backend("file", &conf).unwrap();
+
+        let barrier = AESGCMBarrier::new(Arc::clone(&backend));
+
+        let mut logical_backend = new_logical_backend!({
+            paths: [
+                {
+                    pattern: "/1/(?P<bar>[^/.]+?)",
+                    fields: {
+                        "mytype": {
+                            field_type: FieldType::Int,
+                            description: "haha"
+                        },
+                        "mypath": {
+                            field_type: FieldType::Str,
+                            description: "hehe"
+                        }
+                    },
+                    operations: [
+                        {op: Operation::Write, raw_handler: |_backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
+                                let _bar = req.get_data("bar")?;
+                                Ok(None)
+                            }
+                        }
+                    ]
+                },
+                {
+                    pattern: "/2/(?P<foo>.+?)/(?P<goo>.+)",
+                    fields: {
+                        "myflag": {
+                            field_type: FieldType::Bool,
+                            description: "hoho"
+                        },
+                        "foo": {
+                            field_type: FieldType::Str,
+                            description: "foo"
+                        },
+                        "goo": {
+                            field_type: FieldType::Int,
+                            description: "goo"
+                        },
+                        "array": {
+                            field_type: FieldType::Array,
+                            required: true,
+                            description: "array"
+                        },
+                        "array_default": {
+                            field_type: FieldType::Array,
+                            default: "[]",
+                            description: "array default"
+                        },
+                        "bool": {
+                            field_type: FieldType::Bool,
+                            description: "boolean"
+                        },
+                        "bool_default": {
+                            field_type: FieldType::Bool,
+                            default: true,
+                            description: "boolean default"
+                        },
+                        "comma": {
+                            field_type: FieldType::CommaStringSlice,
+                            description: "comma string slice"
+                        },
+                        "comma_default": {
+                            field_type: FieldType::CommaStringSlice,
+                            default: "",
+                            description: "comma string slice"
+                        },
+                        "map": {
+                            field_type: FieldType::Map,
+                            description: "map"
+                        },
+                        "map_default": {
+                            field_type: FieldType::Map,
+                            default: {},
+                            description: "map"
+                        },
+                        "duration": {
+                            field_type: FieldType::DurationSecond,
+                            description: "duration"
+                        },
+                        "duration_default": {
+                            field_type: FieldType::DurationSecond,
+                            default: 50,
+                            description: "duration"
+                        }
+                    },
+                    operations: [
+                        {op: Operation::Read, raw_handler: |_backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
+                                let _foo = req.get_data("foo")?;
+                                let _goo = req.get_data("goo")?;
+                                Ok(None)
+                             }
+                        },
+                        {op: Operation::Write, raw_handler: |_backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
+                                let array_val = req.get_data("array")?;
+                                let array_default_val = req.get_data("array_default")?;
+                                let bool_val = req.get_data("bool")?;
+                                let bool_default_val = req.get_data("bool_default")?;
+                                let comma_val = req.get_data("comma")?;
+                                let comma_default_val = req.get_data("comma_default")?;
+                                let map_val = req.get_data("map")?;
+                                let map_default_val = req.get_data("map_default")?;
+                                let duration_val = req.get_data("duration")?;
+                                let duration_default_val = req.get_data("duration_default")?;
+                                let data = json!({
+                                    "array": array_val,
+                                    "array_default": array_default_val,
+                                    "bool": bool_val,
+                                    "bool_default": bool_default_val,
+                                    "comma": comma_val.as_comma_string_slice().unwrap(),
+                                    "comma_default": comma_default_val.as_comma_string_slice().unwrap(),
+                                    "map": map_val,
+                                    "map_default": map_default_val,
+                                    "duration": duration_val.as_duration().unwrap().as_secs(),
+                                    "duration_default": duration_default_val.as_duration().unwrap().as_secs(),
+                                })
+                                .as_object()
+                                .unwrap()
+                                .clone();
+                                Ok(Some(Response::data_response(Some(data))))
+                             }
+                        }
+                    ]
+                }
+            ],
+            help: "help content",
+        });
+
+        assert!(logical_backend.init().is_ok());
+
+        let mut req = Request::new("/1/bar");
+        req.operation = Operation::Read;
+        req.storage = Some(Arc::new(barrier));
+        assert!(logical_backend.handle_request(&mut req).is_err());
+
+        req.path = "/2/foo/goo".to_string();
+        assert!(logical_backend.handle_request(&mut req).is_err());
+
+        req.path = "/2/foo/22".to_string();
+        assert!(logical_backend.handle_request(&mut req).is_ok());
+
+        let req_body = json!({
+            "array": [1, 2, 3],
+            "bool": true,
+            "comma": "aa,bb,cc",
+            "map": {"aa":"bb"},
+            "duration": 100,
+        });
+        req.operation = Operation::Write;
+        req.body = Some(req_body.as_object().unwrap().clone());
+        let resp = logical_backend.handle_request(&mut req);
+        println!("resp: {:?}", resp);
+        assert!(resp.is_ok());
+        let data = resp.unwrap().unwrap().data;
+        assert!(data.is_some());
+        let resp_body = data.unwrap();
+        assert_eq!(req_body["array"], resp_body["array"]);
+        assert_eq!(req_body["bool"], resp_body["bool"]);
+        let comma = json!(req_body["comma"]);
+        let comma_slice = comma.as_comma_string_slice();
+        assert!(comma_slice.is_some());
+        let req_comma = json!(comma_slice.unwrap());
+        assert_eq!(req_comma, resp_body["comma"]);
+        assert_eq!(req_body["map"], resp_body["map"]);
+        assert_eq!(req_body["duration"], resp_body["duration"]);
+        assert_eq!(resp_body["array_default"], json!([]));
+        assert_eq!(resp_body["bool_default"], json!(true));
+        assert_eq!(resp_body["comma_default"], json!([]));
+        assert_eq!(resp_body["map_default"], json!({}));
+        assert_eq!(resp_body["duration_default"], json!(50));
+
+        let req_body = json!({
+            "array": [1, 2, 3],
+            "bool": "true",
+            "comma": "aa,bb,cc",
+            "map": {"aa":"bb"},
+            "duration": 100,
+        });
+        req.body = Some(req_body.as_object().unwrap().clone());
+        assert!(logical_backend.handle_request(&mut req).is_err());
+
+        let req_body = json!({
+            "array": "[1, 2, 3]",
+            "bool": true,
+            "comma": "aa,bb,cc",
+            "map": {"aa":"bb"},
+            "duration": 100,
+        });
+        req.body = Some(req_body.as_object().unwrap().clone());
+        assert!(logical_backend.handle_request(&mut req).is_err());
+
+        let req_body = json!({
+            "array": [1, 2, 3],
+            "bool": true,
+            "comma": true,
+            "map": {"aa":"bb"},
+            "duration": 100,
+        });
+        req.body = Some(req_body.as_object().unwrap().clone());
+        assert!(logical_backend.handle_request(&mut req).is_err());
+
+        let req_body = json!({
+            "array": [1, 2, 3],
+            "bool": true,
+            "comma": "aa,bb,cc",
+            "map": 11,
+            "duration": 100,
+        });
+        req.body = Some(req_body.as_object().unwrap().clone());
+        assert!(logical_backend.handle_request(&mut req).is_err());
+
+        let req_body = json!({
+            "array": [1, 2, 3],
+            "bool": true,
+            "comma": "aa,bb,cc",
+            "map": {"aa":"bb"},
+            "duration": "1000",
+        });
+        req.body = Some(req_body.as_object().unwrap().clone());
+        let resp = logical_backend.handle_request(&mut req);
+        assert!(resp.is_ok());
+        let data = resp.unwrap().unwrap().data;
+        assert!(data.is_some());
+        let resp_body = data.unwrap();
+        assert_eq!(resp_body["duration"], json!(1000));
+
+        let req_body = json!({
+            "array": [1, 2, 3],
+            "bool": true,
+            "comma": [11, 22, 33],
+            "map": {"aa":"bb"},
+            "duration": "1000",
+        });
+        req.body = Some(req_body.as_object().unwrap().clone());
+        let resp = logical_backend.handle_request(&mut req);
+        assert!(resp.is_ok());
+        let data = resp.unwrap().unwrap().data;
+        assert!(data.is_some());
+        let resp_body = data.unwrap();
+        assert_eq!(resp_body["duration"], json!(1000));
+        assert_eq!(resp_body["comma"], json!(["11", "22", "33"]));
+
+        let req_body = json!({
+            "array": [1, 2, 3],
+            "array_default": [1, 2, 3, 4],
+            "bool": true,
+            "bool_default": false,
+            "comma": [11, 22, 33],
+            "comma_default": [11, 22, 33, 44],
+            "map": {"aa":"bb"},
+            "map_default": {"aa": "bb", "cc": "dd"},
+            "duration": "1000",
+            "duration_default": "2000",
+        });
+        req.body = Some(req_body.as_object().unwrap().clone());
+        let resp = logical_backend.handle_request(&mut req);
+        assert!(resp.is_ok());
+        let data = resp.unwrap().unwrap().data;
+        assert!(data.is_some());
+        let resp_body = data.unwrap();
+        assert_eq!(resp_body["duration"], json!(1000));
+        assert_eq!(resp_body["comma"], json!(["11", "22", "33"]));
+        assert_eq!(req_body["array_default"], resp_body["array_default"]);
+        assert_eq!(req_body["bool_default"], resp_body["bool_default"]);
+        assert_eq!(resp_body["comma_default"], json!(["11", "22", "33", "44"]));
+        assert_eq!(req_body["map_default"], resp_body["map_default"]);
+        assert_eq!(resp_body["duration_default"], json!(2000));
     }
 }

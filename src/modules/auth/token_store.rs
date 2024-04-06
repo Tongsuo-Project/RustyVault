@@ -514,6 +514,7 @@ impl TokenStoreInner {
             display_name: te.display_name.clone(),
             policies: te.policies.clone(),
             metadata: te.meta.clone(),
+            ..Default::default()
         };
         let resp = Response { auth: Some(auth), ..Response::default() };
 

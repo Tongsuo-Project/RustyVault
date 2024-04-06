@@ -163,8 +163,8 @@ used for sign,verify,encrypt,decrypt.
                     description: "Data that needs to be encrypted"
                 },
                 "aad": {
-                    required: false,
                     field_type: FieldType::Str,
+                    default: "",
                     description: "Additional Authenticated Data can be provided for aes-gcm/cbc encryption"
                 }
             },
@@ -194,8 +194,8 @@ used for sign,verify,encrypt,decrypt.
                     description: "Data that needs to be decrypted"
                 },
                 "aad": {
-                    required: false,
                     field_type: FieldType::Str,
+                    default: "",
                     description: "Additional Authenticated Data can be provided for aes-gcm/cbc decryption"
                 }
             },
@@ -269,9 +269,12 @@ impl PkiBackendInner {
         let key_name = key_name_value.as_str().unwrap();
         let key_type_value = req.get_data("key_type")?;
         let key_type = key_type_value.as_str().unwrap();
-        let pem_bundle_value = req.get_data("pem_bundle");
-        let hex_bundle_value = req.get_data("hex_bundle");
-        if pem_bundle_value.is_err() && hex_bundle_value.is_err() {
+        let pem_bundle_value = req.get_data("pem_bundle")?;
+        let pem_bundle = pem_bundle_value.as_str().unwrap();
+        let hex_bundle_value = req.get_data("hex_bundle")?;
+        let hex_bundle = hex_bundle_value.as_str().unwrap();
+
+        if pem_bundle.len() == 0 && hex_bundle.len() == 0 {
             return Err(RvError::ErrRequestFieldNotFound);
         }
 
@@ -282,56 +285,46 @@ impl PkiBackendInner {
 
         let mut key_bundle = KeyBundle::new(key_name, key_type.to_lowercase().as_str(), 0);
 
-        match pem_bundle_value {
-            Ok(pem_bundle_val) => {
-                if let Some(pem_bundle) = pem_bundle_val.as_str() {
-                    key_bundle.key = pem_bundle.as_bytes().to_vec();
-                    match key_type {
-                        "rsa" => {
-                            let rsa = Rsa::private_key_from_pem(&key_bundle.key)?;
-                            key_bundle.bits = rsa.size() * 8;
-                        }
-                        "ec" => {
-                            let ec_key = EcKey::private_key_from_pem(&key_bundle.key)?;
-                            key_bundle.bits = ec_key.group().degree();
-                        }
-                        _ => {
-                            return Err(RvError::ErrPkiKeyTypeInvalid);
-                        }
-                    }
+        if pem_bundle.len() != 0 {
+            key_bundle.key = pem_bundle.as_bytes().to_vec();
+            match key_type {
+                "rsa" => {
+                    let rsa = Rsa::private_key_from_pem(&key_bundle.key)?;
+                    key_bundle.bits = rsa.size() * 8;
+                },
+                "ec" => {
+                    let ec_key = EcKey::private_key_from_pem(&key_bundle.key)?;
+                    key_bundle.bits = ec_key.group().degree();
+                },
+                _ => {
+                    return Err(RvError::ErrPkiKeyTypeInvalid);
                 }
-            }
-            _ => {}
+            };
         }
 
-        match hex_bundle_value {
-            Ok(hex_bundle_val) => {
-                if let Some(hex_bundle) = hex_bundle_val.as_str() {
-                    key_bundle.key = hex::decode(&hex_bundle)?;
-                    key_bundle.bits = (key_bundle.key.len() as u32) * 8;
-                    match key_bundle.bits {
-                        128 | 192 | 256 => {}
-                        _ => {
-                            return Err(RvError::ErrPkiKeyBitsInvalid);
-                        }
-                    }
-                    let iv_value = req.get_data("iv")?;
-                    match key_type {
-                        "aes-gcm" | "aes-cbc" => {
-                            if let Some(iv) = iv_value.as_str() {
-                                key_bundle.iv = hex::decode(&iv)?;
-                            } else {
-                                return Err(RvError::ErrRequestFieldNotFound);
-                            }
-                        }
-                        "aes-ecb" => {}
-                        _ => {
-                            return Err(RvError::ErrPkiKeyTypeInvalid);
-                        }
-                    }
+        if hex_bundle.len() != 0 {
+            key_bundle.key = hex::decode(&hex_bundle)?;
+            key_bundle.bits = (key_bundle.key.len() as u32) * 8;
+            match key_bundle.bits {
+                128 | 192 | 256 => {},
+                _ => {
+                    return Err(RvError::ErrPkiKeyBitsInvalid);
                 }
-            }
-            _ => {}
+            };
+            let iv_value = req.get_data("iv")?;
+            match key_type {
+                "aes-gcm" | "aes-cbc" => {
+                    if let Some(iv) = iv_value.as_str() {
+                        key_bundle.iv = hex::decode(&iv)?;
+                    } else {
+                        return Err(RvError::ErrRequestFieldNotFound);
+                    }
+                },
+                "aes-ecb" => {},
+                _ => {
+                    return Err(RvError::ErrPkiKeyTypeInvalid);
+                }
+            };
         }
 
         self.write_key(req, &key_bundle)?;

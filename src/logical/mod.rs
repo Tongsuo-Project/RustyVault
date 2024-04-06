@@ -24,6 +24,7 @@ pub use path::{Path, PathOperation};
 pub use request::Request;
 pub use response::Response;
 pub use secret::{Secret, SecretData};
+pub use connection::Connection;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, EnumString, Display, Enum, Serialize, Deserialize)]
 pub enum Operation {

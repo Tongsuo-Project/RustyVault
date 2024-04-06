@@ -94,3 +94,14 @@ pub fn asn1time_to_timestamp(time_str: &str) -> Result<i64, RvError> {
 
     Ok(timestamp)
 }
+
+pub fn hex_encode_with_colon(bytes: &[u8]) -> String {
+    let hex_str = hex::encode(bytes);
+    let split_hex: Vec<String> = hex_str
+        .as_bytes()
+        .chunks(2)
+        .map(|chunk| String::from_utf8(chunk.to_vec()).unwrap())
+        .collect();
+
+    split_hex.join(":")
+}
