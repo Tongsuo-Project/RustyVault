@@ -1,3 +1,4 @@
+#[cfg(feature = "storage_mysql")]
 extern crate diesel;
 
 pub mod cli;
@@ -14,6 +15,7 @@ pub mod router;
 pub mod shamir;
 pub mod storage;
 pub mod utils;
+#[cfg(feature = "storage_mysql")]
 pub mod schema;
 
 /// Exit ok
