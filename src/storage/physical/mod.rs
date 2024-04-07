@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use crate::errors::RvError;
 
+#[cfg(feature = "storage_mysql")]
 use super::mysql::mysql_backend::MysqlBackend;
 
 
@@ -31,6 +32,7 @@ pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Bac
             let backend = file::FileBackend::new(conf)?;
             Ok(Arc::new(backend))
         },
+        #[cfg(feature = "storage_mysql")]
         "mysql" => {
             let backend = MysqlBackend::new(conf)?;
             Ok(Arc::new(backend))
