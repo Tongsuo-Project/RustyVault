@@ -9,7 +9,7 @@ use crate::{
     logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
-    utils::key::KeyBundle,
+    utils::key::{KeyBundle, EncryptExtraData},
 };
 
 const PKI_CONFIG_KEY_PREFIX: &str = "config/key/";
@@ -398,7 +398,7 @@ impl PkiBackendInner {
         let key_bundle = self.fetch_key(req, key_name)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
-        let result = key_bundle.encrypt(&decoded_data, Some(aad.as_bytes()))?;
+        let result = key_bundle.encrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
 
         let resp_data = json!({
             "result": hex::encode(&result),
@@ -421,7 +421,7 @@ impl PkiBackendInner {
         let key_bundle = self.fetch_key(req, key_name)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
-        let result = key_bundle.decrypt(&decoded_data, Some(aad.as_bytes()))?;
+        let result = key_bundle.decrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
 
         let resp_data = json!({
             "result": hex::encode(&result),
