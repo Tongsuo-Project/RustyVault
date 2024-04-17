@@ -9,7 +9,7 @@ pub fn ca_common_fields() -> HashMap<String, Arc<Field>> {
     let fields = new_fields!({
         "alt_names": {
             field_type: FieldType::Str,
-            required: false,
+            default: "",
             description: r#"The requested Subject Alternative Names, if any,
     in a comma-delimited list. May contain both DNS names and email addresses."#
         },
@@ -45,43 +45,43 @@ Set the not after field of the certificate with specified date value.
 The value format should be given in UTC format YYYY-MM-ddTHH:MM:SSZ."#
         },
         "ou": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"If set, OU (OrganizationalUnit) will be set to this value."#
         },
         "organization": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"If set, O (Organization) will be set to this value."#
         },
         "country": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"If set, Country will be set to this value."#
         },
         "locality": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"If set, Locality will be set to this value in certificates issued by this role."#
         },
         "province": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"If set, Province will be set to this value."#
         },
         "street_address": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"If set, Street Address will be set to this value."#
         },
         "postal_code": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"If set, Postal Code will be set to this value."#
         },
         "serial_number": {
-            required: false,
             field_type: FieldType::Str,
+            default: "",
             description: r#"The Subject's requested serial number, if any.
 See RFC 4519 Section 2.31 'serialNumber' for a description of this field.
 If you want more than one, specify alternative names in the alt_names

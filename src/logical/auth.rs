@@ -13,6 +13,7 @@ pub struct Auth {
     pub client_token: String,
     pub display_name: String,
     pub policies: Vec<String>,
+    pub internal_data: HashMap<String, String>,
     pub metadata: HashMap<String, String>,
 }
 
@@ -23,6 +24,7 @@ impl Default for Auth {
             client_token: String::new(),
             display_name: String::new(),
             policies: Vec::new(),
+            internal_data: HashMap::new(),
             metadata: HashMap::new(),
         }
     }

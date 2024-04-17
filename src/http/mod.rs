@@ -90,8 +90,17 @@ pub fn init_service(cfg: &mut web::ServiceConfig) {
 impl ResponseError for RvError {
     // builds the actual response to send back when an error occurs
     fn error_response(&self) -> HttpResponse {
-        let err_json = json!({ "error": self.to_string() });
-        HttpResponse::InternalServerError().json(err_json)
+        let mut status = StatusCode::INTERNAL_SERVER_ERROR;
+        let text: String;
+        if let RvError::ErrResponse(resp_text) = self {
+            text = resp_text.clone();
+        } else if let RvError::ErrResponseStatus(status_code, resp_text) = self {
+            status = StatusCode::from_u16(status_code.clone()).unwrap();
+            text = resp_text.clone();
+        } else {
+            text = self.to_string();
+        }
+        HttpResponse::build(status).json(json!({ "error": text }))
     }
 }
 

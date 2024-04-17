@@ -67,11 +67,8 @@ macro_rules! new_fields_internal {
         $object.required = $required;
     };
     (@object $object:ident default: $default:expr) => {
-        if $object.field_type == FieldType::Str {
-            $object.default = Arc::new($default.to_string());
-        } else {
-            $object.default = Arc::new($default);
-        }
+        let val = serde_json::json!($default);
+        $object.default = val;
         $object.required = false;
     };
     (@object $object:ident description: $description:expr) => {
