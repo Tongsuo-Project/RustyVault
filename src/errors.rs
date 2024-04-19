@@ -222,6 +222,17 @@ pub enum RvError {
     #[error("RwLock was poisoned (writing)")]
     ErrRwLockWritePoison,
 
+    #[error("Some net addr parse error happened, {:?}", .source)]
+    AddrParseError {
+        #[from]
+        source: std::net::AddrParseError,
+    },
+    #[error("Some ipnetwork error happened, {:?}", .source)]
+    IpNetworkError {
+        #[from]
+        source: ipnetwork::IpNetworkError,
+    },
+
     /// Database Errors Begin
     ///
     #[error("Database type is not support now. Please try postgressql or mysql again.")]
