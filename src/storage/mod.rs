@@ -6,6 +6,7 @@ pub mod barrier;
 pub mod barrier_aes_gcm;
 pub mod barrier_view;
 pub mod physical;
+#[cfg(feature = "storage_mysql")]
 pub mod mysql;
 
 pub trait Storage {
