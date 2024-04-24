@@ -50,6 +50,8 @@ jobs:
       run: cargo build --features storage_mysql --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Build crate doc
+      run: cargo doc --no-deps
 
 
   windows-default-test:
@@ -112,3 +114,5 @@ jobs:
       run: cargo build --features storage_mysql --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Build crate doc
+      run: cargo doc --no-deps
