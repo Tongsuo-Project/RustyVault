@@ -141,6 +141,8 @@ pub enum RvError {
     ErrPkiCertNotFound,
     #[error("PKI role is not found.")]
     ErrPkiRoleNotFound,
+    #[error("PKI data is invalid.")]
+    ErrPkiDataInvalid,
     #[error("PKI internal error.")]
     ErrPkiInternal,
     #[error("Credentail is invalid.")]
@@ -323,6 +325,7 @@ impl PartialEq for RvError {
             | (RvError::ErrPkiKeyOperationInvalid, RvError::ErrPkiKeyOperationInvalid)
             | (RvError::ErrPkiCertNotFound, RvError::ErrPkiCertNotFound)
             | (RvError::ErrPkiRoleNotFound, RvError::ErrPkiRoleNotFound)
+            | (RvError::ErrPkiDataInvalid, RvError::ErrPkiDataInvalid)
             | (RvError::ErrPkiInternal, RvError::ErrPkiInternal)
             | (RvError::ErrCredentailInvalid, RvError::ErrCredentailInvalid)
             | (RvError::ErrCredentailNotConfig, RvError::ErrCredentailNotConfig)
