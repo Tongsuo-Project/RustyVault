@@ -1,3 +1,8 @@
+//! The `rusty_vault::errors` module defines an enumeration of various error code, and implements
+//! neccessary traits against it.
+//!
+//! The error code defined in this module are used widely in RustyVault.
+
 use std::{
     io,
     sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard},

@@ -1,3 +1,9 @@
+//! Simply speaking, the `rusty_vault::mount` module manages the relationship between a 'path' and
+//! the real RustyVault module which is responsible for that feature. In RustyVault, everything is
+//! exposed to outside by RESTful API, which is defined by 'path'.
+//!
+//! The binding logic here is managed by `MountEntry` struct.
+
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},

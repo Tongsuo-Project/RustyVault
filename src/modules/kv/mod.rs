@@ -1,3 +1,6 @@
+//! The secure key-value object storage module. The user can use this module to store arbitary data
+//! into RustyVault. The data stored in RustyVault is encrypted.
+
 use std::{
     collections::HashMap,
     ops::Deref,

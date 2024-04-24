@@ -1,3 +1,12 @@
+//! The `rusty_vault::core` module implements several key functions that are
+//! in charge of the whole process of RustyVault. For instance, to seal or unseal the RustyVault we
+//! have the `seal()` and `unseal()` functions in this module. Also, the `handle_request()`
+//! function in this module is to route an API call to its correct backend and get the result back
+//! to the caller.
+//!
+//! This module is very low-level and usually it should not disturb end users and module developers
+//! of RustyVault.
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, RwLock},
