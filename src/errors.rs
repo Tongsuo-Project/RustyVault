@@ -228,6 +228,7 @@ pub enum RvError {
     ///
     #[error("Database type is not support now. Please try postgressql or mysql again.")]
     ErrDatabaseTypeInvalid,
+    #[cfg(feature = "storage_mysql")]
     #[error("Database connection pool ocurrs errors when creating， {:?}", .source)]
     ErrConnectionPoolCreate {
         #[from]
@@ -235,6 +236,7 @@ pub enum RvError {
     },
     #[error("Database connection info is invalid.")]
     ErrDatabaseConnectionInfoInvalid,
+    #[cfg(feature = "storage_mysql")]
     #[error("Failed to execute entry with database, {:?}", .source)]
     ErrDatabaseExecuteEntry {
         #[from]
