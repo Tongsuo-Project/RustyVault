@@ -1,10 +1,13 @@
+//! The `rusty_vault::cli` module is used to serve the RustyVault application.
+//! This module basically accepts options from command-line and starts a server up.
+
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use sysexits::ExitCode;
 
 pub mod command;
 pub mod config;
 
-/// Defines command line options
+/// Defines command line options.
 pub fn define_command_line_options(mut app: Command) -> Command {
     app = app.subcommands([
         Command::new("server").about("Start a rusty_vault server").arg(
@@ -23,6 +26,7 @@ pub fn define_command_line_options(mut app: Command) -> Command {
     app
 }
 
+/// Do real jobs.
 #[inline]
 pub fn run(matches: &ArgMatches) -> ExitCode {
     match matches.subcommand() {

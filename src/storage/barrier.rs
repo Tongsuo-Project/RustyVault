@@ -1,3 +1,10 @@
+//! Defines the `SecurityBarrier` trait for different barrier types.
+//!
+//! Specific barriers in RustyVault need to implement this trait and the `Storage` trait.
+//!
+//! It usually means a different symmetric encryption algorithm is going to be supported,
+//! if a new barrier is under development.
+
 use super::Storage;
 use crate::errors::RvError;
 use zeroize::Zeroizing;

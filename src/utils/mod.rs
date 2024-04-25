@@ -1,3 +1,6 @@
+//! Miscellaneous public handy functions are collected here, such as cryptography tools,
+//! uuid generator, etc.
+
 use std::time::{Duration, SystemTime};
 
 use chrono::prelude::*;

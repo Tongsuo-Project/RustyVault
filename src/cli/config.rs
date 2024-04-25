@@ -1,3 +1,7 @@
+//! This module defines and handles the config file options for RustyVault application.
+//! For instance, the IP address and port for the RustyVault to listen on is handled in this
+//! module.
+
 use std::{collections::HashMap, fmt, fs, path::Path};
 
 use openssl::ssl::SslVersion;
@@ -9,6 +13,7 @@ use serde_json::Value;
 
 use crate::errors::RvError;
 
+/// A struct that contains several configurable options of RustyVault server
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(deserialize_with = "validate_listener")]
@@ -33,6 +38,7 @@ pub struct Config {
     pub daemon_group: String,
 }
 
+/// A struct that contains several configurable options for networking stuffs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Listener {
     #[serde(default)]
@@ -66,6 +72,7 @@ pub struct Listener {
     pub tls_cipher_suites: String,
 }
 
+/// A struct that contains several configurable options for storage stuffs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Storage {
     #[serde(default)]

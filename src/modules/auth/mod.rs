@@ -1,3 +1,7 @@
+//! This module provides the 'auth/' path and relevant authentication features.
+//!
+//! After a successful authentication, a client will be granted a token for further operations.
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, RwLock},

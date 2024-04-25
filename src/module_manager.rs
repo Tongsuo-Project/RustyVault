@@ -1,3 +1,13 @@
+//! RustyVault is consisted of many modules. Modules are the real components that implement the
+//! features that users need. All modules in RustyVault are managed by `rusty_vault::module_manager`.
+//!
+//! In details, the module manager is able to organize, add, remove, setup, initialize, cleanup
+//! other RustyVault modules.
+//!
+//! Do not mix up the RustyVault module with the concept of a Rust module. A RustyVault module is a
+//! piece of code that implements some functionality. Although usually that piece of code is
+//! organized in the form of a module of crate `rusty_vault` in Rust language concept.
+
 use std::sync::{Arc, RwLock};
 
 use crate::{
