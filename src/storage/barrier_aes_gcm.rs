@@ -1,3 +1,6 @@
+//! This is the implementation of aes-gcm barrier, which uses aes-gcm block cipher to encrypt or
+//! decrypt data before writing or reading data to or from specific storage backend.
+
 use std::sync::{Arc, RwLock};
 use std::ops::{Deref, DerefMut};
 

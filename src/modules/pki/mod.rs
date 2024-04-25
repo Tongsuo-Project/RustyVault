@@ -1,3 +1,6 @@
+//! The `rusty_vault::pki` module implements public key cryptography features, including
+//! manipulating certificates as a CA or encrypting a piece of data by using a public key.
+
 use std::{
     ops::Deref,
     sync::{atomic::AtomicU64, Arc, RwLock},

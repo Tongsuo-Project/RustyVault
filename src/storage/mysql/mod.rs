@@ -1,3 +1,5 @@
+//! MySQL storage backend implementations.
+
 use std::collections::HashMap;
 
 use diesel::mysql::MysqlConnection;

@@ -1,3 +1,6 @@
+//! The system module is mainly used to configure RustyVault itself. For instance, the 'mount/'
+//! path is provided here to support mounting new modules in RustyVault via RESTful HTTP request.
+
 use std::{
     collections::HashMap,
     ops::Deref,

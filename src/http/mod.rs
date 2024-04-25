@@ -1,3 +1,7 @@
+//! This module handles almost everything related to RustyVault's HTTP(S) server, including basic
+//! connection, HTTP request reading, HTTP response writing, data encoding/decoding, TLS stuffs, etc.
+//! This module utilize `actix_web` crate as the underlying provider.
+
 use std::{
     any::Any,
     net::SocketAddr,

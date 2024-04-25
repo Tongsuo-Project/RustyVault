@@ -1,3 +1,5 @@
+//! The `rusty_vault::storage::physical` module supports to physical file storage.
+
 use std::{collections::HashMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
@@ -12,7 +14,9 @@ use super::mysql::mysql_backend::MysqlBackend;
 pub mod file;
 pub mod mock;
 
+// TODO: this trait definition should be moved to an upper layer, e.g., in the storage/mod.rs
 pub trait Backend: Send + Sync {
+    //! This trait decsribes the general methods that a storage backend needs to implement.
     fn list(&self, prefix: &str) -> Result<Vec<String>, RvError>;
     fn get(&self, key: &str) -> Result<Option<BackendEntry>, RvError>;
     fn put(&self, entry: &BackendEntry) -> Result<(), RvError>;
@@ -26,6 +30,7 @@ pub struct BackendEntry {
     pub value: Vec<u8>,
 }
 
+// TODO: this is a common function needed by all storage backend. Should be moved out of this file.
 pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Backend>, RvError> {
     match t {
         "file" => {
