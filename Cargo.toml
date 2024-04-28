@@ -2,6 +2,16 @@
 name = "rusty_vault"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+description = """
+RustyVault is a powerful identity-based secrets management software, providing features such as
+cryptographic key management, encryption as a service, public key cryptography, certificates management, identity credentials
+management and so forth.
+
+RustyVault's RESTful API is designed to be fully compatible with Hashicorp Vault.
+"""
+homepage = "https://github.com/Tongsuo-Project/RustyVault"
+documentation = "https://docs.rs/rusty_vault/latest/rusty_vault/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
