@@ -264,11 +264,20 @@ pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
             .service(
                 web::resource("/init")
                     .route(web::get().to(sys_init_get_request_handler))
+                    .route(web::post().to(sys_init_put_request_handler))
                     .route(web::put().to(sys_init_put_request_handler)),
             )
             .service(web::resource("/seal-status").route(web::get().to(sys_seal_status_request_handler)))
-            .service(web::resource("/seal").route(web::put().to(sys_seal_request_handler)))
-            .service(web::resource("/unseal").route(web::put().to(sys_unseal_request_handler)))
+            .service(
+                web::resource("/seal")
+                    .route(web::post().to(sys_seal_request_handler))
+                    .route(web::put().to(sys_seal_request_handler)),
+            )
+            .service(
+                web::resource("/unseal")
+                    .route(web::post().to(sys_unseal_request_handler))
+                    .route(web::put().to(sys_unseal_request_handler)),
+            )
             .service(web::resource("/mounts").route(web::get().to(sys_list_mounts_request_handler)))
             .service(
                 web::resource("/mounts/{path:.*}")
