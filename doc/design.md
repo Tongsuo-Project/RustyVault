@@ -4,7 +4,7 @@ As per: [RustyVault Requirements Document](./req.md). In this document we descri
 
 # Architecture Diagram
 
-<img src="https://github.com/Tongsuo-Project/RustyVault/blob/main/RustyVault.png" width=50% height=50% />
+<img src="https://github.com/Tongsuo-Project/RustyVault/blob/main/doc/RustyVault-arch.png" width=50% height=50% />
 
 Detailed description:
 
