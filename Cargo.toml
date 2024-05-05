@@ -10,7 +10,7 @@ management and so forth.
 
 RustyVault's RESTful API is designed to be fully compatible with Hashicorp Vault.
 """
-homepage = "https://github.com/Tongsuo-Project/RustyVault"
+repository = "https://github.com/Tongsuo-Project/RustyVault"
 documentation = "https://docs.rs/rusty_vault/latest/rusty_vault/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
