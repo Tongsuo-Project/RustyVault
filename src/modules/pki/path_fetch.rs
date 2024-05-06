@@ -122,7 +122,7 @@ impl PkiBackendInner {
 
     pub fn read_path_fetch_cert(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let serial_number_value = req.get_data("serial")?;
-        let serial_number = serial_number_value.as_str().unwrap();
+        let serial_number = serial_number_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let serial_number_hex = serial_number.replace(":", "-").to_lowercase();
         let cert = self.fetch_cert(req, &serial_number_hex)?;
         let ca_bundle = self.fetch_ca_bundle(req)?;
