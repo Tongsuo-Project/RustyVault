@@ -4,7 +4,7 @@
 
 # 结构图
 
-<img src="https://github.com/Tongsuo-Project/RustyVault/blob/main/RustyVault.png" width=50% height=50% />
+<img src="https://github.com/Tongsuo-Project/RustyVault/blob/main/doc/RustyVault-arch.png" width=50% height=50% />
 
 说明如下：
 
