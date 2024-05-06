@@ -4,7 +4,7 @@ use super::{Backend, BackendEntry};
 use crate::errors::RvError;
 
 #[derive(Default)]
-pub struct MockBackend(u32);
+pub struct MockBackend(());
 
 impl Backend for MockBackend {
     fn list(&self, _prefix: &str) -> Result<Vec<String>, RvError> {
@@ -26,6 +26,6 @@ impl Backend for MockBackend {
 
 impl MockBackend {
     pub fn new() -> Self {
-        MockBackend(0)
+        MockBackend(())
     }
 }
