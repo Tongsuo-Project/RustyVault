@@ -1,5 +1,7 @@
 # RustyVault
 
+[![Crates.io Version](https://img.shields.io/crates/v/rusty_vault)](https://crates.io/crates/rusty_vault)
+
 ## Overview
 
 RustyVault is a modern secret management system, written in Rust. RustyVault provides various features which support many scenarios including secure storage, cloud identity management, secret management, Kubernetes integration, PKI infrastructure, cryptographic computing, traditional key management, etc.
