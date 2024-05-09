@@ -58,6 +58,7 @@ ureq = "2.9"
 glob = "0.3"
 serde_asn1_der = "0.8"
 base64 = "0.22"
+ipnetwork = "0.20"
 
 [features]
 storage_mysql = ["diesel", "r2d2", "r2d2-diesel"]
