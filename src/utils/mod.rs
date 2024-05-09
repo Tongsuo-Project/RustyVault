@@ -12,9 +12,9 @@ pub mod cert;
 pub mod key;
 pub mod salt;
 pub mod cidr;
-pub mod sockaddr;
-pub mod ipaddr;
-pub mod unixsock;
+pub mod sock_addr;
+pub mod ip_sock_addr;
+pub mod unix_sock_addr;
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];

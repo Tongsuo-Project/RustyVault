@@ -1,3 +1,6 @@
+//! This module is a Rust replica of
+//! https://github.com/hashicorp/vault/blob/main/sdk/helper/cidrutil/cidr.go
+
 use std::{
     str::FromStr,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
@@ -7,7 +10,7 @@ use std::{
 use ipnetwork::IpNetwork;
 
 use super::{
-    sockaddr::{new_sock_addr, SockAddrType, SockAddr},
+    sock_addr::{new_sock_addr, SockAddrType, SockAddr},
 };
 
 use crate::errors::RvError;
