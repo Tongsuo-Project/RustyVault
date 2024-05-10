@@ -46,9 +46,7 @@ impl PkiBackend {
 impl PkiBackendInner {
     pub fn generate_root(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut export_private_key = false;
-        let exported_vale = req.get_data("exported")?;
-        let exported = exported_vale.as_str().unwrap();
-        if exported == "exported" {
+        if req.get_data("exported")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)? == "exported" {
             export_private_key = true;
         }
 

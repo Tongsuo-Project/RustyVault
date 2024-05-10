@@ -46,7 +46,7 @@ For security reasons, you can only view the certificate when reading this endpoi
 impl PkiBackendInner {
     pub fn write_path_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let pem_bundle_value = req.get_data("pem_bundle")?;
-        let pem_bundle = pem_bundle_value.as_str().unwrap();
+        let pem_bundle = pem_bundle_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let items = pem::parse_many(pem_bundle)?;
         let mut key_found = false;

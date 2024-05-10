@@ -318,30 +318,19 @@ impl PkiBackendInner {
     }
 
     pub fn read_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let name_vale = req.get_data("name")?;
-        let name = name_vale.as_str().unwrap();
-        let role_entry = self.get_role(req, name)?;
+        let role_entry = self.get_role(req, req.get_data("name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
         let data = serde_json::to_value(&role_entry)?;
         Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))))
     }
 
     pub fn create_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let name_vale = req.get_data("name")?;
-        let name = name_vale.as_str().unwrap();
-        let ttl_vale = req.get_data("ttl")?;
-        let ttl = {
-            let ttl_str = ttl_vale.as_str().unwrap();
-            parse_duration(ttl_str)?
-        };
-        let max_ttl_vale = req.get_data("max_ttl")?;
-        let max_ttl = {
-            let max_ttl_str = max_ttl_vale.as_str().unwrap();
-            parse_duration(max_ttl_str)?
-        };
-        let key_type_vale = req.get_data("key_type")?;
-        let key_type = key_type_vale.as_str().unwrap();
-        let key_bits_vale = req.get_data("key_bits")?;
-        let mut key_bits = key_bits_vale.as_u64().unwrap();
+        let name_value = req.get_data("name")?;
+        let name = name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let ttl = parse_duration(req.get_data("ttl")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+        let max_ttl = parse_duration(req.get_data("max_ttl")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+        let key_type_value = req.get_data("key_type")?;
+        let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let mut key_bits = req.get_data("key_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
         match key_type {
             "rsa" => {
                 if key_bits == 0 {
@@ -366,48 +355,28 @@ impl PkiBackendInner {
             }
         }
 
-        let signature_bits_vale = req.get_data("signature_bits")?;
-        let signature_bits = signature_bits_vale.as_u64().unwrap();
-        let allow_localhost_vale = req.get_data("allow_localhost")?;
-        let allow_localhost = allow_localhost_vale.as_bool().unwrap();
-        let allow_bare_domain_vale = req.get_data("allow_bare_domains")?;
-        let allow_bare_domains = allow_bare_domain_vale.as_bool().unwrap();
-        let allow_subdomains_vale = req.get_data("allow_subdomains")?;
-        let allow_subdomains = allow_subdomains_vale.as_bool().unwrap();
-        let allow_any_name_vale = req.get_data("allow_any_name")?;
-        let allow_any_name = allow_any_name_vale.as_bool().unwrap();
-        let allow_ip_sans_vale = req.get_data("allow_ip_sans")?;
-        let allow_ip_sans = allow_ip_sans_vale.as_bool().unwrap();
-        let server_flag_vale = req.get_data("server_flag")?;
-        let server_flag = server_flag_vale.as_bool().unwrap();
-        let client_flag_vale = req.get_data("client_flag")?;
-        let client_flag = client_flag_vale.as_bool().unwrap();
-        let use_csr_sans_vale = req.get_data("use_csr_sans")?;
-        let use_csr_sans = use_csr_sans_vale.as_bool().unwrap();
-        let use_csr_common_name_vale = req.get_data("use_csr_common_name")?;
-        let use_csr_common_name = use_csr_common_name_vale.as_bool().unwrap();
-        let country_vale = req.get_data("country")?;
-        let country = country_vale.as_str().unwrap().to_string();
-        let province_vale = req.get_data("province")?;
-        let province = province_vale.as_str().unwrap().to_string();
-        let locality_vale = req.get_data("locality")?;
-        let locality = locality_vale.as_str().unwrap().to_string();
-        let organization_vale = req.get_data("organization")?;
-        let organization = organization_vale.as_str().unwrap().to_string();
-        let ou_vale = req.get_data("ou")?;
-        let ou = ou_vale.as_str().unwrap().to_string();
-        let street_address_vale = req.get_data("street_address")?;
-        let street_address = street_address_vale.as_str().unwrap().to_string();
-        let postal_code_vale = req.get_data("postal_code")?;
-        let postal_code = postal_code_vale.as_str().unwrap().to_string();
-        let no_store_vale = req.get_data("no_store")?;
-        let no_store = no_store_vale.as_bool().unwrap();
-        let generate_lease_vale = req.get_data("generate_lease")?;
-        let generate_lease = generate_lease_vale.as_bool().unwrap();
-        let not_after_vale = req.get_data("not_after")?;
-        let not_after = not_after_vale.as_str().unwrap().to_string();
-        let not_before_duration_vale = req.get_data("not_before_duration")?;
-        let not_before_duration = Duration::from_secs(not_before_duration_vale.as_u64().unwrap());
+        let signature_bits = req.get_data("signature_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_localhost = req.get_data("allow_localhost")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_bare_domains = req.get_data("allow_bare_domains")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_subdomains = req.get_data("allow_subdomains")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_any_name = req.get_data("allow_any_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_ip_sans = req.get_data("allow_ip_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let server_flag = req.get_data("server_flag")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let client_flag = req.get_data("client_flag")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let use_csr_sans = req.get_data("use_csr_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let use_csr_common_name = req.get_data("use_csr_common_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let country = req.get_data("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let province = req.get_data("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let locality = req.get_data("locality")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let organization = req.get_data("organization")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let ou = req.get_data("ou")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let street_address = req.get_data("street_address")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let postal_code = req.get_data("postal_code")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let no_store = req.get_data("no_store")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let generate_lease = req.get_data("generate_lease")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let not_after = req.get_data("not_after")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let not_before_duration_u64 = req.get_data("not_before_duration")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let not_before_duration = Duration::from_secs(not_before_duration_u64);
 
         let role_entry = RoleEntry {
             ttl,
@@ -446,8 +415,8 @@ impl PkiBackendInner {
     }
 
     pub fn delete_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let name_vale = req.get_data("name")?;
-        let name = name_vale.as_str().unwrap();
+        let name_value = req.get_data("name")?;
+        let name = name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if name == "" {
             return Err(RvError::ErrRequestNoDataField);
         }
