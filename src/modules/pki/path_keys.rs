@@ -212,11 +212,10 @@ used for sign,verify,encrypt,decrypt.
 impl PkiBackendInner {
     pub fn generate_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let key_name_value = req.get_data("key_name")?;
-        let key_name = key_name_value.as_str().unwrap();
+        let key_name = key_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let key_type_value = req.get_data("key_type")?;
-        let key_type = key_type_value.as_str().unwrap();
-        let key_bits_value = req.get_data("key_bits")?;
-        let key_bits = key_bits_value.as_u64().unwrap();
+        let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let key_bits = req.get_data("key_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let mut export_private_key = false;
         if req.path.ends_with("/exported") {
@@ -245,7 +244,7 @@ impl PkiBackendInner {
 
         if export_private_key {
             match key_type {
-                "rsa" | "ec" => {
+                "rsa" | "ec" | "sm2" => {
                     resp_data.insert(
                         "private_key".to_string(),
                         Value::String(String::from_utf8_lossy(&key_bundle.key).to_string()),
@@ -266,13 +265,13 @@ impl PkiBackendInner {
 
     pub fn import_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let key_name_value = req.get_data("key_name")?;
-        let key_name = key_name_value.as_str().unwrap();
+        let key_name = key_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let key_type_value = req.get_data("key_type")?;
-        let key_type = key_type_value.as_str().unwrap();
+        let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let pem_bundle_value = req.get_data("pem_bundle")?;
-        let pem_bundle = pem_bundle_value.as_str().unwrap();
+        let pem_bundle = pem_bundle_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let hex_bundle_value = req.get_data("hex_bundle")?;
-        let hex_bundle = hex_bundle_value.as_str().unwrap();
+        let hex_bundle = hex_bundle_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         if pem_bundle.len() == 0 && hex_bundle.len() == 0 {
             return Err(RvError::ErrRequestFieldNotFound);
@@ -292,7 +291,7 @@ impl PkiBackendInner {
                     let rsa = Rsa::private_key_from_pem(&key_bundle.key)?;
                     key_bundle.bits = rsa.size() * 8;
                 },
-                "ec" => {
+                "ec" | "sm2" => {
                     let ec_key = EcKey::private_key_from_pem(&key_bundle.key)?;
                     key_bundle.bits = ec_key.group().degree();
                 },
@@ -312,19 +311,25 @@ impl PkiBackendInner {
                 }
             };
             let iv_value = req.get_data("iv")?;
-            match key_type {
-                "aes-gcm" | "aes-cbc" => {
-                    if let Some(iv) = iv_value.as_str() {
-                        key_bundle.iv = hex::decode(&iv)?;
-                    } else {
-                        return Err(RvError::ErrRequestFieldNotFound);
-                    }
-                },
-                "aes-ecb" => {},
-                _ => {
-                    return Err(RvError::ErrPkiKeyTypeInvalid);
+            let is_iv_required = matches!(key_type, "aes-gcm" | "aes-cbc" | "sm4-gcm" | "sm4-ccm");
+            #[cfg(tongsuo)]
+            let is_valid_key_type = matches!(key_type, "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm");
+            #[cfg(not(tongsuo))]
+            let is_valid_key_type = matches!(key_type, "aes-gcm" | "aes-cbc" | "aes-ecb");
+
+            // Check if the key type is valid, if not return an error.
+            if !is_valid_key_type {
+                return Err(RvError::ErrPkiKeyTypeInvalid);
+            }
+
+            // Proceed to check IV only if required by the key type.
+            if is_iv_required {
+                if let Some(iv) = iv_value.as_str() {
+                    key_bundle.iv = hex::decode(&iv)?;
+                } else {
+                    return Err(RvError::ErrRequestFieldNotFound);
                 }
-            };
+            }
         }
 
         self.write_key(req, &key_bundle)?;
@@ -343,12 +348,10 @@ impl PkiBackendInner {
     }
 
     pub fn key_sign(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let key_name_value = req.get_data("key_name")?;
-        let key_name = key_name_value.as_str().unwrap();
         let data_value = req.get_data("data")?;
-        let data = data_value.as_str().unwrap();
+        let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, key_name)?;
+        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.sign(&decoded_data)?;
@@ -364,14 +367,12 @@ impl PkiBackendInner {
     }
 
     pub fn key_verify(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let key_name_value = req.get_data("key_name")?;
-        let key_name = key_name_value.as_str().unwrap();
         let data_value = req.get_data("data")?;
-        let data = data_value.as_str().unwrap();
+        let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let signature_value = req.get_data("signature")?;
-        let signature = signature_value.as_str().unwrap();
+        let signature = signature_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, key_name)?;
+        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let decoded_signature = hex::decode(signature.as_bytes())?;
@@ -388,14 +389,12 @@ impl PkiBackendInner {
     }
 
     pub fn key_encrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let key_name_value = req.get_data("key_name")?;
-        let key_name = key_name_value.as_str().unwrap();
         let data_value = req.get_data("data")?;
-        let data = data_value.as_str().unwrap();
+        let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let aad_value = req.get_data("aad")?;
-        let aad = aad_value.as_str().unwrap();
+        let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, key_name)?;
+        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.encrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
@@ -411,14 +410,12 @@ impl PkiBackendInner {
     }
 
     pub fn key_decrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let key_name_value = req.get_data("key_name")?;
-        let key_name = key_name_value.as_str().unwrap();
         let data_value = req.get_data("data")?;
-        let data = data_value.as_str().unwrap();
+        let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let aad_value = req.get_data("aad")?;
-        let aad = aad_value.as_str().unwrap();
+        let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, key_name)?;
+        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.decrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;

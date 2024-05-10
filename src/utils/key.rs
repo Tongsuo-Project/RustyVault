@@ -42,6 +42,25 @@ impl Default for KeyBundle {
     }
 }
 
+fn cipher_from_key_type_and_bits(key_type: &str, bits: u32) -> Result<Cipher, RvError> {
+    match (key_type, bits) {
+        ("aes-gcm", 128) => Ok(Cipher::aes_128_gcm()),
+        ("aes-gcm", 192) => Ok(Cipher::aes_192_gcm()),
+        ("aes-gcm", 256) => Ok(Cipher::aes_256_gcm()),
+        ("aes-cbc", 128) => Ok(Cipher::aes_128_cbc()),
+        ("aes-cbc", 192) => Ok(Cipher::aes_192_cbc()),
+        ("aes-cbc", 256) => Ok(Cipher::aes_256_cbc()),
+        ("aes-ecb", 128) => Ok(Cipher::aes_128_ecb()),
+        ("aes-ecb", 192) => Ok(Cipher::aes_192_ecb()),
+        ("aes-ecb", 256) => Ok(Cipher::aes_256_ecb()),
+        #[cfg(tongsuo)]
+        ("sm4-gcm", 128) => Ok(Cipher::sm4_gcm()),
+        #[cfg(tongsuo)]
+        ("sm4-ccm", 128) => Ok(Cipher::sm4_ccm()),
+        _ => Err(RvError::ErrPkiKeyBitsInvalid),
+    }
+}
+
 impl KeyBundle {
     pub fn new(name: &str, key_type: &str, key_bits: u32) -> Self {
         Self { name: name.to_string(), key_type: key_type.to_string(), bits: key_bits, ..KeyBundle::default() }
@@ -51,12 +70,13 @@ impl KeyBundle {
         let key_bits = self.bits;
         let priv_key = match self.key_type.as_str() {
             "rsa" => {
-                if key_bits != 2048 && key_bits != 3072 && key_bits != 4096 {
-                    return Err(RvError::ErrPkiKeyBitsInvalid);
+                match key_bits {
+                    2048 | 3072 | 4096 => {
+                        let rsa_key = Rsa::generate(key_bits)?;
+                        PKey::from_rsa(rsa_key)?.private_key_to_pem_pkcs8()?
+                    },
+                    _ => return Err(RvError::ErrPkiKeyBitsInvalid),
                 }
-                let rsa_key = Rsa::generate(key_bits)?;
-                let pkey = PKey::from_rsa(rsa_key)?;
-                pkey.private_key_to_pem_pkcs8()?
             }
             "ec" => {
                 let curve_name = match key_bits {
@@ -64,30 +84,43 @@ impl KeyBundle {
                     256 => Nid::SECP256K1,
                     384 => Nid::SECP384R1,
                     521 => Nid::SECP521R1,
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
+                    _ => return Err(RvError::ErrPkiKeyBitsInvalid),
                 };
                 let ec_group = EcGroup::from_curve_name(curve_name)?;
-                let ec_key = EcKey::generate(ec_group.as_ref())?;
-                let pkey = PKey::from_ec_key(ec_key)?;
-                pkey.private_key_to_pem_pkcs8()?
-            }
-            "aes-gcm" | "aes-cbc" | "aes-ecb" => {
-                if key_bits != 128 && key_bits != 192 && key_bits != 256 {
-                    return Err(RvError::ErrPkiKeyBitsInvalid);
+                let ec_key = EcKey::generate(&ec_group)?;
+                PKey::from_ec_key(ec_key)?.private_key_to_pem_pkcs8()?
+            },
+            #[cfg(tongsuo)]
+            "sm2" => {
+                self.bits = 256;
+                let ec_group = EcGroup::from_curve_name(Nid::SM2)?;
+                let ec_key = EcKey::generate(&ec_group)?;
+                PKey::from_ec_key(ec_key)?.private_key_to_pem_pkcs8()?
+            },
+            "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm" => {
+                let _ = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
+
+                #[cfg(not(tongsuo))]
+                if self.key_type.starts_with("sm4-") {
+                    return Err(RvError::ErrPkiKeyTypeInvalid);
                 }
 
-                if self.key_type.as_str() != "aes-ecb" {
-                    let mut iv_bytes = vec![0u8; 16];
-                    rand_bytes(&mut iv_bytes)?;
-                    self.iv = iv_bytes;
+                match self.key_type.as_str() {
+                    "aes-ecb" => (),
+                    "sm4-ccm" => {
+                        self.iv = vec![0u8; 12];
+                        rand_bytes(&mut self.iv)?;
+                    }
+                    _ => {
+                        self.iv = vec![0u8; 16];
+                        rand_bytes(&mut self.iv)?;
+                    }
                 }
 
-                let mut random_bytes = vec![0u8; (key_bits / 8) as usize];
-                rand_bytes(&mut random_bytes)?;
-                random_bytes
-            }
+                let mut key = vec![0u8; key_bits as usize / 8];
+                rand_bytes(&mut key)?;
+                key
+            },
             _ => {
                 return Err(RvError::ErrPkiKeyTypeInvalid);
             }
@@ -99,95 +132,67 @@ impl KeyBundle {
     }
 
     pub fn sign(&self, data: &[u8]) -> Result<Vec<u8>, RvError> {
-        match self.key_type.as_str() {
-            "rsa" => {
-                let rsa = Rsa::private_key_from_pem(&self.key)?;
-                let pkey = PKey::from_rsa(rsa)?;
-                let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
-                signer.set_rsa_padding(Padding::PKCS1)?;
-                signer.update(data)?;
-                return Ok(signer.sign_to_vec()?);
-            }
-            "ec" => {
-                let ec_key = EcKey::private_key_from_pem(&self.key)?;
-                let pkey = PKey::from_ec_key(ec_key)?;
-                let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
-                signer.update(data)?;
-                return Ok(signer.sign_to_vec()?);
-            }
-            _ => {
-                return Err(RvError::ErrPkiKeyOperationInvalid);
-            }
+        let digest = match self.key_type.as_str() {
+            "rsa" | "ec" => MessageDigest::sha256(),
+            #[cfg(tongsuo)]
+            "sm2" => MessageDigest::sm3(),
+            _ => return Err(RvError::ErrPkiKeyOperationInvalid),
+        };
+
+        let pkey = PKey::private_key_from_pem(&self.key)?;
+
+        let mut signer = Signer::new(digest, &pkey)?;
+        if self.key_type == "rsa" {
+            signer.set_rsa_padding(Padding::PKCS1)?;
         }
+
+        signer.update(data)?;
+        signer.sign_to_vec().map_err(From::from)
     }
 
     pub fn verify(&self, data: &[u8], signature: &[u8]) -> Result<bool, RvError> {
-        match self.key_type.as_str() {
-            "rsa" => {
-                let rsa = Rsa::private_key_from_pem(&self.key)?;
-                let pkey = PKey::from_rsa(rsa)?;
-                let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey)?;
-                verifier.set_rsa_padding(Padding::PKCS1)?;
-                verifier.update(data)?;
-                return Ok(verifier.verify(signature).unwrap_or(false));
-            }
-            "ec" => {
-                let ec_key = EcKey::private_key_from_pem(&self.key)?;
-                let pkey = PKey::from_ec_key(ec_key)?;
-                let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey)?;
-                verifier.update(data)?;
-                return Ok(verifier.verify(signature).unwrap_or(false));
-            }
-            _ => {
-                return Err(RvError::ErrPkiKeyOperationInvalid);
-            }
+        let digest = match self.key_type.as_str() {
+            "rsa" | "ec" => MessageDigest::sha256(),
+            #[cfg(tongsuo)]
+            "sm2" => MessageDigest::sm3(),
+            _ => return Err(RvError::ErrPkiKeyOperationInvalid),
+        };
+
+        let pkey = PKey::private_key_from_pem(&self.key)?;
+
+        let mut verifier = Verifier::new(digest, &pkey)?;
+        if self.key_type == "rsa" {
+            verifier.set_rsa_padding(Padding::PKCS1)?;
         }
+
+        verifier.update(data)?;
+        Ok(verifier.verify(signature).unwrap_or(false))
     }
 
     pub fn encrypt(&self, data: &[u8], extra: Option<EncryptExtraData>) -> Result<Vec<u8>, RvError> {
         match self.key_type.as_str() {
-            "aes-gcm" => {
+            "aes-gcm" | "sm4-gcm" | "sm4-ccm" => {
+                let cipher = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
                 let aad = extra.map_or("".as_bytes(), |ex| match ex {
                     EncryptExtraData::Aad(aad) => aad,
                     _ => "".as_bytes(),
                 });
-                let cipher = match self.bits {
-                    128 => Cipher::aes_128_gcm(),
-                    192 => Cipher::aes_192_gcm(),
-                    256 => Cipher::aes_256_gcm(),
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
-                };
                 let mut tag = vec![0u8; 16];
-                let mut ciphertext =
-                    encrypt_aead(cipher, &self.key, Some(&self.iv), aad, data, &mut tag)?;
+                let mut ciphertext = encrypt_aead(
+                    cipher,
+                    &self.key,
+                    Some(&self.iv),
+                    aad,
+                    data,
+                    &mut tag,
+                    )?;
                 ciphertext.extend_from_slice(&tag);
                 Ok(ciphertext)
             }
-            "aes-cbc" => {
-                let cipher = match self.bits {
-                    128 => Cipher::aes_128_cbc(),
-                    192 => Cipher::aes_192_cbc(),
-                    256 => Cipher::aes_256_cbc(),
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
-                };
-
-                Ok(encrypt(cipher, &self.key, Some(&self.iv), data)?)
-            }
-            "aes-ecb" => {
-                let cipher = match self.bits {
-                    128 => Cipher::aes_128_ecb(),
-                    192 => Cipher::aes_192_ecb(),
-                    256 => Cipher::aes_256_ecb(),
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
-                };
-
-                Ok(encrypt(cipher, &self.key, None, data)?)
+            "aes-cbc" | "aes-ecb" => {
+                let cipher = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
+                let iv = if self.key_type == "aes-ecb" { None } else { Some(self.iv.as_slice()) };
+                Ok(encrypt(cipher, &self.key, iv, data)?)
             }
             "rsa" => {
                 let rsa = Rsa::private_key_from_pem(&self.key)?;
@@ -209,54 +214,31 @@ impl KeyBundle {
 
                 return Ok(buf);
             }
-            _ => {
-                return Err(RvError::ErrPkiKeyOperationInvalid);
-            }
+            _ => Err(RvError::ErrPkiKeyOperationInvalid),
         }
     }
 
     pub fn decrypt(&self, data: &[u8], extra: Option<EncryptExtraData>) -> Result<Vec<u8>, RvError> {
+
         match self.key_type.as_str() {
-            "aes-gcm" => {
+            "aes-gcm" | "sm4-gcm" | "sm4-ccm" => {
+                let cipher = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
                 let aad = extra.map_or("".as_bytes(), |ex| match ex {
                     EncryptExtraData::Aad(aad) => aad,
                     _ => "".as_bytes(),
                 });
-                let cipher = match self.bits {
-                    128 => Cipher::aes_128_gcm(),
-                    192 => Cipher::aes_192_gcm(),
-                    256 => Cipher::aes_256_gcm(),
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
-                };
-                let (ciphertext, tag) = data.split_at(data.len() - 16);
+                let tag_len = 16;
+                if data.len() < tag_len {
+                    return Err(RvError::ErrPkiInternal);
+                }
+                let (ciphertext, tag) = data.split_at(data.len() - tag_len);
                 Ok(decrypt_aead(cipher, &self.key, Some(&self.iv), aad, ciphertext, tag)?)
-            }
-            "aes-cbc" => {
-                let cipher = match self.bits {
-                    128 => Cipher::aes_128_cbc(),
-                    192 => Cipher::aes_192_cbc(),
-                    256 => Cipher::aes_256_cbc(),
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
-                };
-
-                Ok(decrypt(cipher, &self.key, Some(&self.iv), data)?)
-            }
-            "aes-ecb" => {
-                let cipher = match self.bits {
-                    128 => Cipher::aes_128_ecb(),
-                    192 => Cipher::aes_192_ecb(),
-                    256 => Cipher::aes_256_ecb(),
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
-                };
-
-                Ok(decrypt(cipher, &self.key, None, data)?)
-            }
+            },
+            "aes-cbc" | "aes-ecb" => {
+                let cipher = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
+                let iv = if self.key_type == "aes-ecb" { None } else { Some(self.iv.as_slice()) };
+                Ok(decrypt(cipher, &self.key, iv, data)?)
+            },
             "rsa" => {
                 let rsa = Rsa::private_key_from_pem(&self.key)?;
                 if data.len() > rsa.size() as usize {
@@ -284,9 +266,7 @@ impl KeyBundle {
 
                 return Ok(buf);
             }
-            _ => {
-                return Err(RvError::ErrPkiKeyOperationInvalid);
-            }
+            _ => Err(RvError::ErrPkiKeyOperationInvalid),
         }
     }
 }
@@ -349,6 +329,13 @@ mod test {
     }
 
     #[test]
+    #[cfg(tongsuo)]
+    fn test_sm2_key_operation() {
+        let mut key_bundle = KeyBundle::new("sm2", "sm2", 256);
+        test_key_sign_verify(&mut key_bundle);
+    }
+
+    #[test]
     fn test_aes_key_operation() {
         // test aes-gcm
         let mut key_bundle = KeyBundle::new("aes-gcm-128", "aes-gcm", 128);
@@ -380,5 +367,21 @@ mod test {
         test_key_encrypt_decrypt(&mut key_bundle, None);
         let mut key_bundle = KeyBundle::new("aes-ecb-256", "aes-ecb", 256);
         test_key_encrypt_decrypt(&mut key_bundle, None);
+    }
+
+    #[test]
+    #[cfg(tongsuo)]
+    fn test_sm4_key_operation() {
+        // test sm4-gcm
+        let mut key_bundle = KeyBundle::new("sm4-gcm-128", "sm4-gcm", 128);
+        test_key_encrypt_decrypt(&mut key_bundle, None);
+        test_key_encrypt_decrypt(&mut key_bundle, None);
+        test_key_encrypt_decrypt(&mut key_bundle, Some(EncryptExtraData::Aad("rusty_vault".as_bytes())));
+
+        // test sm4-ccm
+        let mut key_bundle = KeyBundle::new("sm4-ccm-128", "sm4-ccm", 128);
+        test_key_encrypt_decrypt(&mut key_bundle, None);
+        test_key_encrypt_decrypt(&mut key_bundle, None);
+        test_key_encrypt_decrypt(&mut key_bundle, Some(EncryptExtraData::Aad("rusty_vault".as_bytes())));
     }
 }
