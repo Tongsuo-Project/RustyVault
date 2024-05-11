@@ -10,9 +10,10 @@ use crate::errors::RvError;
 #[cfg(feature = "storage_mysql")]
 use super::mysql::mysql_backend::MysqlBackend;
 
-
+pub mod etcd;
 pub mod file;
 pub mod mock;
+pub mod error;
 
 // TODO: this trait definition should be moved to an upper layer, e.g., in the storage/mod.rs
 pub trait Backend: Send + Sync {
@@ -36,12 +37,16 @@ pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Bac
         "file" => {
             let backend = file::FileBackend::new(conf)?;
             Ok(Arc::new(backend))
-        },
+        }
         #[cfg(feature = "storage_mysql")]
         "mysql" => {
             let backend = MysqlBackend::new(conf)?;
             Ok(Arc::new(backend))
-        },
+        }
+        "etcd" => {
+            let backend = etcd::EtcdBackend::new(conf)?;
+            Ok(Arc::new(backend))
+        }
         "mock" => Ok(Arc::new(mock::MockBackend::new())),
         _ => Err(RvError::ErrPhysicalTypeInvalid),
     }

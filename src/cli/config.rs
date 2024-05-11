@@ -163,7 +163,7 @@ where
     let storage: HashMap<String, Storage> = Deserialize::deserialize(deserializer)?;
 
     for key in storage.keys() {
-        if key != "file" {
+        if key != "file" && key != "etcd" {
             return Err(serde::de::Error::custom("Invalid storage key"));
         }
     }

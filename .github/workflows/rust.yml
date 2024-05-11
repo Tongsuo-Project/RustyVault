@@ -17,9 +17,24 @@ jobs:
           - ubuntu-latest
           - macos-latest
     runs-on: ${{matrix.os}}
+    services:
+      etcd:
+        image: quay.io/coreos/etcd:v3.5.0
+        options: >-
+          --entrypoint etcd
+          --publish 2379:2379
+          --publish 2380:2380
 
     steps:
     - uses: actions/checkout@v3
+    - name: Setup protoc
+      run: |
+        if [ ${{ runner.os }} = 'ubuntu-latest' ]; then
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+        elif [ ${{ runner.os }} = 'macos-latest' ]; then
+          brew install protobuf
+        fi
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -60,10 +75,19 @@ jobs:
         os:
           - windows-latest
     runs-on: ${{matrix.os}}
+    services:
+      etcd:
+        image: quay.io/coreos/etcd:v3.5.0
+        options: >-
+          --entrypoint etcd
+          --publish 2379:2379
+          --publish 2380:2380
 
     steps:
     - uses: actions/checkout@v3
     - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - name: Setup protoc
+      run: vcpkg install protobuf protobuf:x64-windows
     - name: install openssl
       run: vcpkg install openssl:x64-windows-static-md
     - name: Setup Rust

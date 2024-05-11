@@ -229,6 +229,11 @@ pub enum RvError {
     #[error("RwLock was poisoned (writing)")]
     ErrRwLockWritePoison,
 
+    #[error("Some backend error happened, {:?}", .source)]
+    BackendError {
+        #[from]
+        source: crate::storage::physical::error::BackendError,
+    },
     #[error("Some net addr parse error happened, {:?}", .source)]
     AddrParseError {
         #[from]
