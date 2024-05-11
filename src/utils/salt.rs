@@ -143,7 +143,7 @@ mod test {
     use super::*;
     use crate::{
         storage::{
-            physical, barrier_view, barrier_aes_gcm,
+            barrier_view, barrier_aes_gcm,
             barrier::SecurityBarrier,
         }
     };
@@ -163,7 +163,7 @@ mod test {
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
 
-        let backend = physical::new_backend("file", &conf);
+        let backend = crate::storage::new_backend("file", &conf);
         assert!(backend.is_ok());
         let backend = backend.unwrap();
         let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));

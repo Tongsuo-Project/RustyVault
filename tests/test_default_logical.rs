@@ -9,7 +9,7 @@ use go_defer::defer;
 use rusty_vault::{
     core::{Core, SealConfig},
     logical::{Operation, Request},
-    storage::{barrier_aes_gcm, physical},
+    storage,
 };
 use serde_json::{json, Map, Value};
 
@@ -316,9 +316,9 @@ fn test_default_logical() {
     let mut conf: HashMap<String, Value> = HashMap::new();
     conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
-    let backend = physical::new_backend("file", &conf).unwrap();
+    let backend = storage::new_backend("file", &conf).unwrap();
 
-    let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+    let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
     let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
 
