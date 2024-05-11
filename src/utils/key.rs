@@ -42,6 +42,15 @@ impl Default for KeyBundle {
     }
 }
 
+fn key_bits_default(key_type: &str) -> u32 {
+    return match key_type {
+        "rsa" => 2048,
+        "ec" | "sm2" => 256,
+        "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm" => 256,
+        _ => 0,
+    }
+}
+
 fn cipher_from_key_type_and_bits(key_type: &str, bits: u32) -> Result<Cipher, RvError> {
     match (key_type, bits) {
         ("aes-gcm", 128) => Ok(Cipher::aes_128_gcm()),
@@ -63,7 +72,12 @@ fn cipher_from_key_type_and_bits(key_type: &str, bits: u32) -> Result<Cipher, Rv
 
 impl KeyBundle {
     pub fn new(name: &str, key_type: &str, key_bits: u32) -> Self {
-        Self { name: name.to_string(), key_type: key_type.to_string(), bits: key_bits, ..KeyBundle::default() }
+        let bits = if key_bits == 0 {
+            key_bits_default(key_type)
+        } else {
+            key_bits
+        };
+        Self { name: name.to_string(), key_type: key_type.to_string(), bits: bits, ..KeyBundle::default() }
     }
 
     pub fn generate(&mut self) -> Result<(), RvError> {

@@ -289,7 +289,7 @@ impl SystemBackendInner {
     pub fn handle_mount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let logical_type = req.get_data("type")?;
-        let description = req.get_data("description")?;
+        let description = req.get_data_or_default("description")?;
 
         let path = path.as_str().unwrap();
         let logical_type = logical_type.as_str().unwrap();
@@ -382,7 +382,7 @@ impl SystemBackendInner {
     pub fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let logical_type = req.get_data("type")?;
-        let description = req.get_data("description")?;
+        let description = req.get_data_or_default("description")?;
 
         let path = path.as_str().unwrap();
         let logical_type = logical_type.as_str().unwrap();

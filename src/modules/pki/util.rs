@@ -6,13 +6,21 @@ use openssl::x509::X509NameBuilder;
 use super::path_roles::RoleEntry;
 use crate::{errors::RvError, logical::Request, utils::cert::Certificate};
 
+pub const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
+
 pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
-    let ttl = parse_duration(req.get_data("ttl")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
-    let not_before_duration_u64 = req.get_data("not_before_duration")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+    let mut ttl = DEFAULT_MAX_TTL;
+    if let Ok(ttl_value) = req.get_data("ttl") {
+        let ttl_str = ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
+        if ttl_str != "" {
+            ttl = parse_duration(ttl_str)?;
+        }
+    }
+    let not_before_duration_u64 = req.get_data_or_default("not_before_duration")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
     let not_before_duration = Duration::from_secs(not_before_duration_u64);
-    let key_type_value = req.get_data("key_type")?;
+    let key_type_value = req.get_data_or_default("key_type")?;
     let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-    let mut key_bits = req.get_data("key_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+    let mut key_bits = req.get_data_or_default("key_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
     match key_type {
         "rsa" => {
             if key_bits == 0 {
@@ -37,16 +45,16 @@ pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
         }
     }
 
-    let signature_bits = req.get_data("signature_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
-    let use_pss = req.get_data("use_pss")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-    let country = req.get_data("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let province = req.get_data("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let locality = req.get_data("locality")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let organization = req.get_data("organization")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let ou = req.get_data("ou")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let street_address = req.get_data("street_address")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let postal_code = req.get_data("postal_code")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let not_after = req.get_data("not_after")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let signature_bits = req.get_data_or_default("signature_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+    let use_pss = req.get_data_or_default("use_pss")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+    let country = req.get_data_or_default("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let province = req.get_data_or_default("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let locality = req.get_data_or_default("locality")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let organization = req.get_data_or_default("organization")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let ou = req.get_data_or_default("ou")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let street_address = req.get_data_or_default("street_address")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let postal_code = req.get_data_or_default("postal_code")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let not_after = req.get_data_or_default("not_after")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
 
     let role_entry = RoleEntry {
         ttl,
@@ -72,16 +80,14 @@ pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
 pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result<Certificate, RvError> {
     let mut common_names = Vec::new();
 
-    let common_name_value = req.get_data("common_name")?;
+    let common_name_value = req.get_data_or_default("common_name")?;
     let common_name = common_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
     if common_name != "" {
         common_names.push(common_name.to_string());
     }
 
-    let alt_names_value = req.get_data("alt_names");
-    if alt_names_value.is_ok() {
-        let alt_names_val = alt_names_value.unwrap();
-        let alt_names = alt_names_val.as_str().unwrap();
+    if let Ok(alt_names_value) = req.get_data("alt_names") {
+        let alt_names = alt_names_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if alt_names != "" {
             for v in alt_names.split(',') {
                 common_names.push(v.to_string());
@@ -90,10 +96,8 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
     }
 
     let mut ip_sans = Vec::new();
-    let ip_sans_value = req.get_data("ip_sans");
-    if ip_sans_value.is_ok() {
-        let ip_sans_val = ip_sans_value.unwrap();
-        let ip_sans_str = ip_sans_val.as_str().unwrap();
+    if let Ok(ip_sans_value) = req.get_data("ip_sans") {
+        let ip_sans_str = ip_sans_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if ip_sans_str != "" {
             for v in ip_sans_str.split(',') {
                 ip_sans.push(v.to_string());

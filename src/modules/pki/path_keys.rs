@@ -22,12 +22,13 @@ impl PkiBackend {
             pattern: r"keys/generate/(exported|internal)",
             fields: {
                 "key_name": {
+                    required: true,
                     field_type: FieldType::Str,
                     description: "key name"
                 },
                 "key_bits": {
-                    required: true,
                     field_type: FieldType::Int,
+                    default: 0,
                     description: r#"
 The number of bits to use. Allowed values are 0 (universal default); with rsa
 key_type: 2048 (default), 3072, or 4096; with ec key_type: 224, 256 (default),
@@ -213,9 +214,10 @@ impl PkiBackendInner {
     pub fn generate_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let key_name_value = req.get_data("key_name")?;
         let key_name = key_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let key_type_value = req.get_data("key_type")?;
+        let key_type_value = req.get_data_or_default("key_type")?;
         let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let key_bits = req.get_data("key_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let key_bits_value = req.get_data_or_default("key_bits")?;
+        let key_bits = key_bits_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let mut export_private_key = false;
         if req.path.ends_with("/exported") {
@@ -266,11 +268,11 @@ impl PkiBackendInner {
     pub fn import_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let key_name_value = req.get_data("key_name")?;
         let key_name = key_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let key_type_value = req.get_data("key_type")?;
+        let key_type_value = req.get_data_or_default("key_type")?;
         let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let pem_bundle_value = req.get_data("pem_bundle")?;
+        let pem_bundle_value = req.get_data_or_default("pem_bundle")?;
         let pem_bundle = pem_bundle_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let hex_bundle_value = req.get_data("hex_bundle")?;
+        let hex_bundle_value = req.get_data_or_default("hex_bundle")?;
         let hex_bundle = hex_bundle_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         if pem_bundle.len() == 0 && hex_bundle.len() == 0 {
@@ -310,7 +312,7 @@ impl PkiBackendInner {
                     return Err(RvError::ErrPkiKeyBitsInvalid);
                 }
             };
-            let iv_value = req.get_data("iv")?;
+            let iv_value = req.get_data_or_default("iv")?;
             let is_iv_required = matches!(key_type, "aes-gcm" | "aes-cbc" | "sm4-gcm" | "sm4-ccm");
             #[cfg(tongsuo)]
             let is_valid_key_type = matches!(key_type, "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm");
@@ -391,7 +393,7 @@ impl PkiBackendInner {
     pub fn key_encrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let data_value = req.get_data("data")?;
         let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let aad_value = req.get_data("aad")?;
+        let aad_value = req.get_data_or_default("aad")?;
         let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
@@ -412,7 +414,7 @@ impl PkiBackendInner {
     pub fn key_decrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let data_value = req.get_data("data")?;
         let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let aad_value = req.get_data("aad")?;
+        let aad_value = req.get_data_or_default("aad")?;
         let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
