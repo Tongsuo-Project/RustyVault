@@ -234,6 +234,16 @@ pub enum RvError {
         #[from]
         source: crate::storage::physical::error::BackendError,
     },
+    #[error("Some net addr parse error happened, {:?}", .source)]
+    AddrParseError {
+        #[from]
+        source: std::net::AddrParseError,
+    },
+    #[error("Some ipnetwork error happened, {:?}", .source)]
+    IpNetworkError {
+        #[from]
+        source: ipnetwork::IpNetworkError,
+    },
 
     /// Database Errors Begin
     ///

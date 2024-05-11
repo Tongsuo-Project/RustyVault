@@ -65,13 +65,12 @@ requested common name is allowed by the role policy.
 
 impl PkiBackendInner {
     pub fn issue_cert(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let role_value = req.get_data("role")?;
-        let role_name = role_value.as_str().unwrap();
+        //let role_name = req.get_data("role")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let mut common_names = Vec::new();
 
         let common_name_value = req.get_data("common_name")?;
-        let common_name = common_name_value.as_str().unwrap();
+        let common_name = common_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if common_name != "" {
             common_names.push(common_name.to_string());
         }
@@ -87,7 +86,7 @@ impl PkiBackendInner {
             }
         }
 
-        let role = self.get_role(req, &role_name)?;
+        let role = self.get_role(req, req.get_data("role")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
         if role.is_none() {
             return Err(RvError::ErrPkiRoleNotFound);
         }
@@ -111,7 +110,7 @@ impl PkiBackendInner {
         let mut not_after = not_before + parse_duration("30d").unwrap();
 
         let ttl_value = req.get_data("ttl")?;
-        let ttl = ttl_value.as_str().unwrap();
+        let ttl = ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if ttl != "" {
             let ttl_dur = parse_duration(ttl)?;
             let req_ttl_not_after_dur = SystemTime::now() + ttl_dur;
