@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use humantime::parse_duration;
 use serde::{Deserialize, Serialize};
 
-use super::{PkiBackend, PkiBackendInner};
+use super::{PkiBackend, PkiBackendInner, util::DEFAULT_MAX_TTL};
 use crate::{
     errors::RvError,
     logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
@@ -11,8 +11,6 @@ use crate::{
     storage::StorageEntry,
     utils::{deserialize_duration, serialize_duration},
 };
-
-const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleEntry {
@@ -104,15 +102,14 @@ max_ttl, whichever is shorter."#
                 },
                 "max_ttl": {
                     field_type: FieldType::Str,
-                    required: true,
                     description: r#"
-        The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
+The maximum allowed lease duration. If not set, defaults to the system maximum lease TTL."#
                 },
                 "use_pss": {
                     field_type: FieldType::Bool,
                     default: false,
                     description: r#"
-        Whether or not to use PSS signatures when using a RSA key-type issuer. Defaults to false."#
+Whether or not to use PSS signatures when using a RSA key-type issuer. Defaults to false."#
                 },
                 "allow_localhost": {
                     field_type: FieldType::Bool,
@@ -157,30 +154,30 @@ See the documentation for more information."#
                     field_type: FieldType::Bool,
                     default: true,
                     description: r#"
-        If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
+If set, IP Subject Alternative Names are allowed. Any valid IP is accepted and No authorization checking is performed."#
                 },
                 "server_flag": {
                     field_type: FieldType::Bool,
                     default: true,
                     description: r#"
-        If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
+If set, certificates are flagged for server auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
                 },
                 "client_flag": {
                     field_type: FieldType::Bool,
                     default: true,
                     description: r#"
-        If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
+If set, certificates are flagged for client auth use. defaults to true. See also RFC 5280 Section 4.2.1.12."#
                 },
                 "code_signing_flag": {
                     field_type: FieldType::Bool,
                     description: r#"
-        If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
+If set, certificates are flagged for code signing use. defaults to false. See also RFC 5280 Section 4.2.1.12."#
                 },
                 "key_type": {
                     field_type: FieldType::Str,
                     default: "rsa",
                     description: r#"
-        The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
+The type of key to use; defaults to RSA. "rsa" "ec", "ed25519" and "any" are the only valid values."#
                 },
                 "key_bits": {
                     field_type: FieldType::Int,
@@ -215,43 +212,43 @@ The value format should be given in UTC format YYYY-MM-ddTHH:MM:SSZ."#
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-        If set, OU (OrganizationalUnit) will be set to this value in certificates issued by this role."#
+If set, OU (OrganizationalUnit) will be set to this value in certificates issued by this role."#
                 },
                 "organization": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-        If set, O (Organization) will be set to this value in certificates issued by this role."#
+If set, O (Organization) will be set to this value in certificates issued by this role."#
                 },
                 "country": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-        If set, Country will be set to this value in certificates issued by this role."#
+If set, Country will be set to this value in certificates issued by this role."#
                 },
                 "locality": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-        If set, Locality will be set to this value in certificates issued by this role."#
+If set, Locality will be set to this value in certificates issued by this role."#
                 },
                 "province": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-        If set, Province will be set to this value in certificates issued by this role."#
+If set, Province will be set to this value in certificates issued by this role."#
                 },
                 "street_address": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-        If set, Street Address will be set to this value."#
+If set, Street Address will be set to this value."#
                 },
                 "postal_code": {
                     required: false,
                     field_type: FieldType::Str,
                     description: r#"
-        If set, Postal Code will be set to this value."#
+If set, Postal Code will be set to this value."#
                 },
                 "use_csr_common_name": {
                     field_type: FieldType::Bool,
@@ -326,11 +323,23 @@ impl PkiBackendInner {
     pub fn create_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name_value = req.get_data("name")?;
         let name = name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let ttl = parse_duration(req.get_data("ttl")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
-        let max_ttl = parse_duration(req.get_data("max_ttl")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
-        let key_type_value = req.get_data("key_type")?;
+        let mut ttl = DEFAULT_MAX_TTL;
+        if let Ok(ttl_value) = req.get_data("ttl") {
+            let ttl_str = ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
+            if ttl_str != "" {
+                ttl = parse_duration(ttl_str)?;
+            }
+        }
+        let mut max_ttl = DEFAULT_MAX_TTL;
+        if let Ok(max_ttl_value) = req.get_data("max_ttl") {
+            let max_ttl_str = max_ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
+            if max_ttl_str != "" {
+                max_ttl = parse_duration(max_ttl_str)?;
+            }
+        }
+        let key_type_value = req.get_data_or_default("key_type")?;
         let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let mut key_bits = req.get_data("key_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let mut key_bits = req.get_data_or_default("key_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
         match key_type {
             "rsa" => {
                 if key_bits == 0 {
@@ -355,27 +364,27 @@ impl PkiBackendInner {
             }
         }
 
-        let signature_bits = req.get_data("signature_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let allow_localhost = req.get_data("allow_localhost")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let allow_bare_domains = req.get_data("allow_bare_domains")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let allow_subdomains = req.get_data("allow_subdomains")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let allow_any_name = req.get_data("allow_any_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let allow_ip_sans = req.get_data("allow_ip_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let server_flag = req.get_data("server_flag")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let client_flag = req.get_data("client_flag")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let use_csr_sans = req.get_data("use_csr_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let use_csr_common_name = req.get_data("use_csr_common_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let country = req.get_data("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let province = req.get_data("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let locality = req.get_data("locality")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let organization = req.get_data("organization")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let ou = req.get_data("ou")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let street_address = req.get_data("street_address")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let postal_code = req.get_data("postal_code")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let no_store = req.get_data("no_store")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let generate_lease = req.get_data("generate_lease")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
-        let not_after = req.get_data("not_after")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-        let not_before_duration_u64 = req.get_data("not_before_duration")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let signature_bits = req.get_data_or_default("signature_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_localhost = req.get_data_or_default("allow_localhost")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_bare_domains = req.get_data_or_default("allow_bare_domains")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_subdomains = req.get_data_or_default("allow_subdomains")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_any_name = req.get_data_or_default("allow_any_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let allow_ip_sans = req.get_data_or_default("allow_ip_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let server_flag = req.get_data_or_default("server_flag")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let client_flag = req.get_data_or_default("client_flag")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let use_csr_sans = req.get_data_or_default("use_csr_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let use_csr_common_name = req.get_data_or_default("use_csr_common_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let country = req.get_data_or_default("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let province = req.get_data_or_default("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let locality = req.get_data_or_default("locality")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let organization = req.get_data_or_default("organization")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let ou = req.get_data_or_default("ou")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let street_address = req.get_data_or_default("street_address")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let postal_code = req.get_data_or_default("postal_code")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let no_store = req.get_data_or_default("no_store")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let generate_lease = req.get_data_or_default("generate_lease")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let not_after = req.get_data_or_default("not_after")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+        let not_before_duration_u64 = req.get_data_or_default("not_before_duration")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
         let not_before_duration = Duration::from_secs(not_before_duration_u64);
 
         let role_entry = RoleEntry {

@@ -149,7 +149,7 @@ impl UserPassBackendInner {
 
     pub fn read_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
-        let username = username_value.as_str().unwrap().to_lowercase();
+        let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_lowercase();
 
         let entry = self.get_user(req, &username)?;
         if entry.is_none() {
@@ -165,43 +165,41 @@ impl UserPassBackendInner {
 
     pub fn write_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
-        let username = username_value.as_str().unwrap();
+        let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_lowercase();
 
         let mut user_entry = UserEntry::default();
 
-        let entry = self.get_user(req, username)?;
-        if entry.is_some() {
-            user_entry = entry.unwrap();
+        if let Some(entry) = self.get_user(req, &username)? {
+            user_entry = entry;
         }
 
-        let password_value = req.get_data("password")?;
-        let password = password_value.as_str().unwrap();
-        if password != "" {
-            let password_hash = self.gen_password_hash(password)?;
-
-            user_entry.password_hash = password_hash;
+        if let Ok(password_value) = req.get_data("password") {
+            let password = password_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
+            if password != "" {
+                user_entry.password_hash = self.gen_password_hash(password)?;
+            }
         }
 
-        let ttl_value = req.get_data("ttl")?;
-        let ttl = ttl_value.as_u64().unwrap();
+        let ttl_value = req.get_data_or_default("ttl")?;
+        let ttl = ttl_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
         if ttl > 0 {
             user_entry.ttl = Duration::from_secs(ttl);
         }
 
-        let max_ttl_value = req.get_data("max_ttl")?;
-        let max_ttl = max_ttl_value.as_u64().unwrap();
+        let max_ttl_value = req.get_data_or_default("max_ttl")?;
+        let max_ttl = max_ttl_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
         if max_ttl > 0 {
             user_entry.max_ttl = Duration::from_secs(max_ttl);
         }
 
-        self.set_user(req, username, &user_entry)?;
+        self.set_user(req, &username, &user_entry)?;
 
         Ok(None)
     }
 
     pub fn delete_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
-        let username = username_value.as_str().unwrap();
+        let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if username == "" {
             return Err(RvError::ErrRequestNoDataField);
         }
@@ -218,7 +216,7 @@ impl UserPassBackendInner {
 
     pub fn write_user_password(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
-        let username = username_value.as_str().unwrap();
+        let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let mut user_entry = UserEntry::default();
 
@@ -228,7 +226,7 @@ impl UserPassBackendInner {
         }
 
         let password_value = req.get_data("password")?;
-        let password = password_value.as_str().unwrap();
+        let password = password_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let password_hash = self.gen_password_hash(password)?;
 

@@ -565,15 +565,15 @@ mod test {
                         },
                         {op: Operation::Write, raw_handler: |_backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
                                 let array_val = req.get_data("array")?;
-                                let array_default_val = req.get_data("array_default")?;
+                                let array_default_val = req.get_data_or_default("array_default")?;
                                 let bool_val = req.get_data("bool")?;
-                                let bool_default_val = req.get_data("bool_default")?;
+                                let bool_default_val = req.get_data_or_default("bool_default")?;
                                 let comma_val = req.get_data("comma")?;
-                                let comma_default_val = req.get_data("comma_default")?;
+                                let comma_default_val = req.get_data_or_default("comma_default")?;
                                 let map_val = req.get_data("map")?;
-                                let map_default_val = req.get_data("map_default")?;
+                                let map_default_val = req.get_data_or_default("map_default")?;
                                 let duration_val = req.get_data("duration")?;
-                                let duration_default_val = req.get_data("duration_default")?;
+                                let duration_default_val = req.get_data_or_default("duration_default")?;
                                 let data = json!({
                                     "array": array_val,
                                     "array_default": array_default_val,
