@@ -22,3 +22,10 @@ Cargo.lock
 
 # VIM temp file
 *.swp
+
+# IDE files
+.idea
+.vscode
+
+# OS files
+.DS_Store

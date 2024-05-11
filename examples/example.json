@@ -1,0 +1,24 @@
+{
+    "listener": {
+        "tcp": {
+            "ltype": "tcp",
+            "address": "0.0.0.0:8080",
+            "tls_disable": true
+        }
+    },
+    "storage": {
+        "etcd": {
+            "stype": "etcd",
+            "address": "http://127.0.0.1:2379",
+            "path": "rustyvault"
+        }
+    },
+    "api_addr": "http://localhost:8080",
+    "log_format": "json",
+    "log_level": "info",
+    "pid_file": "/tmp/rustyvault/vault.pid",
+    "work_dir": "/tmp/rustyvault",
+    "daemon": true,
+    "daemon_user": "vault",
+    "daemon_group": "vault"
+}
