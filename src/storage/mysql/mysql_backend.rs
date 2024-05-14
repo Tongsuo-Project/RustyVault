@@ -14,7 +14,7 @@ use crate::schema::vault::dsl::*;
 use crate::{
     errors::RvError,
     schema::vault::vault_key,
-    storage::physical::{Backend, BackendEntry},
+    storage::{Backend, BackendEntry},
 };
 
 use super::new;
@@ -130,8 +130,8 @@ mod test {
     use serde_json::Value;
     use std::collections::HashMap;
 
-    use crate::storage::physical::test::test_backend;
-    use crate::storage::physical::test::test_backend_list_prefix;
+    use crate::storage::test::test_backend;
+    use crate::storage::test::test_backend_list_prefix;
 
     use super::MysqlBackend;
 

@@ -253,7 +253,7 @@ mod test {
     use crate::{
         logical::{Field, field::FieldTrait, FieldType, PathOperation},
         new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal,
-        storage::{barrier_aes_gcm::AESGCMBarrier, physical},
+        storage,
     };
 
     struct MyTest;
@@ -307,9 +307,9 @@ mod test {
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
-        let backend = physical::new_backend("file", &conf).unwrap();
+        let backend = storage::new_backend("file", &conf).unwrap();
 
-        let barrier = AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
         let mut logical_backend = new_logical_backend!({
             paths: [
@@ -468,9 +468,9 @@ mod test {
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
-        let backend = physical::new_backend("file", &conf).unwrap();
+        let backend = storage::new_backend("file", &conf).unwrap();
 
-        let barrier = AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
         let mut logical_backend = new_logical_backend!({
             paths: [

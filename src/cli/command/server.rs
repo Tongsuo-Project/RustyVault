@@ -21,7 +21,7 @@ use crate::{
     core::Core,
     errors::RvError,
     http,
-    storage::{barrier_aes_gcm, physical},
+    storage,
     EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
 };
 
@@ -109,9 +109,9 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
 
     let server = actix_rt::System::new();
 
-    let backend = physical::new_backend(storage.stype.as_str(), &storage.config).unwrap();
+    let backend = storage::new_backend(storage.stype.as_str(), &storage.config).unwrap();
 
-    let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+    let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
     let core = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
 
