@@ -8,7 +8,7 @@ use std::{
 
 use serde_json::Value;
 
-use super::{Backend, BackendEntry};
+use crate::storage::{Backend, BackendEntry};
 use crate::errors::RvError;
 
 #[derive(Debug)]
@@ -140,7 +140,7 @@ mod test {
     use go_defer::defer;
 
     use super::{
-        super::test::{test_backend, test_backend_list_prefix},
+        super::super::test::{test_backend, test_backend_list_prefix},
         *,
     };
 

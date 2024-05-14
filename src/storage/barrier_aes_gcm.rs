@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     barrier::{SecurityBarrier, BARRIER_INIT_PATH},
-    physical::{Backend, BackendEntry},
+    Backend, BackendEntry,
     Storage, StorageEntry,
 };
 use crate::errors::RvError;
@@ -340,7 +340,7 @@ mod test {
         let mut key = vec![0u8; cipher.key_length()];
         thread_rng().fill(key.as_mut_slice());
 
-        let backend = physical::new_backend("file", &conf).unwrap();
+        let backend = new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier {
             backend,
@@ -380,7 +380,7 @@ mod test {
             110, 162, 1, 9, 51, 16, 75, 157, 129,
         ];
 
-        let backend = physical::new_backend("file", &conf).unwrap();
+        let backend = new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier {
             backend,
@@ -412,7 +412,7 @@ mod test {
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
-        let backend = physical::new_backend("file", &conf).unwrap();
+        let backend = new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 
@@ -459,7 +459,7 @@ mod test {
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
 
-        let backend = physical::new_backend("file", &conf).unwrap();
+        let backend = new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 

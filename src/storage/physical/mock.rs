@@ -1,6 +1,6 @@
 use std::default::Default;
 
-use super::{Backend, BackendEntry};
+use crate::storage::{Backend, BackendEntry};
 use crate::errors::RvError;
 
 #[derive(Default)]
