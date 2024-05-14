@@ -65,20 +65,16 @@ requested common name is allowed by the role policy.
 
 impl PkiBackendInner {
     pub fn issue_cert(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        //let role_name = req.get_data("role")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-
         let mut common_names = Vec::new();
 
-        let common_name_value = req.get_data("common_name")?;
+        let common_name_value = req.get_data_or_default("common_name")?;
         let common_name = common_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if common_name != "" {
             common_names.push(common_name.to_string());
         }
 
-        let alt_names_value = req.get_data("alt_names");
-        if alt_names_value.is_ok() {
-            let alt_names_val = alt_names_value.unwrap();
-            let alt_names = alt_names_val.as_str().unwrap();
+        if let Ok(alt_names_value) = req.get_data("alt_names") {
+            let alt_names = alt_names_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
             if alt_names != "" {
                 for v in alt_names.split(',') {
                     common_names.push(v.to_string());
@@ -94,10 +90,8 @@ impl PkiBackendInner {
         let role_entry = role.unwrap();
 
         let mut ip_sans = Vec::new();
-        let ip_sans_value = req.get_data("ip_sans");
-        if ip_sans_value.is_ok() {
-            let ip_sans_val = ip_sans_value.unwrap();
-            let ip_sans_str = ip_sans_val.as_str().unwrap();
+        if let Ok(ip_sans_value) = req.get_data("ip_sans") {
+            let ip_sans_str = ip_sans_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
             if ip_sans_str != "" {
                 for v in ip_sans_str.split(',') {
                     ip_sans.push(v.to_string());
@@ -109,9 +103,8 @@ impl PkiBackendInner {
         let not_before = SystemTime::now() - Duration::from_secs(10);
         let mut not_after = not_before + parse_duration("30d").unwrap();
 
-        let ttl_value = req.get_data("ttl")?;
-        let ttl = ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if ttl != "" {
+        if let Ok(ttl_value) = req.get_data("ttl") {
+            let ttl = ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
             let ttl_dur = parse_duration(ttl)?;
             let req_ttl_not_after_dur = SystemTime::now() + ttl_dur;
             let req_ttl_not_after =
