@@ -55,7 +55,6 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
             fields: {
                 "serial": {
                     field_type: FieldType::Str,
-                    default: "72h",
                     description: "Certificate serial number, in colon- or hyphen-separated octal"
                 }
             },

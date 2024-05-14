@@ -62,15 +62,7 @@ impl Request {
         Self { operation: Operation::Renew, path: path.to_string(), auth, data, ..Default::default() }
     }
 
-    pub fn get_data(&self, key: &str) -> Result<Value, RvError> {
-        if self.storage.is_none() || self.match_path.is_none() {
-            return Err(RvError::ErrRequestNotReady);
-        }
-
-        if self.data.is_none() && self.body.is_none() {
-            return Err(RvError::ErrRequestNoData);
-        }
-
+    fn get_data_raw(&self, key: &str, default: bool) -> Result<Value, RvError> {
         let field = self.match_path.as_ref().unwrap().get_field(key);
         if field.is_none() {
             return Err(RvError::ErrRequestNoDataField);
@@ -95,11 +87,64 @@ impl Request {
             }
         }
 
-        if field.required {
-            return Err(RvError::ErrRequestFieldNotFound);
+        if default {
+            if field.required {
+                return Err(RvError::ErrRequestFieldNotFound);
+            }
+
+            return field.get_default();
         }
 
-        return field.get_default();
+        return Err(RvError::ErrRequestFieldNotFound);
+    }
+
+    pub fn get_data(&self, key: &str) -> Result<Value, RvError> {
+        if self.storage.is_none() || self.match_path.is_none() {
+            return Err(RvError::ErrRequestNotReady);
+        }
+
+        if self.data.is_none() && self.body.is_none() {
+            return Err(RvError::ErrRequestNoData);
+        }
+
+        self.get_data_raw(key, false)
+    }
+
+    pub fn get_data_or_default(&self, key: &str) -> Result<Value, RvError> {
+        if self.storage.is_none() || self.match_path.is_none() {
+            return Err(RvError::ErrRequestNotReady);
+        }
+
+        if self.data.is_none() && self.body.is_none() {
+            return Err(RvError::ErrRequestNoData);
+        }
+
+        self.get_data_raw(key, true)
+    }
+
+    pub fn get_data_or_next(&self, keys: &[&str]) -> Result<Value, RvError> {
+        if self.storage.is_none() || self.match_path.is_none() {
+            return Err(RvError::ErrRequestNotReady);
+        }
+
+        if self.data.is_none() && self.body.is_none() {
+            return Err(RvError::ErrRequestNoData);
+        }
+
+        for &key in keys.iter() {
+            match self.get_data_raw(key, false) {
+                Ok(raw) => {
+                    return Ok(raw);
+                },
+                Err(e) => {
+                    if e != RvError::ErrRequestFieldNotFound {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        return Err(RvError::ErrRequestFieldNotFound);
     }
 
     //TODO: the sensitive data is still in the memory. Need to totally resolve this in `serde_json` someday.
