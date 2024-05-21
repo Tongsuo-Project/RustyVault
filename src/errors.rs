@@ -12,6 +12,20 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RvError {
+    #[error("Cipher operation update failed.")]
+    ErrCryptoCipherUpdateFailed,
+    #[error("Cipher operation finalization failed.")]
+    ErrCryptoCipherFinalizeFailed,
+    #[error("Cipher initialization failed.")]
+    ErrCryptoCipherInitFailed,
+    #[error("Cipher not initialized.")]
+    ErrCryptoCipherNotInited,
+    #[error("Cipher operation not supported.")]
+    ErrCryptoCipherOPNotSupported,
+    #[error("AEAD Cipher tag is missing.")]
+    ErrCryptoCipherNoTag,
+    #[error("AEAD Cipher tag should not be present.")]
+    ErrCryptoCipherAEADTagPresent,
     #[error("Config path is invalid.")]
     ErrConfigPathInvalid,
     #[error("Config load failed.")]
@@ -274,7 +288,14 @@ pub enum RvError {
 impl PartialEq for RvError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (RvError::ErrCoreLogicalBackendExist, RvError::ErrCoreLogicalBackendExist)
+            (RvError::ErrCryptoCipherUpdateFailed, RvError::ErrCryptoCipherUpdateFailed)
+            | (RvError::ErrCryptoCipherFinalizeFailed, RvError::ErrCryptoCipherFinalizeFailed)
+            | (RvError::ErrCryptoCipherInitFailed, RvError::ErrCryptoCipherInitFailed)
+            | (RvError::ErrCryptoCipherNotInited, RvError::ErrCryptoCipherNotInited)
+            | (RvError::ErrCryptoCipherOPNotSupported, RvError::ErrCryptoCipherOPNotSupported)
+            | (RvError::ErrCryptoCipherNoTag, RvError::ErrCryptoCipherNoTag)
+            | (RvError::ErrCryptoCipherAEADTagPresent, RvError::ErrCryptoCipherAEADTagPresent)
+            | (RvError::ErrCoreLogicalBackendExist, RvError::ErrCoreLogicalBackendExist)
             | (RvError::ErrCoreNotInit, RvError::ErrCoreNotInit)
             | (RvError::ErrCoreLogicalBackendNoExist, RvError::ErrCoreLogicalBackendNoExist)
             | (RvError::ErrCoreSealConfigInvalid, RvError::ErrCoreSealConfigInvalid)

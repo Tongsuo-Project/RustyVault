@@ -25,8 +25,6 @@ serde_json = "^1.0"
 serde_bytes = "0.11"
 go-defer = "^0.1"
 rand = "^0.8"
-openssl = { version = "0.10" }
-openssl-sys = { version = "0.9" }
 derivative = "2.2.0"
 enum-map = "2.6.1"
 strum = { version = "0.25", features = ["derive"] }
@@ -61,12 +59,20 @@ serde_asn1_der = "0.8"
 base64 = "0.22"
 ipnetwork = "0.20"
 
-[patch.crates-io]
-openssl = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }
-openssl-sys = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }
+# optional dependencies
+openssl = { version = "0.10", optional = true }
+openssl-sys = { version = "0.9", optional = true }
+
+# uncomment the following lines to use Tongsuo as underlying crypto adaptor
+#[patch.crates-io]
+#openssl = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }
+#openssl-sys = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }
 
 [features]
+default = ["crypto_adaptor_openssl"]
 storage_mysql = ["diesel", "r2d2", "r2d2-diesel"]
+crypto_adaptor_openssl = ["dep:openssl", "dep:openssl-sys"]
+crypto_adaptor_tongsuo = ["dep:openssl", "dep:openssl-sys"]
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5"
