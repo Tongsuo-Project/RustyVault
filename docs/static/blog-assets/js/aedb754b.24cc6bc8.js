@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunksea_orm=self.webpackChunksea_orm||[]).push([[7287],{60954:e=>{e.exports=JSON.parse('{"permalink":"/SeaORM/blog","page":1,"postsPerPage":16,"totalPages":1,"totalCount":16,"blogDescription":"Blog","blogTitle":"Blog"}')}}]);
