@@ -3,8 +3,14 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "docs/**/*"
+      - ".github/workflows/website.yml"
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - "docs/**/*"
+      - ".github/workflows/website.yml"
 
 env:
   CARGO_TERM_COLOR: always
