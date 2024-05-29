@@ -134,7 +134,7 @@ module.exports = {
     },
     announcementBar: {
       id: 'rustyvault-bar',
-      content: 'If you like 🧰 RustyVault, please give us a <a target="_blank" href="https://github.com/Tongsuo-Project/RustyVault/issues">⭐️ on GitHub</a> and complete our <a target="_blank" href="https://www.sea-ql.org/community-survey">Community Survey</a>! 🦀',
+      content: 'If you like 🧰 RustyVault, please give us a <a target="_blank" href="https://github.com/Tongsuo-Project/RustyVault">⭐️ on GitHub</a>',
     },
   },
   themes: [
