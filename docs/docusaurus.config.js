@@ -55,7 +55,11 @@ module.exports = {
           sidebarId: 'tutorialSidebar',
           label: 'Docs',
         },
-        // {to: '/blog', label: 'Blog', position: 'left'},
+        { 
+          href: 'https://www.tongsuo.net/blog', 
+          label: 'Blog', 
+          position: 'left'
+        },
         {
           to: 'https://crates.io/crates/rusty_vault',
           label: 'Crate',
