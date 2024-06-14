@@ -1,5 +1,5 @@
 //! This module is a Rust replica of
-//! https://github.com/hashicorp/go-sockaddr/blob/master/ipv4addr.go
+//! <https://github.com/hashicorp/go-sockaddr/blob/master/ipv4addr.go>
 
 use std::{
     fmt,

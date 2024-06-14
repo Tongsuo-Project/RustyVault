@@ -1,5 +1,5 @@
 //! This module is a Rust replica of
-//! https://github.com/hashicorp/vault/blob/main/sdk/helper/salt/salt.go
+//! <https://github.com/hashicorp/vault/blob/main/sdk/helper/salt/salt.go>
 
 use openssl::{
     hash::{hash, MessageDigest},
