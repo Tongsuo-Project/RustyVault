@@ -1,5 +1,5 @@
 //! This module is a Rust replica of
-//! https://github.com/hashicorp/go-sockaddr/blob/master/unixsock.go
+//! <https://github.com/hashicorp/go-sockaddr/blob/master/unixsock.go>
 
 use std::fmt;
 use as_any::Downcast;

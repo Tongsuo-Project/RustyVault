@@ -1,5 +1,5 @@
 //! This module is a Rust replica of
-//! https://github.com/hashicorp/go-sockaddr/blob/master/sockaddr.go
+//! <https://github.com/hashicorp/go-sockaddr/blob/master/sockaddr.go>
 
 use std::{
     fmt,
