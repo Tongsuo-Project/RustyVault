@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use lazy_static::lazy_static;
 
 use crate::{
     errors::RvError,

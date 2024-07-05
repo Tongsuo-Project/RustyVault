@@ -13,7 +13,7 @@ use serde_json::{from_value, json, Map, Value};
 use crate::{
     context::Context,
     core::Core,
-    context::Context, errors::RvError,
+    errors::RvError,
     logical::{Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response},
     modules::{auth::AuthModule, Module},
     mount::MountEntry,
