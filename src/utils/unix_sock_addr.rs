@@ -2,13 +2,11 @@
 //! <https://github.com/hashicorp/go-sockaddr/blob/master/unixsock.go>
 
 use std::fmt;
+
 use as_any::Downcast;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    sock_addr::{SockAddr, SockAddrType},
-};
-
+use super::sock_addr::{SockAddr, SockAddrType};
 use crate::errors::RvError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -20,11 +18,13 @@ impl UnixSockAddr {
     pub fn new(s: &str) -> Result<Self, RvError> {
         // Check to make sure the string begins with either a '.' or '/', or contains a '/'.
         if s.len() > 1 && (s[0..1].contains('.') || s[0..1].contains('/') || s.contains('/')) {
-            Ok(Self {
-                path: s.to_string(),
-            })
+            Ok(Self { path: s.to_string() })
         } else {
-            Err(RvError::ErrResponse(format!("Unable to convert {} to a UNIX Socke, make sure the string begins with either a '.' or '/', or contains a '/'", s)))
+            Err(RvError::ErrResponse(format!(
+                "Unable to convert {} to a UNIX Socke, make sure the string begins with either a '.' or '/', or \
+                 contains a '/'",
+                s
+            )))
         }
     }
 }
@@ -59,9 +59,7 @@ impl fmt::Display for UnixSockAddr {
 
 #[cfg(test)]
 mod test {
-    use super::{
-        *, super::sock_addr::{SockAddrType},
-    };
+    use super::{super::sock_addr::SockAddrType, *};
 
     #[test]
     fn test_unix_sock_addr() {

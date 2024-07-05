@@ -1,9 +1,7 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use super::{request::Request, response::Response, Backend, Field, Operation};
-use crate::{
-    context::Context, errors::RvError
-};
+use crate::{context::Context, errors::RvError};
 
 type PathOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
@@ -30,7 +28,13 @@ impl fmt::Debug for PathOperation {
 
 impl Path {
     pub fn new(pattern: &str) -> Self {
-        Self { ctx: Arc::new(Context::new()), pattern: pattern.to_string(), fields: HashMap::new(), operations: Vec::new(), help: String::new() }
+        Self {
+            ctx: Arc::new(Context::new()),
+            pattern: pattern.to_string(),
+            fields: HashMap::new(),
+            operations: Vec::new(),
+            help: String::new(),
+        }
     }
 
     pub fn get_field(&self, key: &str) -> Option<Arc<Field>> {

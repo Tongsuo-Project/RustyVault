@@ -8,8 +8,10 @@ use std::{
 
 use serde_json::Value;
 
-use crate::storage::{Backend, BackendEntry};
-use crate::errors::RvError;
+use crate::{
+    errors::RvError,
+    storage::{Backend, BackendEntry},
+};
 
 #[derive(Debug)]
 pub struct FileBackend {

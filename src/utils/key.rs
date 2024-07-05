@@ -48,7 +48,7 @@ fn key_bits_default(key_type: &str) -> u32 {
         "ec" | "sm2" => 256,
         "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm" => 256,
         _ => 0,
-    }
+    };
 }
 
 // TODO: this function needs to be refactored to use crypto adaptors.
@@ -73,26 +73,20 @@ fn cipher_from_key_type_and_bits(key_type: &str, bits: u32) -> Result<Cipher, Rv
 
 impl KeyBundle {
     pub fn new(name: &str, key_type: &str, key_bits: u32) -> Self {
-        let bits = if key_bits == 0 {
-            key_bits_default(key_type)
-        } else {
-            key_bits
-        };
-        Self { name: name.to_string(), key_type: key_type.to_string(), bits: bits, ..KeyBundle::default() }
+        let bits = if key_bits == 0 { key_bits_default(key_type) } else { key_bits };
+        Self { name: name.to_string(), key_type: key_type.to_string(), bits, ..KeyBundle::default() }
     }
 
     pub fn generate(&mut self) -> Result<(), RvError> {
         let key_bits = self.bits;
         let priv_key = match self.key_type.as_str() {
-            "rsa" => {
-                match key_bits {
-                    2048 | 3072 | 4096 => {
-                        let rsa_key = Rsa::generate(key_bits)?;
-                        PKey::from_rsa(rsa_key)?.private_key_to_pem_pkcs8()?
-                    },
-                    _ => return Err(RvError::ErrPkiKeyBitsInvalid),
+            "rsa" => match key_bits {
+                2048 | 3072 | 4096 => {
+                    let rsa_key = Rsa::generate(key_bits)?;
+                    PKey::from_rsa(rsa_key)?.private_key_to_pem_pkcs8()?
                 }
-            }
+                _ => return Err(RvError::ErrPkiKeyBitsInvalid),
+            },
             "ec" => {
                 let curve_name = match key_bits {
                     224 => Nid::SECP224R1,
@@ -111,7 +105,7 @@ impl KeyBundle {
                 let ec_group = EcGroup::from_curve_name(Nid::SM2)?;
                 let ec_key = EcKey::generate(&ec_group)?;
                 PKey::from_ec_key(ec_key)?.private_key_to_pem_pkcs8()?
-            },
+            }
             "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm" => {
                 let _ = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
 
@@ -135,7 +129,7 @@ impl KeyBundle {
                 let mut key = vec![0u8; key_bits as usize / 8];
                 rand_bytes(&mut key)?;
                 key
-            },
+            }
             _ => {
                 return Err(RvError::ErrPkiKeyTypeInvalid);
             }
@@ -193,14 +187,7 @@ impl KeyBundle {
                     _ => "".as_bytes(),
                 });
                 let mut tag = vec![0u8; 16];
-                let mut ciphertext = encrypt_aead(
-                    cipher,
-                    &self.key,
-                    Some(&self.iv),
-                    aad,
-                    data,
-                    &mut tag,
-                    )?;
+                let mut ciphertext = encrypt_aead(cipher, &self.key, Some(&self.iv), aad, data, &mut tag)?;
                 ciphertext.extend_from_slice(&tag);
                 Ok(ciphertext)
             }
@@ -234,7 +221,6 @@ impl KeyBundle {
     }
 
     pub fn decrypt(&self, data: &[u8], extra: Option<EncryptExtraData>) -> Result<Vec<u8>, RvError> {
-
         match self.key_type.as_str() {
             "aes-gcm" | "sm4-gcm" | "sm4-ccm" => {
                 let cipher = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
@@ -248,12 +234,12 @@ impl KeyBundle {
                 }
                 let (ciphertext, tag) = data.split_at(data.len() - tag_len);
                 Ok(decrypt_aead(cipher, &self.key, Some(&self.iv), aad, ciphertext, tag)?)
-            },
+            }
             "aes-cbc" | "aes-ecb" => {
                 let cipher = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
                 let iv = if self.key_type == "aes-ecb" { None } else { Some(self.iv.as_slice()) };
                 Ok(decrypt(cipher, &self.key, iv, data)?)
-            },
+            }
             "rsa" => {
                 let rsa = Rsa::private_key_from_pem(&self.key)?;
                 if data.len() > rsa.size() as usize {

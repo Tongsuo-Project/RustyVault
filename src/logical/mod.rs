@@ -17,9 +17,7 @@ use enum_map::Enum;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
-use crate::{
-    context::Context, errors::RvError,
-};
+use crate::{context::Context, errors::RvError};
 
 pub mod auth;
 pub mod backend;
@@ -33,13 +31,13 @@ pub mod secret;
 
 pub use auth::Auth;
 pub use backend::{LogicalBackend, CTX_KEY_BACKEND_PATH};
+pub use connection::Connection;
 pub use field::{Field, FieldType};
 pub use lease::Lease;
 pub use path::{Path, PathOperation};
 pub use request::Request;
 pub use response::Response;
 pub use secret::{Secret, SecretData};
-pub use connection::Connection;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, EnumString, Display, Enum, Serialize, Deserialize)]
 pub enum Operation {

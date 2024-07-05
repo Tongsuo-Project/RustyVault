@@ -7,9 +7,6 @@ pub struct Connection {
 
 impl Default for Connection {
     fn default() -> Self {
-        Self {
-            peer_addr: String::new(),
-            peer_tls_cert: None,
-        }
+        Self { peer_addr: String::new(), peer_tls_cert: None }
     }
 }

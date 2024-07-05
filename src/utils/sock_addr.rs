@@ -1,19 +1,12 @@
 //! This module is a Rust replica of
 //! <https://github.com/hashicorp/go-sockaddr/blob/master/sockaddr.go>
 
-use std::{
-    fmt,
-    str::FromStr,
-};
+use std::{fmt, str::FromStr};
 
 use as_any::AsAny;
-use serde::{Deserialize, Serialize, Deserializer, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{
-    ip_sock_addr::IpSockAddr,
-    unix_sock_addr::UnixSockAddr,
-};
-
+use super::{ip_sock_addr::IpSockAddr, unix_sock_addr::UnixSockAddr};
 use crate::errors::RvError;
 
 pub trait CloneBox {
@@ -61,9 +54,7 @@ impl SockAddrMarshaler {
 
     pub fn from_str(s: &str) -> Result<Self, RvError> {
         let sock_addr = new_sock_addr(s)?;
-        Ok(SockAddrMarshaler {
-            sock_addr: sock_addr,
-        })
+        Ok(SockAddrMarshaler { sock_addr })
     }
 }
 
@@ -96,9 +87,7 @@ impl<'de> Deserialize<'de> for SockAddrMarshaler {
     {
         let s = String::deserialize(deserializer)?;
         let sock_addr = new_sock_addr(&s).map_err(serde::de::Error::custom)?;
-        Ok(SockAddrMarshaler {
-            sock_addr: sock_addr,
-        })
+        Ok(SockAddrMarshaler { sock_addr })
     }
 }
 
@@ -121,7 +110,7 @@ impl FromStr for SockAddrType {
             "IPv4" | "ipv4" => Ok(SockAddrType::IPv4),
             "IPv6" | "ipv6" => Ok(SockAddrType::IPv6),
             "Unix" | "UNIX" | "unix" => Ok(SockAddrType::Unix),
-            _ => Err(RvError::ErrResponse("invalid sockaddr type".to_string()))
+            _ => Err(RvError::ErrResponse("invalid sockaddr type".to_string())),
         }
     }
 }
@@ -141,11 +130,8 @@ pub fn new_sock_addr(s: &str) -> Result<Box<dyn SockAddr>, RvError> {
 #[cfg(test)]
 mod test {
     use super::{
-        *, super::{
-            sock_addr::{SockAddrType},
-            ip_sock_addr::IpSockAddr,
-            unix_sock_addr::UnixSockAddr,
-        },
+        super::{ip_sock_addr::IpSockAddr, sock_addr::SockAddrType, unix_sock_addr::UnixSockAddr},
+        *,
     };
 
     #[test]
