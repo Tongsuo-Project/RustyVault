@@ -15,6 +15,7 @@
 //! Different strage types are all as sub-module of this module.
 
 use std::{collections::HashMap, sync::Arc};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -23,9 +24,9 @@ use crate::errors::RvError;
 pub mod barrier;
 pub mod barrier_aes_gcm;
 pub mod barrier_view;
-pub mod physical;
 #[cfg(feature = "storage_mysql")]
 pub mod mysql;
+pub mod physical;
 
 /// A trait that abstracts core methods for all storage barrier types.
 pub trait Storage: Send + Sync {
@@ -78,12 +79,12 @@ pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Bac
         "file" => {
             let backend = physical::file::FileBackend::new(conf)?;
             Ok(Arc::new(backend))
-        },
+        }
         #[cfg(feature = "storage_mysql")]
         "mysql" => {
             let backend = mysql::mysql_backend::MysqlBackend::new(conf)?;
             Ok(Arc::new(backend))
-        },
+        }
         "mock" => Ok(Arc::new(physical::mock::MockBackend::new())),
         _ => Err(RvError::ErrPhysicalTypeInvalid),
     }

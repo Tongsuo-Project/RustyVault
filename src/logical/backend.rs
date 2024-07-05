@@ -3,10 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use regex::Regex;
 use serde_json::{Map, Value};
 
-use super::{path::Path, request::Request, response::Response, secret::Secret, FieldType, Backend, Operation};
-use crate::{
-    context::Context, errors::RvError
-};
+use super::{path::Path, request::Request, response::Response, secret::Secret, Backend, FieldType, Operation};
+use crate::{context::Context, errors::RvError};
 
 type BackendOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
@@ -262,9 +260,8 @@ mod test {
 
     use super::*;
     use crate::{
-        logical::{Field, field::FieldTrait, FieldType, PathOperation},
-        new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal,
-        storage,
+        logical::{field::FieldTrait, Field, FieldType, PathOperation},
+        new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal, storage,
     };
 
     struct MyTest;
@@ -440,7 +437,10 @@ mod test {
             "mytype": 1,
             "mypath": "/pp",
             "mypassword": "123qwe",
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
         req.body = Some(body);
         req.storage = Some(Arc::new(barrier));
         assert!(logical_backend.handle_request(&mut req).is_ok());

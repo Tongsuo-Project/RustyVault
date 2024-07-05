@@ -2,11 +2,13 @@
 
 use std::collections::HashMap;
 
-use diesel::mysql::MysqlConnection;
-use diesel::r2d2::{self, ConnectionManager};
+use diesel::{
+    mysql::MysqlConnection,
+    r2d2::{self, ConnectionManager},
+};
+use serde_json::Value;
 
 use crate::errors::RvError;
-use serde_json::Value;
 
 type MysqlDbPool = r2d2::Pool<ConnectionManager<MysqlConnection>>;
 
@@ -15,8 +17,8 @@ pub mod mysql_backend;
 pub fn new(conf: &HashMap<String, Value>) -> Result<MysqlDbPool, RvError> {
     let pool = establish_mysql_connection(conf);
     match pool {
-        Ok(pool)=> Ok(pool),
-        Err(e)=> Err(e),
+        Ok(pool) => Ok(pool),
+        Err(e) => Err(e),
     }
 }
 
@@ -47,7 +49,7 @@ fn establish_mysql_connection(conf: &HashMap<String, Value>) -> Result<MysqlDbPo
         Err(e) => {
             log::error!("Error: {:?}", e);
             Err(RvError::ErrConnectionPoolCreate { source: (e) })
-        },
+        }
     }
 }
 
@@ -65,7 +67,7 @@ mod test {
         conf.insert("password".to_string(), Value::String("password".to_string()));
 
         let pool = establish_mysql_connection(&conf);
-        
+
         assert!(pool.is_ok());
     }
 }

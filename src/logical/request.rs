@@ -151,14 +151,13 @@ impl Request {
     }
 
     pub fn get_data_as_str(&self, key: &str) -> Result<String, RvError> {
-        self.get_data(key)?
-            .as_str()
-            .ok_or(RvError::ErrRequestFieldInvalid)
-            .and_then(|s| if s.trim().is_empty() {
+        self.get_data(key)?.as_str().ok_or(RvError::ErrRequestFieldInvalid).and_then(|s| {
+            if s.trim().is_empty() {
                 Err(RvError::ErrResponse(format!("missing {}", key)))
             } else {
                 Ok(s.trim().to_string())
-            })
+            }
+        })
     }
 
     pub fn get_field_default_or_zero(&self, key: &str) -> Result<Value, RvError> {

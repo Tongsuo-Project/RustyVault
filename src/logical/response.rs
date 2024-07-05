@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use lazy_static::lazy_static;
 
 use crate::{
     errors::RvError,
-    logical::{Auth, secret::SecretData},
+    logical::{secret::SecretData, Auth},
 };
 
 lazy_static! {
@@ -32,7 +32,15 @@ pub struct Response {
 
 impl Default for Response {
     fn default() -> Self {
-        Response { request_id: String::new(), headers: None, data: None, auth: None, secret: None, redirect: String::new(), warnings: Vec::new(), }
+        Response {
+            request_id: String::new(),
+            headers: None,
+            data: None,
+            auth: None,
+            secret: None,
+            redirect: String::new(),
+            warnings: Vec::new(),
+        }
     }
 }
 
@@ -98,7 +106,10 @@ impl Response {
         let mut data: Map<String, Value> = json!({
             HTTP_CONTENT_TYPE.to_string(): "application/json",
             HTTP_STATUS_CODE.to_string(): code,
-        }).as_object().unwrap().clone();
+        })
+        .as_object()
+        .unwrap()
+        .clone();
 
         if let Some(response) = resp {
             let raw_body = serde_json::to_value(response).unwrap();

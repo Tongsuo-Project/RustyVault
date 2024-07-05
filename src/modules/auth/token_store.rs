@@ -11,8 +11,9 @@ use super::{
     AUTH_ROUTER_PREFIX,
 };
 use crate::{
+    context::Context,
     core::Core,
-    context::Context, errors::RvError,
+    errors::RvError,
     handler::Handler,
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,

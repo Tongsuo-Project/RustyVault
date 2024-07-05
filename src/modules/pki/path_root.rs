@@ -4,7 +4,8 @@ use serde_json::{json, Value};
 
 use super::{field, util, PkiBackend, PkiBackendInner};
 use crate::{
-    context::Context, errors::RvError,
+    context::Context,
+    errors::RvError,
     logical::{Backend, Operation, Path, PathOperation, Request, Response},
     new_path, new_path_internal, utils,
 };

@@ -10,7 +10,8 @@ use serde_json::{json, Map, Value};
 
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
-    context::Context, errors::RvError,
+    context::Context,
+    errors::RvError,
     logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal, utils,
     utils::cert,
