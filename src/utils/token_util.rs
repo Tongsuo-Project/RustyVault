@@ -123,7 +123,6 @@ impl TokenParams {
             self.token_num_uses = num_uses_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
         }
 
-        println!("111");
         if let Ok(type_value) = req.get_data_or_default("token_type") {
             let token_type = type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
             self.token_type = match token_type.as_str() {
@@ -140,7 +139,6 @@ impl TokenParams {
                 }
             };
         }
-        println!("222");
 
         if let Ok(policies_value) = req.get_data("token_policies") {
             self.token_policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
