@@ -1,20 +1,13 @@
 //! This module is a Rust replica of
 //! <https://github.com/hashicorp/go-sockaddr/blob/master/ipv4addr.go>
 
-use std::{
-    fmt,
-    str::FromStr,
-    net::SocketAddr,
-};
+use std::{fmt, net::SocketAddr, str::FromStr};
 
 use as_any::Downcast;
 use ipnetwork::IpNetwork;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    sock_addr::{SockAddr, SockAddrType},
-};
-
+use super::sock_addr::{SockAddr, SockAddrType};
 use crate::errors::RvError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -26,15 +19,9 @@ pub struct IpSockAddr {
 impl IpSockAddr {
     pub fn new(s: &str) -> Result<Self, RvError> {
         if let Ok(sock_addr) = SocketAddr::from_str(s) {
-            return Ok(IpSockAddr {
-                addr: IpNetwork::from(sock_addr.ip()),
-                port: sock_addr.port(),
-            });
+            return Ok(IpSockAddr { addr: IpNetwork::from(sock_addr.ip()), port: sock_addr.port() });
         } else if let Ok(ip_addr) = IpNetwork::from_str(s) {
-            return Ok(IpSockAddr {
-                addr: ip_addr,
-                port: 0,
-            });
+            return Ok(IpSockAddr { addr: ip_addr, port: 0 });
         }
         return Err(RvError::ErrResponse(format!("Unable to parse {} to an IP address:", s)));
     }
@@ -85,9 +72,7 @@ impl fmt::Display for IpSockAddr {
 
 #[cfg(test)]
 mod test {
-    use super::{
-        *, super::sock_addr::{SockAddrType},
-    };
+    use super::{super::sock_addr::SockAddrType, *};
 
     #[test]
     fn test_ip_sock_addr() {

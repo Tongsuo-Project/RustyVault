@@ -27,11 +27,12 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //! SOFTWARE.
 
+use std::ops::DerefMut;
+
 use rand::{thread_rng, RngCore};
+use zeroize::Zeroizing;
 
 use crate::errors::RvError;
-use zeroize::Zeroizing;
-use std::ops::DerefMut;
 
 static GF256_EXP: [u8; 256] = [
     0x01, 0xe5, 0x4c, 0xb5, 0xfb, 0x9f, 0xfc, 0x12, 0x03, 0x34, 0xd4, 0xc4, 0x16, 0xba, 0x1f, 0x36, 0x05, 0x5c, 0x67,

@@ -18,7 +18,7 @@ use crate::{
     core::Core,
     errors::RvError,
     http::{request_auth, response_error, response_json_ok, response_ok, Connection},
-    logical::{Operation, Connection as ReqConnection, Response},
+    logical::{Connection as ReqConnection, Operation, Response},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

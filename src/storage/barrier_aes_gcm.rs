@@ -1,8 +1,10 @@
 //! This is the implementation of aes-gcm barrier, which uses aes-gcm block cipher to encrypt or
 //! decrypt data before writing or reading data to or from specific storage backend.
 
-use std::sync::{Arc, RwLock};
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{Arc, RwLock},
+};
 
 use openssl::{
     cipher::{Cipher, CipherRef},
@@ -10,14 +12,13 @@ use openssl::{
 };
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, Zeroizing};
 
 use super::{
     barrier::{SecurityBarrier, BARRIER_INIT_PATH},
-    Backend, BackendEntry,
-    Storage, StorageEntry,
+    Backend, BackendEntry, Storage, StorageEntry,
 };
 use crate::errors::RvError;
-use zeroize::{Zeroize, Zeroizing};
 
 const EPOCH_SIZE: usize = 4;
 const KEY_EPOCH: u8 = 1;

@@ -24,13 +24,7 @@ use crate::{
     handler::Handler,
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
-    modules::{
-        auth::AuthModule,
-        credential::{
-            userpass::UserPassModule,
-        },
-        pki::PkiModule,
-    },
+    modules::{auth::AuthModule, credential::userpass::UserPassModule, pki::PkiModule},
     mount::MountTable,
     router::Router,
     shamir::{ShamirSecret, SHAMIR_OVERHEAD},
