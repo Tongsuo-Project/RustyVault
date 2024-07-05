@@ -4,9 +4,13 @@ use regex::Regex;
 use serde_json::{Map, Value};
 
 use super::{path::Path, request::Request, response::Response, secret::Secret, FieldType, Backend, Operation};
-use crate::errors::RvError;
+use crate::{
+    context::Context, errors::RvError
+};
 
 type BackendOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
+
+pub const CTX_KEY_BACKEND_PATH: &str = "backend.path";
 
 #[derive(Clone)]
 pub struct LogicalBackend {
@@ -17,6 +21,7 @@ pub struct LogicalBackend {
     pub help: String,
     pub secrets: Vec<Arc<Secret>>,
     pub auth_renew_handler: Option<Arc<BackendOperationHandler>>,
+    pub ctx: Arc<Context>,
 }
 
 impl Backend for LogicalBackend {
@@ -58,6 +63,10 @@ impl Backend for LogicalBackend {
         Some(self.root_paths.clone())
     }
 
+    fn get_ctx(&self) -> Option<Arc<Context>> {
+        Some(Arc::clone(&self.ctx))
+    }
+
     fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         if req.storage.is_none() {
             return Err(RvError::ErrRequestNotReady);
@@ -86,6 +95,7 @@ impl Backend for LogicalBackend {
             req.match_path = Some(path.clone());
             for operation in &path.operations {
                 if operation.op == req.operation {
+                    self.ctx.set(CTX_KEY_BACKEND_PATH, path.clone());
                     let ret = operation.handle_request(self, req);
                     self.clear_secret_field(req);
                     return ret;
@@ -113,6 +123,7 @@ impl LogicalBackend {
             help: String::new(),
             secrets: Vec::new(),
             auth_renew_handler: None,
+            ctx: Arc::new(Context::new()),
         }
     }
 

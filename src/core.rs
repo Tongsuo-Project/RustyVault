@@ -9,13 +9,14 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
     ops::{Deref, DerefMut},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use as_any::Downcast;
 use go_defer::defer;
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 use crate::{
     cli::config::Config,
@@ -23,21 +24,21 @@ use crate::{
     handler::Handler,
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
-    modules::{auth::AuthModule, credential::userpass::UserPassModule, pki::PkiModule},
+    modules::{
+        auth::AuthModule,
+        credential::{
+            userpass::UserPassModule,
+        },
+        pki::PkiModule,
+    },
     mount::MountTable,
     router::Router,
     shamir::{ShamirSecret, SHAMIR_OVERHEAD},
     storage::{
-        barrier::SecurityBarrier,
-        barrier_aes_gcm,
-        barrier_view::BarrierView,
-        physical,
-        Backend as PhysicalBackend,
-        BackendEntry as PhysicalBackendEntry,
+        barrier::SecurityBarrier, barrier_aes_gcm, barrier_view::BarrierView, physical, Backend as PhysicalBackend,
+        BackendEntry as PhysicalBackendEntry, Storage,
     },
 };
-
-use zeroize::Zeroizing;
 
 pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Core>>) -> Result<Arc<dyn Backend>, RvError> + Send + Sync;
 
@@ -156,8 +157,11 @@ impl Core {
         if seal_config.secret_shares == 1 {
             init_result.secret_shares.deref_mut().push(master_key.deref().clone());
         } else {
-            init_result.secret_shares =
-                ShamirSecret::split(master_key.deref().as_slice(), seal_config.secret_shares, seal_config.secret_threshold)?;
+            init_result.secret_shares = ShamirSecret::split(
+                master_key.deref().as_slice(),
+                seal_config.secret_shares,
+                seal_config.secret_threshold,
+            )?;
         }
 
         log::debug!("master_key: {}", hex::encode(master_key.deref()));
@@ -195,6 +199,14 @@ impl Core {
         self.pre_seal()?;
 
         Ok(init_result)
+    }
+
+    pub fn get_system_view(&self) -> Option<Arc<BarrierView>> {
+        self.system_view.clone()
+    }
+
+    pub fn get_system_storage(&self) -> &dyn Storage {
+        self.system_view.as_ref().unwrap().as_storage()
     }
 
     pub fn get_logical_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {

@@ -152,6 +152,7 @@ mod test {
     fn test_salt() {
         // init the storage
         let dir = env::temp_dir().join("rusty_vault_test_salt");
+        let _ = fs::remove_dir_all(&dir);
         assert!(fs::create_dir(&dir).is_ok());
         defer! (
             assert!(fs::remove_dir_all(&dir).is_ok());
