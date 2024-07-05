@@ -28,7 +28,7 @@ pub mod physical;
 pub mod mysql;
 
 /// A trait that abstracts core methods for all storage barrier types.
-pub trait Storage {
+pub trait Storage: Send + Sync {
     fn list(&self, prefix: &str) -> Result<Vec<String>, RvError>;
     fn get(&self, key: &str) -> Result<Option<StorageEntry>, RvError>;
     fn put(&self, entry: &StorageEntry) -> Result<(), RvError>;
