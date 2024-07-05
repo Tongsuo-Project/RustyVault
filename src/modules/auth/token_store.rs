@@ -12,7 +12,7 @@ use super::{
 };
 use crate::{
     core::Core,
-    errors::RvError,
+    context::Context, errors::RvError,
     handler::Handler,
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,

@@ -38,6 +38,10 @@ impl IpSockAddr {
         }
         return Err(RvError::ErrResponse(format!("Unable to parse {} to an IP address:", s)));
     }
+
+    pub fn to_string(&self) -> String {
+        format!("{}", self)
+    }
 }
 
 impl SockAddr for IpSockAddr {
@@ -67,11 +71,15 @@ impl SockAddr for IpSockAddr {
 
 impl fmt::Display for IpSockAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.port == 0 {
-            write!(f, "{}", self.addr.ip())
-        } else {
-            write!(f, "{}:{}", self.addr.ip(), self.port)
+        if self.port != 0 {
+            return write!(f, "{}:{}", self.addr.ip(), self.port);
         }
+
+        if self.addr.prefix() == 32 {
+            return write!(f, "{}", self.addr.ip());
+        }
+
+        write!(f, "{}/{}", self.addr.ip(), self.addr.prefix())
     }
 }
 

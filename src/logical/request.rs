@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use serde_json::{Map, Value};
+use tokio::task::JoinHandle;
 
 use super::{Operation, Path};
 use crate::{
@@ -23,6 +24,7 @@ pub struct Request {
     pub connection: Option<Connection>,
     pub secret: Option<SecretData>,
     pub auth: Option<Auth>,
+    pub tasks: Vec<JoinHandle<()>>,
 }
 
 impl Default for Request {
@@ -41,6 +43,7 @@ impl Default for Request {
             connection: None,
             secret: None,
             auth: None,
+            tasks: Vec::new(),
         }
     }
 }
@@ -135,7 +138,7 @@ impl Request {
             match self.get_data_raw(key, false) {
                 Ok(raw) => {
                     return Ok(raw);
-                },
+                }
                 Err(e) => {
                     if e != RvError::ErrRequestFieldNotFound {
                         return Err(e);
@@ -145,6 +148,22 @@ impl Request {
         }
 
         return Err(RvError::ErrRequestFieldNotFound);
+    }
+
+    pub fn get_data_as_str(&self, key: &str) -> Result<String, RvError> {
+        self.get_data(key)?
+            .as_str()
+            .ok_or(RvError::ErrRequestFieldInvalid)
+            .and_then(|s| if s.trim().is_empty() {
+                Err(RvError::ErrResponse(format!("missing {}", key)))
+            } else {
+                Ok(s.trim().to_string())
+            })
+    }
+
+    pub fn get_field_default_or_zero(&self, key: &str) -> Result<Value, RvError> {
+        let field = self.match_path.as_ref().unwrap().get_field(key).ok_or(RvError::ErrRequestNoDataField)?;
+        field.get_default()
     }
 
     //TODO: the sensitive data is still in the memory. Need to totally resolve this in `serde_json` someday.
@@ -196,5 +215,9 @@ impl Request {
         }
 
         self.storage.as_ref().unwrap().delete(key)
+    }
+
+    pub fn add_task(&mut self, task: JoinHandle<()>) {
+        self.tasks.push(task);
     }
 }
