@@ -61,7 +61,3 @@ Part of the features provided by RustyVault are as follows:
 ## Design
 
 Read the [design](./doc/design.md) document.
-
-## Docs
-
-Read the [docs](rustyvault.netlify.app) site.
