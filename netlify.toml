@@ -1,4 +1,4 @@
 [build]
-  base = "/docs"
-  publish = "/docs/build"
-  ignore = "git diff --quiet $COMMIT_REF $CACHED_COMMIT_REF -- docs/"
+  base = "docs"
+  publish = "docs/build"
+  ignore = "git diff --quiet $COMMIT_REF $CACHED_COMMIT_REF -- ../docs/ .  ../netlify.toml"
