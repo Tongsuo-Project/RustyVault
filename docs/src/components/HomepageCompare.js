@@ -6,7 +6,7 @@ import styles from './HomepageCompare.module.css';
 
 export default function render() {
   return (
-    <section className={clsx('home-section', styles.features)}>
+    <section className={clsx('home-section', 'home-section-alt', styles.features)}>
       <div className="container">
         <div className="row">
           <div className={clsx('col col--12')}>
