@@ -240,6 +240,12 @@ pub enum RvError {
         source: ipnetwork::IpNetworkError,
     },
 
+    #[error("Some actix_web http header error happened, {:?}", .source)]
+    ActixWebHttpHeaderError {
+        #[from]
+        source: actix_web::http::header::ToStrError,
+    },
+
     /// Database Errors Begin
     ///
     #[error("Database type is not support now. Please try postgressql or mysql again.")]
