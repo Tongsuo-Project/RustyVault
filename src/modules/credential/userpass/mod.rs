@@ -1,9 +1,9 @@
 use std::{
-    ops::Deref,
     sync::{Arc, RwLock},
 };
 
 use as_any::Downcast;
+use derive_more::Deref;
 
 use crate::{
     core::Core,
@@ -34,16 +34,10 @@ pub struct UserPassBackendInner {
     pub core: Arc<RwLock<Core>>,
 }
 
+#[derive(Deref)]
 pub struct UserPassBackend {
+    #[deref]
     pub inner: Arc<UserPassBackendInner>,
-}
-
-impl Deref for UserPassBackend {
-    type Target = UserPassBackendInner;
-
-    fn deref(&self) -> &UserPassBackendInner {
-        &self.inner
-    }
 }
 
 impl UserPassBackend {
