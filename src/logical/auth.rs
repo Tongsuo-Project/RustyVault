@@ -1,14 +1,16 @@
 use std::{
     collections::HashMap,
-    ops::{Deref, DerefMut},
 };
 
+use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
 use super::lease::Lease;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Deref, DerefMut)]
 pub struct Auth {
+    #[deref]
+    #[deref_mut]
     pub lease: Lease,
     pub client_token: String,
     pub display_name: String,
@@ -27,19 +29,5 @@ impl Default for Auth {
             internal_data: HashMap::new(),
             metadata: HashMap::new(),
         }
-    }
-}
-
-impl Deref for Auth {
-    type Target = Lease;
-
-    fn deref(&self) -> &Lease {
-        &self.lease
-    }
-}
-
-impl DerefMut for Auth {
-    fn deref_mut(&mut self) -> &mut Lease {
-        &mut self.lease
     }
 }

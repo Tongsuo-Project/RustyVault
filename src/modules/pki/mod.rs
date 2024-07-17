@@ -2,10 +2,11 @@
 //! manipulating certificates as a CA or encrypting a piece of data by using a public key.
 
 use std::{
-    ops::Deref,
     sync::{atomic::AtomicU64, Arc, RwLock},
     time::Duration,
 };
+
+use derive_more::Deref;
 
 use crate::{
     core::Core,
@@ -45,16 +46,10 @@ pub struct PkiBackendInner {
     pub revoked_cert_count: AtomicU64,
 }
 
+#[derive(Deref)]
 pub struct PkiBackend {
+    #[deref]
     pub inner: Arc<PkiBackendInner>,
-}
-
-impl Deref for PkiBackend {
-    type Target = PkiBackendInner;
-
-    fn deref(&self) -> &PkiBackendInner {
-        &self.inner
-    }
 }
 
 impl PkiBackend {

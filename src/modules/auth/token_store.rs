@@ -1,8 +1,9 @@
-use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use humantime::parse_duration;
 use lazy_static::lazy_static;
 use regex::Regex;
+use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -78,16 +79,10 @@ pub struct TokenStoreInner {
     pub expiration: Arc<ExpirationManager>,
 }
 
+#[derive(Deref)]
 pub struct TokenStore {
+    #[deref]
     pub inner: Arc<TokenStoreInner>,
-}
-
-impl Deref for TokenStore {
-    type Target = TokenStoreInner;
-
-    fn deref(&self) -> &TokenStoreInner {
-        &self.inner
-    }
 }
 
 impl Default for TokenEntry {

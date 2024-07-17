@@ -1,12 +1,12 @@
 use std::{
     collections::HashMap,
-    ops::Deref,
     path::PathBuf,
     sync::{Arc, RwLock},
     time::{Duration, SystemTime},
 };
 
 use delay_timer::prelude::*;
+use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -59,7 +59,9 @@ pub struct ExpirationManagerInner {
     pub task: RwLock<ExpirationTask>,
 }
 
+#[derive(Deref)]
 pub struct ExpirationManager {
+    #[deref]
     pub inner: Arc<ExpirationManagerInner>,
 }
 
@@ -89,14 +91,6 @@ impl Default for ExpirationManagerInner {
 impl Default for ExpirationManager {
     fn default() -> Self {
         Self { inner: Arc::new(ExpirationManagerInner::default()) }
-    }
-}
-
-impl Deref for ExpirationManager {
-    type Target = ExpirationManagerInner;
-
-    fn deref(&self) -> &ExpirationManagerInner {
-        &self.inner
     }
 }
 

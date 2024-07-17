@@ -3,11 +3,11 @@
 
 use std::{
     collections::HashMap,
-    ops::Deref,
     sync::{Arc, RwLock},
     time::Duration,
 };
 
+use derive_more::Deref;
 use humantime::parse_duration;
 use serde_json::{Map, Value};
 
@@ -45,16 +45,10 @@ pub struct KvBackendInner {
     pub core: Arc<RwLock<Core>>,
 }
 
+#[derive(Deref)]
 pub struct KvBackend {
+    #[deref]
     pub inner: Arc<KvBackendInner>,
-}
-
-impl Deref for KvBackend {
-    type Target = KvBackendInner;
-
-    fn deref(&self) -> &KvBackendInner {
-        &self.inner
-    }
 }
 
 impl KvBackend {
