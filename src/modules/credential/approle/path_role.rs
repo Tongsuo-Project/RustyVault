@@ -3304,7 +3304,7 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(
+        let _resp = test_write_api(
             &c,
             &root_token,
             "auth/approle/role/role1/secret-id-accessor/lookup",
