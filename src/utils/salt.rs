@@ -164,7 +164,7 @@ mod test {
         let view = barrier_view::BarrierView::new(Arc::new(aes_gcm_view), "test");
 
         //test salt
-        let salt = Salt::new(Some(view.as_storage()), None);
+        let salt = Salt::new(Some(&view), None);
         assert!(salt.is_ok());
 
         let salt = salt.unwrap();
@@ -174,7 +174,7 @@ mod test {
         assert!(ss.is_ok());
         assert!(ss.unwrap().is_some());
 
-        let salt2 = Salt::new(Some(view.as_storage()), Some(&salt.config));
+        let salt2 = Salt::new(Some(&view), Some(&salt.config));
         assert!(salt2.is_ok());
 
         let salt2 = salt2.unwrap();
