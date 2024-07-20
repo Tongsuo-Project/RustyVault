@@ -16,7 +16,7 @@ use crate::{
     errors::RvError,
     logical::{Auth, Request, Response, SecretData},
     router::Router,
-    storage::{barrier_view::BarrierView, StorageEntry},
+    storage::{barrier_view::BarrierView, Storage, StorageEntry},
     utils::{deserialize_system_time, generate_uuid, serialize_system_time},
 };
 
@@ -454,7 +454,7 @@ impl ExpirationManagerInner {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let id_view = self.id_view.as_ref().unwrap().as_storage();
+        let id_view = self.id_view.as_ref().unwrap();
 
         let raw = id_view.get(lease_id)?;
         if raw.is_none() {
@@ -471,7 +471,7 @@ impl ExpirationManagerInner {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let id_view = self.id_view.as_ref().unwrap().as_storage();
+        let id_view = self.id_view.as_ref().unwrap();
 
         let value = serde_json::to_string(&le)?;
 
@@ -485,7 +485,7 @@ impl ExpirationManagerInner {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let id_view = self.id_view.as_ref().unwrap().as_storage();
+        let id_view = self.id_view.as_ref().unwrap();
 
         id_view.delete(lease_id)
     }
@@ -498,7 +498,7 @@ impl ExpirationManagerInner {
 
         let token_store = token_store.as_ref().unwrap();
 
-        let token_view = self.token_view.as_ref().unwrap().as_storage();
+        let token_view = self.token_view.as_ref().unwrap();
 
         let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
 
@@ -506,23 +506,6 @@ impl ExpirationManagerInner {
 
         token_view.put(&entry)
     }
-
-    /*
-    fn remove_index_by_token(&self, token: &str, lease_id: &str) -> Result<(), RvError> {
-        let token_store = self.token_store.read()?;
-        if token_store.is_none() || self.token_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let token_store = token_store.as_ref().unwrap();
-
-        let token_view = self.token_view.as_ref().unwrap().as_storage();
-
-        let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
-
-        token_view.delete(&key)
-    }
-    */
 
     fn lookup_by_token(&self, token: &str) -> Result<Vec<String>, RvError> {
         let token_store = self.token_store.read()?;
@@ -532,7 +515,7 @@ impl ExpirationManagerInner {
 
         let token_store = token_store.as_ref().unwrap();
 
-        let token_view = self.token_view.as_ref().unwrap().as_storage();
+        let token_view = self.token_view.as_ref().unwrap();
         let prefix = format!("{}/", token_store.salt_id(token));
         let sub_keys = token_view.list(&prefix)?;
 

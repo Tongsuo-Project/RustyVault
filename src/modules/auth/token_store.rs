@@ -128,7 +128,7 @@ impl TokenStore {
         let mut inner = TokenStoreInner::default();
 
         let view = core.system_view.as_ref().unwrap().new_sub_view(TOKEN_SUB_PATH);
-        let salt = view.as_storage().get(TOKEN_SALT_LOCATION)?;
+        let salt = view.get(TOKEN_SALT_LOCATION)?;
 
         if salt.is_some() {
             inner.salt = String::from_utf8_lossy(&salt.unwrap().value).to_string();
@@ -137,7 +137,7 @@ impl TokenStore {
         if inner.salt.as_str() == "" {
             inner.salt = generate_uuid();
             let raw = StorageEntry { key: TOKEN_SALT_LOCATION.to_string(), value: inner.salt.as_bytes().to_vec() };
-            view.as_storage().put(&raw)?;
+            view.put(&raw)?;
         }
 
         inner.router = Arc::clone(&core.router);
