@@ -62,6 +62,7 @@ blake2b_simd = "1.0"
 derive_more = "0.99.17"
 dashmap = "5.5"
 tokio = "1.38"
+ctor = "0.2.8"
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }

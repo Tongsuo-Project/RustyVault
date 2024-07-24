@@ -315,23 +315,15 @@ impl AESGCMBarrier {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, env, fs};
-
-    use go_defer::defer;
-    use serde_json::Value;
-
     use super::{super::*, *};
+
+    use crate::{
+        test_utils::test_backend,
+    };
 
     #[test]
     fn test_encrypt_decrypt() {
-        let dir = env::temp_dir().join("rusty_vault_test_encrypt_decrypt");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
+        let backend = test_backend("test_encrypt_decrypt");
 
         let cipher = Cipher::aes_256_gcm();
         let ctx = CipherCtx::new();
@@ -340,8 +332,6 @@ mod test {
 
         let mut key = vec![0u8; cipher.key_length()];
         thread_rng().fill(key.as_mut_slice());
-
-        let backend = new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier {
             backend,
@@ -362,14 +352,7 @@ mod test {
 
     #[test]
     fn test_decrypt() {
-        let dir = env::temp_dir().join("rusty_vault_test_decrypt");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
+        let backend = test_backend("test_decrypt");
 
         let cipher = Cipher::aes_256_gcm();
         let ctx = CipherCtx::new();
@@ -380,8 +363,6 @@ mod test {
             121, 133, 170, 204, 71, 77, 160, 134, 22, 37, 254, 206, 120, 206, 143, 197, 150, 83, 5, 45, 121, 51, 124,
             110, 162, 1, 9, 51, 16, 75, 157, 129,
         ];
-
-        let backend = new_backend("file", &conf).unwrap();
 
         let barrier = AESGCMBarrier {
             backend,
@@ -404,16 +385,7 @@ mod test {
 
     #[test]
     fn test_barriew_aes256_gcm() {
-        let dir = env::temp_dir().join("rusty_vault_test_barriew_aes256_gcm");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = new_backend("file", &conf).unwrap();
+        let backend = test_backend("test_barriew_aes256_gcm");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 
@@ -451,17 +423,7 @@ mod test {
 
     #[test]
     fn test_barriew_storage_api() {
-        let dir = env::temp_dir().join("rusty_vault_test_barriew_storage_api");
-        let _ = fs::remove_dir_all(&dir);
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = new_backend("file", &conf).unwrap();
+        let backend = test_backend("test_barriew_storage_api");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 

@@ -253,13 +253,13 @@ macro_rules! new_logical_backend_internal {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, env, fs, sync::Arc, time::Duration};
+    use std::{sync::Arc, time::Duration};
 
-    use go_defer::defer;
     use serde_json::json;
 
     use super::*;
     use crate::{
+        test_utils::test_backend,
         logical::{field::FieldTrait, Field, FieldType, PathOperation},
         new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal, storage,
     };
@@ -304,18 +304,9 @@ mod test {
 
     #[test]
     fn test_logical_backend_api() {
-        let dir = env::temp_dir().join("rusty_vault_test_logical_api");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
+        let backend = test_backend("test_logical_backend_api");
 
         let t = MyTest::new();
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
 
         let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
@@ -470,16 +461,7 @@ mod test {
 
     #[test]
     fn test_logical_path_field() {
-        let dir = env::temp_dir().join("rusty_vault_test_logical_path_field");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
+        let backend = test_backend("test_logical_path_field");
 
         let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 

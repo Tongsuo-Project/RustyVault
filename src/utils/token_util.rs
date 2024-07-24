@@ -178,29 +178,21 @@ impl TokenParams {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, env, fs, sync::Arc};
+    use std::sync::Arc;
 
-    use go_defer::defer;
     use serde_json::json;
 
     use super::*;
     use crate::{
         logical::{Operation, Path},
-        storage::{self, barrier_aes_gcm::AESGCMBarrier},
+        storage::barrier_aes_gcm::AESGCMBarrier,
+        test_utils::test_backend,
     };
 
     #[test]
     fn test_token_util() {
-        let dir = env::temp_dir().join("rusty_vault_test_token_util");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
+        // init the storage backend
+        let backend = test_backend("test_token_util");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 
