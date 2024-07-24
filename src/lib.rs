@@ -41,6 +41,9 @@ pub mod shamir;
 pub mod storage;
 pub mod utils;
 
+#[cfg(test)]
+pub mod test_utils;
+
 /// Exit ok
 pub const EXIT_CODE_OK: sysexits::ExitCode = sysexits::ExitCode::Ok;
 /// Exit code when server exits unexpectedly
