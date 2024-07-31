@@ -23,6 +23,7 @@ struct RouterEntry {
     mount_entry: Arc<RwLock<MountEntry>>,
 }
 
+#[derive(Default)]
 pub struct Router {
     root: Arc<RwLock<Trie<String, RouterEntry>>>,
 }
@@ -35,7 +36,7 @@ impl RouterEntry {
 
 impl Router {
     pub fn new() -> Self {
-        Self { root: Arc::new(RwLock::new(Trie::new())) }
+        Router::default()
     }
 
     pub fn mount(

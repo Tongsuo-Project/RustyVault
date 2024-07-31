@@ -30,19 +30,13 @@ struct Auth {
     renewable: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct LogicalResponse {
     renewable: bool,
     lease_id: String,
     lease_duration: u64,
     auth: Option<Auth>,
     data: HashMap<String, Value>,
-}
-
-impl Default for LogicalResponse {
-    fn default() -> Self {
-        Self { renewable: false, lease_id: String::new(), lease_duration: 0, auth: None, data: HashMap::new() }
-    }
 }
 
 async fn logical_request_handler(

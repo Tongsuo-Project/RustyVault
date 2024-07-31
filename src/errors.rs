@@ -260,6 +260,12 @@ pub enum RvError {
         source: actix_web::http::header::ToStrError,
     },
 
+    #[error("Some url error happened, {:?}", .source)]
+    UrlError {
+        #[from]
+        source: url::ParseError,
+    },
+
     /// Database Errors Begin
     ///
     #[error("Database type is not support now. Please try postgressql or mysql again.")]
@@ -390,4 +396,18 @@ impl<T> From<PoisonError<RwLockReadGuard<'_, T>>> for RvError {
     fn from(_: PoisonError<RwLockReadGuard<'_, T>>) -> Self {
         RvError::ErrRwLockReadPoison
     }
+}
+
+#[macro_export]
+macro_rules! rv_error_response {
+    ($message:expr) => {
+        RvError::ErrResponse($message.to_string())
+    };
+}
+
+#[macro_export]
+macro_rules! rv_error_response_status {
+    ($status:expr, $message:expr) => {
+        RvError::ErrResponseStatus($status, $message.to_string())
+    };
 }

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::lease::Lease;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
 pub struct Auth {
     #[deref]
     #[deref_mut]
@@ -17,17 +17,4 @@ pub struct Auth {
     pub policies: Vec<String>,
     pub internal_data: HashMap<String, String>,
     pub metadata: HashMap<String, String>,
-}
-
-impl Default for Auth {
-    fn default() -> Self {
-        Self {
-            lease: Lease::default(),
-            client_token: String::new(),
-            display_name: String::new(),
-            policies: Vec::new(),
-            internal_data: HashMap::new(),
-            metadata: HashMap::new(),
-        }
-    }
 }

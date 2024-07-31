@@ -8,6 +8,7 @@ use std::{
 
 use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
 use serde::{Deserialize, Serialize};
+use better_default::Default;
 
 use super::{AppRoleBackendInner, SECRET_ID_ACCESSOR_LOCAL_PREFIX, SECRET_ID_ACCESSOR_PREFIX, SECRET_ID_LOCAL_PREFIX};
 use crate::{
@@ -22,7 +23,7 @@ const MAX_HMAC_INPUT_LENGTH: usize = 4096;
 // secretIDStorageEntry represents the information stored in storage
 // when a secret_id is created. The structure of the secret_id storage
 // entry is the same for all the types of secret_ids generated.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SecretIdStorageEntry {
     // Accessor for the secret_id. It is a random uuid serving as
     // a secondary index for the secret_id. This uniquely identifies
@@ -42,16 +43,19 @@ pub struct SecretIdStorageEntry {
 
     // The time when the secret_id was created
     #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    #[default(SystemTime::now())]
     pub creation_time: SystemTime,
 
     // The time when the secret_id becomes eligible for tidy operation.
     // Tidying is performed by the PeriodicFunc of the backend which is 1
     // minute apart.
     #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    #[default(SystemTime::now())]
     pub expiration_time: SystemTime,
 
     // The time representing the last time this storage entry was modified
     #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    #[default(SystemTime::now())]
     pub last_updated_time: SystemTime,
 
     // metadata that belongs to the secret_id
@@ -70,33 +74,11 @@ pub struct SecretIdStorageEntry {
 // unique secret_id. Note that secret_id should never be stored in plaintext
 // anywhere in the backend. secret_id_hmac will be used as an index to fetch the
 // properties of the secret_id and to delete the secret_id.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SecretIdAccessorStorageEntry {
     // Hash of the secret_id which can be used to find the storage index at which
     // properties of secret_id is stored.
     pub secret_id_hmac: String,
-}
-
-impl Default for SecretIdStorageEntry {
-    fn default() -> Self {
-        Self {
-            secret_id_accessor: String::new(),
-            secret_id_num_uses: 0,
-            secret_id_ttl: Duration::from_secs(0),
-            creation_time: SystemTime::now(),
-            expiration_time: SystemTime::now(),
-            last_updated_time: SystemTime::now(),
-            metadata: HashMap::new(),
-            cidr_list: Vec::new(),
-            token_cidr_list: Vec::new(),
-        }
-    }
-}
-
-impl Default for SecretIdAccessorStorageEntry {
-    fn default() -> Self {
-        Self { secret_id_hmac: String::new() }
-    }
 }
 
 impl AppRoleBackendInner {

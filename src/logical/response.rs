@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use better_default::Default;
 
 use crate::{
     errors::RvError,
@@ -15,7 +16,7 @@ lazy_static! {
     static ref HTTP_STATUS_CODE: &'static str = "http_status_code";
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Response {
     #[serde(default)]
     pub request_id: String,
@@ -28,20 +29,6 @@ pub struct Response {
     // warnings allow operations or backends to return warnings in response
     // to user actions without failing the action outright.
     pub warnings: Vec<String>,
-}
-
-impl Default for Response {
-    fn default() -> Self {
-        Response {
-            request_id: String::new(),
-            headers: None,
-            data: None,
-            auth: None,
-            secret: None,
-            redirect: String::new(),
-            warnings: Vec::new(),
-        }
-    }
 }
 
 impl Response {

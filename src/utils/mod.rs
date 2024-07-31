@@ -23,6 +23,7 @@ pub mod sock_addr;
 pub mod string;
 pub mod token_util;
 pub mod unix_sock_addr;
+pub mod ocsp;
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];

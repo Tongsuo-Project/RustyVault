@@ -37,17 +37,11 @@ pub trait Storage: Send + Sync {
 }
 
 /// This struct is used to describe a specific storage entry
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StorageEntry {
     pub key: String,
     pub value: Vec<u8>,
-}
-
-impl Default for StorageEntry {
-    fn default() -> Self {
-        Self { key: String::new(), value: Vec::new() }
-    }
 }
 
 impl StorageEntry {

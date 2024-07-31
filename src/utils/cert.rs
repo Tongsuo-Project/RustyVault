@@ -21,6 +21,7 @@ use openssl::{
 };
 use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::ByteBuf;
+use better_default::Default;
 
 use crate::errors::RvError;
 
@@ -33,13 +34,15 @@ extern "C" {
     pub fn X509_check_ca(x509: *mut openssl_sys::X509) -> c_int;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CertBundle {
     #[serde(serialize_with = "serialize_x509", deserialize_with = "deserialize_x509")]
+    #[default(X509_DEFAULT.clone())]
     pub certificate: X509,
     #[serde(serialize_with = "serialize_vec_x509", deserialize_with = "deserialize_vec_x509")]
     pub ca_chain: Vec<X509>,
     #[serde(serialize_with = "serialize_pkey", deserialize_with = "deserialize_pkey")]
+    #[default(PKEY_DEFAULT.clone())]
     pub private_key: PKey<Private>,
     #[serde(default)]
     pub private_key_type: String,
@@ -106,16 +109,10 @@ pub fn is_ca_cert(cert: &X509) -> bool {
     unsafe { X509_check_ca(cert.as_ptr()) != 0 }
 }
 
-impl Default for CertBundle {
-    fn default() -> Self {
-        CertBundle {
-            certificate: X509_DEFAULT.clone(),
-            ca_chain: Vec::new(),
-            private_key: PKEY_DEFAULT.clone(),
-            private_key_type: String::new(),
-            serial_number: String::new(),
-        }
-    }
+pub fn generate_serial_number() -> BigNum {
+    let mut sn = BigNum::new().unwrap();
+    sn.rand(159, MsbOption::MAYBE_ZERO, false).unwrap();
+    sn
 }
 
 impl CertBundle {
@@ -169,48 +166,34 @@ impl CertBundle {
     }
 }
 
+#[derive(Default)]
 pub struct Certificate {
+    #[default(3)]
     pub version: i32,
+    #[default(generate_serial_number())]
     pub serial_number: BigNum,
+    #[default(X509NameBuilder::new().unwrap().build())]
     pub issuer: X509Name,
+    #[default(X509NameBuilder::new().unwrap().build())]
     pub subject: X509Name,
+    #[default(SystemTime::now())]
     pub not_before: SystemTime,
+    #[default(SystemTime::now())]
     pub not_after: SystemTime,
     pub extensions: Vec<X509Extension>,
+    #[default(Asn1OctetString::new_from_bytes("".as_bytes()).unwrap())]
     pub subject_key_id: Asn1OctetString,
+    #[default(Asn1OctetString::new_from_bytes("".as_bytes()).unwrap())]
     pub authority_key_id: Asn1OctetString,
     pub dns_sans: Vec<String>,
     pub email_sans: Vec<String>,
     pub ip_sans: Vec<String>,
     pub uri_sans: Vec<String>,
     pub is_ca: bool,
+    #[default("rsa".to_string())]
     pub key_type: String,
+    #[default(2048)]
     pub key_bits: u32,
-}
-
-impl Default for Certificate {
-    fn default() -> Self {
-        let mut sn = BigNum::new().unwrap();
-        sn.rand(159, MsbOption::MAYBE_ZERO, false).unwrap();
-        Self {
-            version: 3,
-            serial_number: sn,
-            issuer: X509NameBuilder::new().unwrap().build(),
-            subject: X509NameBuilder::new().unwrap().build(),
-            not_before: SystemTime::now(),
-            not_after: SystemTime::now(),
-            extensions: Vec::new(),
-            subject_key_id: Asn1OctetString::new_from_bytes("".as_bytes()).unwrap(),
-            authority_key_id: Asn1OctetString::new_from_bytes("".as_bytes()).unwrap(),
-            dns_sans: Vec::new(),
-            email_sans: Vec::new(),
-            ip_sans: Vec::new(),
-            uri_sans: Vec::new(),
-            is_ca: false,
-            key_type: "rsa".to_string(),
-            key_bits: 2048,
-        }
-    }
 }
 
 impl Certificate {
