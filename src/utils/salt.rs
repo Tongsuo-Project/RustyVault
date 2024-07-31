@@ -2,6 +2,7 @@
 //! <https://github.com/hashicorp/vault/blob/main/sdk/helper/salt/salt.go>
 
 use derivative::Derivative;
+use better_default::Default;
 use openssl::{
     hash::{hash, MessageDigest},
     nid::Nid,
@@ -17,37 +18,26 @@ use crate::{
 
 static DEFAULT_LOCATION: &str = "salt";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Salt {
     pub config: Config,
+    #[default(generate_uuid())]
     pub salt: String,
+    #[default(true)]
     pub generated: bool,
 }
 
-#[derive(Derivative)]
+#[derive(Derivative, Default)]
 #[derivative(Debug, Clone)]
 pub struct Config {
+    #[default(DEFAULT_LOCATION.to_string())]
     pub location: String,
     #[derivative(Debug = "ignore")]
+    #[default(MessageDigest::sha256())]
     pub hash_type: MessageDigest,
     #[derivative(Debug = "ignore")]
+    #[default(MessageDigest::sha256())]
     pub hmac_type: MessageDigest,
-}
-
-impl Default for Salt {
-    fn default() -> Self {
-        Self { salt: generate_uuid(), generated: true, config: Config::default() }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            location: DEFAULT_LOCATION.to_string(),
-            hash_type: MessageDigest::sha256(),
-            hmac_type: MessageDigest::sha256(),
-        }
-    }
 }
 
 impl Salt {

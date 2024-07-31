@@ -3,6 +3,7 @@ use std::{collections::HashMap, mem, sync::Arc, time::Duration};
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use better_default::Default;
 
 use super::{
     validation::{create_hmac, verify_cidr_role_secret_id_subset, SecretIdStorageEntry},
@@ -23,7 +24,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
 pub struct RoleEntry {
     // Name of the role. This field is not persisted on disk. After the role is read out of disk,
     // the sanitized version of name is set in this field for subsequent use of role name
@@ -41,6 +42,7 @@ pub struct RoleEntry {
     pub policies: Vec<String>,
 
     // lower_case_role_name enforces the lower casing of role names for all the
+    #[default(true)]
     pub lower_case_role_name: bool,
 
     // A constraint, if set, requires 'secret_id' credential to be presented during login
@@ -83,36 +85,9 @@ pub struct RoleEntry {
     pub token_params: TokenParams,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RoleIdEntry {
     pub name: String,
-}
-
-impl Default for RoleEntry {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            role_id: String::new(),
-            hmac_key: String::new(),
-            policies: Vec::new(),
-            lower_case_role_name: true,
-            bind_secret_id: false,
-            secret_id_num_uses: 0,
-            secret_id_prefix: String::new(),
-            bound_cidr_list_old: String::new(),
-            bound_cidr_list: Vec::new(),
-            secret_id_bound_cidrs: Vec::new(),
-            secret_id_ttl: Duration::from_secs(0),
-            period: Duration::from_secs(0),
-            token_params: TokenParams::default(),
-        }
-    }
-}
-
-impl Default for RoleIdEntry {
-    fn default() -> Self {
-        Self { name: String::new() }
-    }
 }
 
 impl RoleEntry {

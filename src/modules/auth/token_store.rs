@@ -60,7 +60,7 @@ struct TokenReqData {
     renewable: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TokenEntry {
     pub id: String,
     pub parent: String,
@@ -72,6 +72,7 @@ pub struct TokenEntry {
     pub ttl: u64,
 }
 
+#[derive(Default)]
 pub struct TokenStoreInner {
     pub router: Arc<Router>,
     pub view: Option<Arc<dyn Storage + Send + Sync>>,
@@ -79,44 +80,10 @@ pub struct TokenStoreInner {
     pub expiration: Arc<ExpirationManager>,
 }
 
-#[derive(Deref)]
+#[derive(Default, Deref)]
 pub struct TokenStore {
     #[deref]
     pub inner: Arc<TokenStoreInner>,
-}
-
-impl Default for TokenEntry {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            parent: String::new(),
-            policies: Vec::new(),
-            path: String::new(),
-            meta: HashMap::new(),
-            display_name: String::new(),
-            num_uses: 0,
-            ttl: 0,
-        }
-    }
-}
-
-impl Default for TokenStoreInner {
-    fn default() -> Self {
-        Self {
-            router: Arc::new(Router::new()),
-            view: None,
-            salt: String::new(),
-            expiration: Arc::new(ExpirationManager::default()),
-        }
-    }
-}
-
-impl Default for TokenStore {
-    fn default() -> Self {
-        let inner = TokenStoreInner { ..TokenStoreInner::default() };
-
-        Self { inner: Arc::new(inner) }
-    }
 }
 
 impl TokenStore {

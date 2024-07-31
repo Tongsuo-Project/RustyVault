@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use humantime::parse_duration;
 use serde::{Deserialize, Serialize};
+use better_default::Default;
 
 use super::{util::DEFAULT_MAX_TTL, PkiBackend, PkiBackendInner};
 use crate::{
@@ -13,26 +14,37 @@ use crate::{
     utils::{deserialize_duration, serialize_duration},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RoleEntry {
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub ttl: Duration,
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[default(DEFAULT_MAX_TTL)]
     pub max_ttl: Duration,
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub not_before_duration: Duration,
+    #[default("rsa".to_string())]
     pub key_type: String,
+    #[default(2048)]
     pub key_bits: u32,
+    #[default(256)]
     pub signature_bits: u32,
     pub use_pss: bool,
+    #[default(true)]
     pub allow_localhost: bool,
+    #[default(true)]
     pub allow_bare_domains: bool,
+    #[default(true)]
     pub allow_subdomains: bool,
+    #[default(true)]
     pub allow_any_name: bool,
+    #[default(true)]
     pub allow_ip_sans: bool,
     pub server_flag: bool,
     pub client_flag: bool,
+    #[default(true)]
     pub use_csr_sans: bool,
+    #[default(true)]
     pub use_csr_common_name: bool,
     pub country: String,
     pub province: String,
@@ -41,42 +53,10 @@ pub struct RoleEntry {
     pub ou: String,
     pub street_address: String,
     pub postal_code: String,
+    #[default(true)]
     pub no_store: bool,
     pub generate_lease: bool,
     pub not_after: String,
-}
-
-impl Default for RoleEntry {
-    fn default() -> Self {
-        Self {
-            ttl: Duration::from_secs(0),
-            max_ttl: DEFAULT_MAX_TTL,
-            not_before_duration: Duration::from_secs(0),
-            key_type: "rsa".to_string(),
-            key_bits: 2048,
-            signature_bits: 256,
-            use_pss: false,
-            allow_localhost: true,
-            allow_bare_domains: true,
-            allow_subdomains: true,
-            allow_any_name: true,
-            allow_ip_sans: true,
-            server_flag: false,
-            client_flag: false,
-            use_csr_sans: true,
-            use_csr_common_name: true,
-            country: "".to_string(),
-            province: "".to_string(),
-            locality: "".to_string(),
-            organization: "".to_string(),
-            ou: "".to_string(),
-            street_address: "".to_string(),
-            postal_code: "".to_string(),
-            no_store: true,
-            generate_lease: false,
-            not_after: "".to_string(),
-        }
-    }
 }
 
 impl PkiBackend {

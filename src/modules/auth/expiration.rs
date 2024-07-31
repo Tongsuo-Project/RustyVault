@@ -9,6 +9,7 @@ use delay_timer::prelude::*;
 use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use better_default::Default;
 
 use super::TokenStore;
 use crate::{
@@ -44,6 +45,7 @@ struct LeaseEntry {
     pub expire_time: SystemTime,
 }
 
+#[derive(Default)]
 pub struct ExpirationTask {
     pub last_task_id: u64,
     pub task_id_map: HashMap<String, u64>,
@@ -51,47 +53,22 @@ pub struct ExpirationTask {
     pub task_timer: DelayTimer,
 }
 
+#[derive(Default)]
 pub struct ExpirationManagerInner {
     pub router: Option<Arc<Router>>,
     pub id_view: Option<Arc<BarrierView>>,
     pub token_view: Option<Arc<BarrierView>>,
+    #[default(Arc::new(RwLock::new(None)))]
     pub token_store: Arc<RwLock<Option<Arc<TokenStore>>>>,
+    #[default(RwLock::new(ExpirationTask::default()))]
     pub task: RwLock<ExpirationTask>,
 }
 
-#[derive(Deref)]
+#[derive(Default, Deref)]
 pub struct ExpirationManager {
     #[deref]
+    #[default(Arc::new(ExpirationManagerInner::default()))]
     pub inner: Arc<ExpirationManagerInner>,
-}
-
-impl Default for ExpirationTask {
-    fn default() -> Self {
-        Self {
-            last_task_id: 0,
-            task_id_map: HashMap::new(),
-            task_id_remove_pending: Vec::new(),
-            task_timer: DelayTimerBuilder::default().build(),
-        }
-    }
-}
-
-impl Default for ExpirationManagerInner {
-    fn default() -> Self {
-        Self {
-            router: None,
-            id_view: None,
-            token_view: None,
-            token_store: Arc::new(RwLock::new(None)),
-            task: RwLock::new(ExpirationTask::default()),
-        }
-    }
-}
-
-impl Default for ExpirationManager {
-    fn default() -> Self {
-        Self { inner: Arc::new(ExpirationManagerInner::default()) }
-    }
 }
 
 impl LeaseEntry {

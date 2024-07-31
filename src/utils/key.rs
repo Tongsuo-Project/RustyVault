@@ -9,11 +9,13 @@ use openssl::{
     symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher},
 };
 use serde::{Deserialize, Serialize};
+use better_default::Default;
 
 use crate::{errors::RvError, utils::generate_uuid};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct KeyBundle {
+    #[default(generate_uuid())]
     pub id: String,
     pub name: String,
     pub key_type: String,
@@ -27,19 +29,6 @@ pub struct KeyBundle {
 pub enum EncryptExtraData<'a> {
     Aad(&'a [u8]),
     Flag(bool),
-}
-
-impl Default for KeyBundle {
-    fn default() -> Self {
-        KeyBundle {
-            id: generate_uuid(),
-            name: String::new(),
-            key_type: String::new(),
-            key: Vec::new(),
-            iv: Vec::new(),
-            bits: 0,
-        }
-    }
 }
 
 fn key_bits_default(key_type: &str) -> u32 {
