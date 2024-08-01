@@ -4,6 +4,7 @@ use crate::errors::RvError;
 use crate::modules::crypto::{AEADCipher, AESKeySize, BlockCipher, CipherMode, AES};
 use openssl::symm::{Cipher, Crypter, Mode, encrypt, encrypt_aead, decrypt, decrypt_aead};
 use openssl::rand::rand_priv_bytes;
+use crate::modules::crypto::crypto_adaptors::common;
 
 pub struct AdaptorCTX {
     ctx: Crypter,
