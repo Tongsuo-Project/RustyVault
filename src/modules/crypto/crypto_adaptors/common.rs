@@ -1,6 +1,10 @@
 //! This module contains some common functions used by openssl and tongsuo adaptors.
 //! Functions in this module SHOULD NOT be used directly by applications.
 
+use crate::modules::RvError;
+use crate::modules::crypto::{ AESKeySize, CipherMode };
+use openssl::symm::Cipher;
+
 macro_rules! common_aes_set_aad {
     ($aes: expr, $aad: expr) => {
         $aes.aad = Some($aad.clone());
@@ -10,7 +14,7 @@ macro_rules! common_aes_set_aad {
 
 macro_rules! common_aes_get_tag {
     ($aes: expr) => {
-        if $aes.tag == None {
+        if $aes.tag.is_none() {
             return Err(RvError::ErrCryptoCipherNoTag);
         }
         return Ok($aes.tag.clone().unwrap());
@@ -55,27 +59,27 @@ macro_rules! common_aes_new {
                     // for aes-128, key is 16 bytes and iv is 16 bytes
                     let mut buf = [0; 16];
                     let mut buf2 = [0; 16];
-                    rand_priv_bytes(&mut buf).unwrap();
+                    rand_priv_bytes(&mut buf)?;
                     aes_key = buf.to_vec();
-                    rand_priv_bytes(&mut buf2).unwrap();
+                    rand_priv_bytes(&mut buf2)?;
                     aes_iv = buf2.to_vec();
                 },
                 AESKeySize::AES192 => {
                     // for aes-192, key is 24 bytes and iv is 16 bytes
                     let mut buf = [0; 24];
                     let mut buf2 = [0; 16];
-                    rand_priv_bytes(&mut buf).unwrap();
+                    rand_priv_bytes(&mut buf)?;
                     aes_key = buf.to_vec();
-                    rand_priv_bytes(&mut buf2).unwrap();
+                    rand_priv_bytes(&mut buf2)?;
                     aes_iv = buf2.to_vec();
                 },
                 AESKeySize::AES256 => {
                     // for aes-256, key is 32 bytes and iv is 16 bytes
                     let mut buf = [0; 32];
                     let mut buf2 = [0; 16];
-                    rand_priv_bytes(&mut buf).unwrap();
+                    rand_priv_bytes(&mut buf)?;
                     aes_key = buf.to_vec();
-                    rand_priv_bytes(&mut buf2).unwrap();
+                    rand_priv_bytes(&mut buf2)?;
                     aes_iv = buf2.to_vec();
                 },
             }
@@ -100,36 +104,46 @@ macro_rules! common_get_key_iv {
     }
 }
 
+pub fn common_internal_get_cipher_alg(alg: &(AESKeySize, CipherMode)) ->
+Result<(Cipher, bool), RvError> {
+    let cipher;
+    let mut aead = false;
+
+    match alg {
+        (AESKeySize::AES128, CipherMode::CBC) => cipher = Cipher::aes_128_cbc(),
+        (AESKeySize::AES192, CipherMode::CBC) => cipher = Cipher::aes_192_cbc(),
+        (AESKeySize::AES256, CipherMode::CBC) => cipher = Cipher::aes_256_cbc(),
+        (AESKeySize::AES128, CipherMode::GCM) => {
+            cipher = Cipher::aes_128_gcm();
+            aead = true;
+        },
+        (AESKeySize::AES192, CipherMode::GCM) => {
+            cipher = Cipher::aes_192_gcm();
+            aead = true;
+        },
+        (AESKeySize::AES256, CipherMode::GCM) => {
+            cipher = Cipher::aes_256_gcm();
+            aead = true;
+        },
+        _ => return Err(RvError::ErrCryptoCipherOPNotSupported),
+    }
+
+    return Ok((cipher, aead));
+}
+
 macro_rules! common_aes_encrypt {
     ($aes: expr, $plaintext: expr) => {
         let cipher;
-        let mut aead = false;
+        let aead: bool;
 
-        match $aes.alg {
-            (AESKeySize::AES128, CipherMode::CBC) => cipher = Cipher::aes_128_cbc(),
-            (AESKeySize::AES192, CipherMode::CBC) => cipher = Cipher::aes_192_cbc(),
-            (AESKeySize::AES256, CipherMode::CBC) => cipher = Cipher::aes_256_cbc(),
-            (AESKeySize::AES128, CipherMode::GCM) => {
-                cipher = Cipher::aes_128_gcm();
-                aead = true;
-            },
-            (AESKeySize::AES192, CipherMode::GCM) => {
-                cipher = Cipher::aes_192_gcm();
-                aead = true;
-            },
-            (AESKeySize::AES256, CipherMode::GCM) => {
-                cipher = Cipher::aes_256_gcm();
-                aead = true;
-            },
-            _ => return Err(RvError::ErrCryptoCipherOPNotSupported),
-        }
+        (cipher, aead) = common::common_internal_get_cipher_alg(&$aes.alg)?;
 
         if aead == false {
             let ciphertext = encrypt(
                 cipher,
                 &$aes.key,
                 Some(&$aes.iv),
-                $plaintext).unwrap();
+                $plaintext)?;
             return Ok(ciphertext.to_vec());
         } else {
             // aes_xxx_gcm's tag is at most 16-bytes long.
@@ -141,7 +155,7 @@ macro_rules! common_aes_encrypt {
                 &$aes.aad.clone().unwrap(),
                 $plaintext,
                 tag
-            ).unwrap();
+            )?;
             $aes.tag = Some(tag.to_vec());
             return Ok(ciphertext.to_vec());
         }
@@ -150,28 +164,28 @@ macro_rules! common_aes_encrypt {
 
 macro_rules! common_aes_decrypt {
     ($aes: expr, $ciphertext: expr) => {
-        match $aes.alg {
-            (AESKeySize::AES128, CipherMode::CBC) => {
-                let plaintext = decrypt(
-                    Cipher::aes_128_cbc(),
-                    &$aes.key,
-                    Some(&$aes.iv),
-                    $ciphertext).unwrap();
-                return Ok(plaintext.to_vec());
-            }
-            (AESKeySize::AES128, CipherMode::GCM) => {
-                // aes_128_gcm's tag is 16-bytes long.
-                let plaintext = decrypt_aead(
-                    Cipher::aes_128_gcm(),
-                    &$aes.key,
-                    Some(&$aes.iv),
-                    &$aes.aad.clone().unwrap(),
-                    $ciphertext,
-                    &$aes.tag.clone().unwrap()
-                ).unwrap();
-                return Ok(plaintext.to_vec());
-            }
-            _ => { return Err(RvError::ErrCryptoCipherOPNotSupported); }
+        let cipher;
+        let aead: bool;
+
+        (cipher, aead) = common::common_internal_get_cipher_alg(&$aes.alg)?;
+
+        if aead == false {
+            let plaintext = decrypt(
+                cipher,
+                &$aes.key,
+                Some(&$aes.iv),
+                $ciphertext)?;
+            return Ok(plaintext.to_vec());
+        } else {
+            let plaintext = decrypt_aead(
+                cipher,
+                &$aes.key,
+                Some(&$aes.iv),
+                &$aes.aad.clone().unwrap(),
+                $ciphertext,
+                &$aes.tag.clone().unwrap()
+            )?;
+            return Ok(plaintext.to_vec());
         }
     }
 }
@@ -190,14 +204,14 @@ macro_rules! common_aes_encrypt_update {
             _ => { return Err(RvError::ErrCryptoCipherOPNotSupported); }
         }
 
-        if let None = $aes.ctx {
+        if $aes.ctx.is_none() {
             // init adaptor ctx if it's not inited.
             let encrypter = Crypter::new(
                 cipher,
                 Mode::Encrypt,
                 &$aes.key,
                 Some(&$aes.iv)
-            ).unwrap();
+            )?;
             let adaptor_ctx = AdaptorCTX { ctx: encrypter, tag_set: false, aad_set: false };
 
             $aes.ctx = Some(adaptor_ctx);
@@ -207,7 +221,7 @@ macro_rules! common_aes_encrypt_update {
             // set additional authenticated data before doing real jobs.
             if $aes.ctx.as_mut().unwrap().aad_set == false {
                 if let Some(aad) = &$aes.aad {
-                    $aes.ctx.as_mut().unwrap().ctx.aad_update(aad).unwrap();
+                    $aes.ctx.as_mut().unwrap().ctx.aad_update(aad)?;
                     $aes.ctx.as_mut().unwrap().aad_set = true;
                 }
             }
@@ -218,7 +232,7 @@ macro_rules! common_aes_encrypt_update {
         // error information by unwrapping it.
         // we also can't use the question mark operatior since the error codes are differently
         // defined in RustyVault and underlying adaptor, such as rust-openssl.
-        let count = $aes.ctx.as_mut().unwrap().ctx.update(&$plaintext, &mut $ciphertext[..]).unwrap();
+        let count = $aes.ctx.as_mut().unwrap().ctx.update(&$plaintext, &mut $ciphertext[..])?;
 
         return Ok(count);
     }
@@ -227,15 +241,15 @@ macro_rules! common_aes_encrypt_update {
 macro_rules! common_aes_encrypt_final {
     ($aes: expr, $ciphertext: expr) => {
         // Unlike encrypt_update() function, we don't do auto-initialization here.
-        if let None = $aes.ctx {
+        if $aes.ctx.is_none() {
             return Err(RvError::ErrCryptoCipherNotInited);
         }
 
-        let count = $aes.ctx.as_mut().unwrap().ctx.finalize($ciphertext).unwrap();
+        let count = $aes.ctx.as_mut().unwrap().ctx.finalize($ciphertext)?;
 
         if $aes.alg.1 == CipherMode::GCM {
             // set tag for caller to obtain.
-            if let Some(_) = $aes.tag {
+            if $aes.tag.is_some() {
                 // tag should not be set before encrypt_final() is called.
                 return Err(RvError::ErrCryptoCipherAEADTagPresent);
             }
@@ -243,7 +257,7 @@ macro_rules! common_aes_encrypt_final {
             // 16-byte long is enough for all types of AEAD cipher tag.
             // TODO: this is for AES-128-GCM only.
             let mut tag: Vec<u8> = vec![0; 16];
-            $aes.ctx.as_mut().unwrap().ctx.get_tag(&mut tag).unwrap();
+            $aes.ctx.as_mut().unwrap().ctx.get_tag(&mut tag)?;
             $aes.tag = Some(tag);
         }
 
@@ -265,14 +279,14 @@ macro_rules! common_aes_decrypt_update {
             _ => { return Err(RvError::ErrCryptoCipherOPNotSupported); }
         }
 
-        if let None = $aes.ctx {
+        if $aes.ctx.is_none() {
             // init adaptor ctx if it's not inited.
             let encrypter = Crypter::new(
                 cipher,
                 Mode::Decrypt,
                 &$aes.key,
                 Some(&$aes.iv)
-            ).unwrap();
+            )?;
             let adaptor_ctx = AdaptorCTX { ctx: encrypter, tag_set: false, aad_set: false };
 
             $aes.ctx = Some(adaptor_ctx);
@@ -282,7 +296,7 @@ macro_rules! common_aes_decrypt_update {
         if $aes.alg.1 == CipherMode::GCM {
             if $aes.ctx.as_mut().unwrap().aad_set == false {
                 if let Some(aad) = &$aes.aad {
-                    $aes.ctx.as_mut().unwrap().ctx.aad_update(aad).unwrap();
+                    $aes.ctx.as_mut().unwrap().ctx.aad_update(aad)?;
                     $aes.ctx.as_mut().unwrap().aad_set = true;
                 }
             }
@@ -294,9 +308,9 @@ macro_rules! common_aes_decrypt_update {
             Ok(count) => { return Ok(count); }
             Err(err_stack) => {
                 let errs = err_stack.errors();
-                println!("{}", errs.len());
+                log::error!("{}", errs.len());
                 for err in errs.iter() {
-                    println!("{:?}", err.reason());
+                    log::error!("{:?}", err.reason());
                 }
                 return Err(RvError::ErrCryptoCipherUpdateFailed);
             }
@@ -307,7 +321,7 @@ macro_rules! common_aes_decrypt_update {
 macro_rules! common_aes_decrypt_final {
     ($aes: expr, $plaintext: expr) => {
         // Unlike decrypt_update() function, we don't do auto-initialization here.
-        if let None = $aes.ctx {
+        if $aes.ctx.is_none() {
             return Err(RvError::ErrCryptoCipherNotInited);
         }
 
@@ -315,7 +329,7 @@ macro_rules! common_aes_decrypt_final {
         if $aes.alg.1 == CipherMode::GCM {
             if $aes.ctx.as_mut().unwrap().tag_set == false {
                 if let Some(tag) = &$aes.tag {
-                    $aes.ctx.as_mut().unwrap().ctx.set_tag(tag).unwrap();
+                    $aes.ctx.as_mut().unwrap().ctx.set_tag(tag)?;
                     $aes.ctx.as_mut().unwrap().tag_set = true;
                 } else {
                     // if tag is missing, then return an error.
@@ -328,9 +342,9 @@ macro_rules! common_aes_decrypt_final {
             Ok(count) => { return Ok(count); }
             Err(err_stack) => {
                 let errs = err_stack.errors();
-                println!("{}", errs.len());
+                log::error!("{}", errs.len());
                 for err in errs.iter() {
-                    println!("{:?}", err.reason());
+                    log::error!("{:?}", err.reason());
                 }
                 return Err(RvError::ErrCryptoCipherFinalizeFailed);
             }
