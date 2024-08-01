@@ -314,9 +314,9 @@ impl PkiBackendInner {
             };
             let iv_value = req.get_data_or_default("iv")?;
             let is_iv_required = matches!(key_type, "aes-gcm" | "aes-cbc" | "sm4-gcm" | "sm4-ccm");
-            #[cfg(tongsuo)]
+            #[cfg(feature = "crypto_adaptor_tongsuo")]
             let is_valid_key_type = matches!(key_type, "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm");
-            #[cfg(not(tongsuo))]
+            #[cfg(not(feature = "crypto_adaptor_tongsuo"))]
             let is_valid_key_type = matches!(key_type, "aes-gcm" | "aes-cbc" | "aes-ecb");
 
             // Check if the key type is valid, if not return an error.
