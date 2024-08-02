@@ -14,6 +14,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  TONGSUO_VERSION: 8.4.0
 
 jobs:
   unix-default-test:
@@ -30,6 +31,34 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  unix-tongsuo-test:
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+    runs-on: ${{matrix.os}}
+
+    steps:
+    - name: Build Tongsuo
+      run: |
+        wget "https://github.com/Tongsuo-Project/Tongsuo/archive/refs/tags/${TONGSUO_VERSION}.tar.gz"
+        tar zxf "${TONGSUO_VERSION}.tar.gz"
+        pushd "Tongsuo-${TONGSUO_VERSION}"
+        ./config --prefix=${RUNNER_TEMP}/tongsuo --libdir=${RUNNER_TEMP}/tongsuo/lib
+        make -j4
+        make install
+        popd
+    - uses: actions/checkout@v3
+    - name: Build
+      run : |
+        OPENSSL_DIR=${RUNNER_TEMP}/tongsuo cargo build --verbose --features crypto_adaptor_tongsuo --no-default-features --config 'patch.crates-io.openssl.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"' --config 'patch.crates-io.openssl-sys.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"'
+    - name: Run tests
+      run : |
+        export LD_LIBRARY_PATH=${RUNNER_TEMP}/tongsuo/lib
+        OPENSSL_DIR=${RUNNER_TEMP}/tongsuo cargo test --verbose --features crypto_adaptor_tongsuo --no-default-features --config 'patch.crates-io.openssl.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"' --config 'patch.crates-io.openssl-sys.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"'
+
 
   unix-mysql-test:
     strategy:
@@ -101,6 +130,8 @@ jobs:
         Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait
     - name: Set MySQLCLIENT_LIB_DIR
       run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\lib\vs14" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - name: Set MYSQLCLIENT_VERSION
+      run: echo "MYSQLCLIENT_VERSION=8.4.0" | Out-File -FilePath $env:GITHUB_ENV -Append
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
