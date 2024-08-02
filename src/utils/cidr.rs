@@ -1,5 +1,5 @@
 //! This module is a Rust replica of
-//! https://github.com/hashicorp/vault/blob/main/sdk/helper/cidrutil/cidr.go
+//! <https://github.com/hashicorp/vault/blob/main/sdk/helper/cidrutil/cidr.go>
 
 use std::{
     str::FromStr,
