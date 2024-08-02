@@ -3,11 +3,18 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "docs/**/*"
+      - ".github/workflows/website.yml"
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - "docs/**/*"
+      - ".github/workflows/website.yml"
 
 env:
   CARGO_TERM_COLOR: always
+  TONGSUO_VERSION: 8.4.0
 
 jobs:
   unix-default-test:
@@ -26,6 +33,34 @@ jobs:
       run: ulimit -n 65535
     - name: Run tests
       run: cargo test --verbose
+
+  unix-tongsuo-test:
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+    runs-on: ${{matrix.os}}
+
+    steps:
+    - name: Build Tongsuo
+      run: |
+        wget "https://github.com/Tongsuo-Project/Tongsuo/archive/refs/tags/${TONGSUO_VERSION}.tar.gz"
+        tar zxf "${TONGSUO_VERSION}.tar.gz"
+        pushd "Tongsuo-${TONGSUO_VERSION}"
+        ./config --prefix=${RUNNER_TEMP}/tongsuo --libdir=${RUNNER_TEMP}/tongsuo/lib
+        make -j4
+        make install
+        popd
+    - uses: actions/checkout@v3
+    - name: Build
+      run : |
+        OPENSSL_DIR=${RUNNER_TEMP}/tongsuo cargo build --verbose --features crypto_adaptor_tongsuo --no-default-features --config 'patch.crates-io.openssl.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"' --config 'patch.crates-io.openssl-sys.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"'
+    - name: Run tests
+      run : |
+        export LD_LIBRARY_PATH=${RUNNER_TEMP}/tongsuo/lib
+        OPENSSL_DIR=${RUNNER_TEMP}/tongsuo cargo test --verbose --features crypto_adaptor_tongsuo --no-default-features --config 'patch.crates-io.openssl.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"' --config 'patch.crates-io.openssl-sys.git="https://github.com/Tongsuo-Project/rust-tongsuo.git"'
+
 
   unix-mysql-test:
     strategy:

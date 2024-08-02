@@ -1,0 +1,31 @@
+name: Test deployment
+
+on:
+    pull_request:
+      paths:
+        - ".github/workflows/website.yml"
+        - "docs/**/*"
+    push:
+      branches: [main]
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./docs
+
+jobs:
+    test-deploy:
+        name: Test deployment
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 18
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+            - name: Test build website
+              run: yarn build
