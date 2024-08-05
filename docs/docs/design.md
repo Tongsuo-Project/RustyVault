@@ -1,10 +1,14 @@
+---
+sidebar_position: 5
+title: Design
+---
 # RustyVault Design
 
 As per: [RustyVault Requirements Document](./req.md). In this document we describe the architecture of RustyVault.
 
 # Architecture Diagram
 
-<img src="https://github.com/Tongsuo-Project/RustyVault/blob/main/doc/RustyVault-arch.png" width=50% height=50% />
+![RustyVault Architecture](/img/RustyVault-arch.png)
 
 Detailed description:
 
