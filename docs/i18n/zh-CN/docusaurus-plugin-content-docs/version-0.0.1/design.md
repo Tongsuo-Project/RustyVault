@@ -9,7 +9,7 @@ title: 设计
 
 # 结构图
 
-<img src="https://github.com/Tongsuo-Project/RustyVault/blob/main/doc/RustyVault-arch.png" width=50% height=50% />
+![RustyVault Architecture](/img/RustyVault-arch.png)
 
 说明如下：
 
