@@ -5,9 +5,10 @@
 //! It usually means a different symmetric encryption algorithm is going to be supported,
 //! if a new barrier is under development.
 
+use zeroize::Zeroizing;
+
 use super::Storage;
 use crate::errors::RvError;
-use zeroize::Zeroizing;
 
 pub const BARRIER_INIT_PATH: &str = "barrier/init";
 

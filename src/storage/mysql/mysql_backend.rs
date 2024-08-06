@@ -3,21 +3,20 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use diesel::prelude::*;
-use diesel::{r2d2::ConnectionManager, MysqlConnection};
+use diesel::{prelude::*, r2d2::ConnectionManager, MysqlConnection};
 use r2d2::Pool;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::schema::vault;
-use crate::schema::vault::dsl::*;
+use super::new;
 use crate::{
     errors::RvError,
-    schema::vault::vault_key,
+    schema::{
+        vault,
+        vault::{dsl::*, vault_key},
+    },
     storage::{Backend, BackendEntry},
 };
-
-use super::new;
 
 pub struct MysqlBackend {
     pool: Arc<Mutex<Pool<ConnectionManager<MysqlConnection>>>>,
@@ -49,7 +48,7 @@ impl Backend for MysqlBackend {
                     let key = key.trim_start_matches(prefix);
                     match key.find('/') {
                         Some(i) => {
-                            let key = &key[0..i+1];
+                            let key = &key[0..i + 1];
                             if !keys.contains(&key.to_string()) {
                                 keys.push(key.to_string());
                             }
@@ -127,13 +126,12 @@ impl MysqlBackend {
 #[cfg(test)]
 mod test {
 
-    use serde_json::Value;
     use std::collections::HashMap;
 
-    use crate::storage::test::test_backend;
-    use crate::storage::test::test_backend_list_prefix;
+    use serde_json::Value;
 
     use super::MysqlBackend;
+    use crate::storage::test::{test_backend, test_backend_list_prefix};
 
     #[test]
     fn test_mysql_backend() {

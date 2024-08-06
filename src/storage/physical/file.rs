@@ -8,8 +8,10 @@ use std::{
 
 use serde_json::Value;
 
-use crate::storage::{Backend, BackendEntry};
-use crate::errors::RvError;
+use crate::{
+    errors::RvError,
+    storage::{Backend, BackendEntry},
+};
 
 #[derive(Debug)]
 pub struct FileBackend {
@@ -147,6 +149,7 @@ mod test {
     #[test]
     fn test_file_backend() {
         let dir = env::temp_dir().join("rusty_vault");
+        let _ = fs::remove_dir_all(&dir);
         assert!(fs::create_dir(&dir).is_ok());
         defer! (
             assert!(fs::remove_dir_all(&dir).is_ok());

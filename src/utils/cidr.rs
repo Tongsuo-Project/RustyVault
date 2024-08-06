@@ -2,17 +2,14 @@
 //! <https://github.com/hashicorp/vault/blob/main/sdk/helper/cidrutil/cidr.go>
 
 use std::{
-    str::FromStr,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     collections::HashSet,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    str::FromStr,
 };
 
 use ipnetwork::IpNetwork;
 
-use super::{
-    sock_addr::{new_sock_addr, SockAddrType, SockAddr},
-};
-
+use super::sock_addr::{new_sock_addr, SockAddr, SockAddrType};
 use crate::errors::RvError;
 
 pub fn is_ip_addr(addr: &dyn SockAddr) -> bool {
@@ -73,10 +70,8 @@ pub fn validate_cidr_string(cidr_list: &str, separator: &str) -> Result<bool, Rv
         return Err(RvError::ErrResponse("missing separator".to_string()));
     }
 
-    let cidrs_set: HashSet<&str> = cidr_list.split(separator)
-        .map(|cidr| cidr.trim())
-        .filter(|cidr| !cidr.is_empty())
-        .collect();
+    let cidrs_set: HashSet<&str> =
+        cidr_list.split(separator).map(|cidr| cidr.trim()).filter(|cidr| !cidr.is_empty()).collect();
 
     let cidrs: Vec<&str> = cidrs_set.into_iter().collect();
 

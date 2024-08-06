@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use super::{UserPassBackend, UserPassBackendInner};
 use crate::{
+    context::Context,
     errors::RvError,
     logical::{Auth, Backend, Field, FieldType, Lease, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal,

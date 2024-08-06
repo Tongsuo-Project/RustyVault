@@ -2,5 +2,5 @@
 //! , etc.
 //!
 
+pub mod approle;
 pub mod userpass;
-//pub mod cert;

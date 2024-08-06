@@ -12,11 +12,16 @@ use serde::{Deserialize, Deserializer, Serializer};
 use crate::errors::RvError;
 
 pub mod cert;
-pub mod key;
-pub mod salt;
 pub mod cidr;
-pub mod sock_addr;
+pub mod crypto;
 pub mod ip_sock_addr;
+pub mod key;
+pub mod locks;
+pub mod policy;
+pub mod salt;
+pub mod sock_addr;
+pub mod string;
+pub mod token_util;
 pub mod unix_sock_addr;
 
 pub fn generate_uuid() -> String {
@@ -105,11 +110,8 @@ pub fn asn1time_to_timestamp(time_str: &str) -> Result<i64, RvError> {
 
 pub fn hex_encode_with_colon(bytes: &[u8]) -> String {
     let hex_str = hex::encode(bytes);
-    let split_hex: Vec<String> = hex_str
-        .as_bytes()
-        .chunks(2)
-        .map(|chunk| String::from_utf8(chunk.to_vec()).unwrap())
-        .collect();
+    let split_hex: Vec<String> =
+        hex_str.as_bytes().chunks(2).map(|chunk| String::from_utf8(chunk.to_vec()).unwrap()).collect();
 
     split_hex.join(":")
 }

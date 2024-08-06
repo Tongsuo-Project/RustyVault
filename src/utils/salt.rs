@@ -1,21 +1,18 @@
 //! This module is a Rust replica of
 //! <https://github.com/hashicorp/vault/blob/main/sdk/helper/salt/salt.go>
 
+use derivative::Derivative;
 use openssl::{
     hash::{hash, MessageDigest},
-    pkey::PKey,
     nid::Nid,
+    pkey::PKey,
     sign::Signer,
 };
-use derivative::Derivative;
 
-use super::{
-    generate_uuid,
-};
-
+use super::generate_uuid;
 use crate::{
-    storage::{Storage, StorageEntry},
     errors::RvError,
+    storage::{Storage, StorageEntry},
 };
 
 static DEFAULT_LOCATION: &str = "salt";
@@ -31,19 +28,15 @@ pub struct Salt {
 #[derivative(Debug, Clone)]
 pub struct Config {
     pub location: String,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     pub hash_type: MessageDigest,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     pub hmac_type: MessageDigest,
 }
 
 impl Default for Salt {
     fn default() -> Self {
-        Self {
-            salt: generate_uuid(),
-            generated: true,
-            config: Config::default(),
-        }
+        Self { salt: generate_uuid(), generated: true, config: Config::default() }
     }
 }
 
@@ -79,10 +72,7 @@ impl Salt {
                 salt.salt = String::from_utf8_lossy(&raw.value).to_string();
                 salt.generated = false;
             } else {
-                let entry = StorageEntry {
-                    key: salt.config.location.clone(),
-                    value: salt.salt.as_bytes().to_vec(),
-                };
+                let entry = StorageEntry { key: salt.config.location.clone(), value: salt.salt.as_bytes().to_vec() };
 
                 s.put(&entry)?;
             }
@@ -137,21 +127,19 @@ impl Salt {
 #[cfg(test)]
 mod test {
     use std::{collections::HashMap, env, fs, sync::Arc};
+
     use go_defer::defer;
     use rand::{thread_rng, Rng};
     use serde_json::Value;
+
     use super::*;
-    use crate::{
-        storage::{
-            barrier_view, barrier_aes_gcm,
-            barrier::SecurityBarrier,
-        }
-    };
+    use crate::storage::{barrier::SecurityBarrier, barrier_aes_gcm, barrier_view};
 
     #[test]
     fn test_salt() {
         // init the storage
         let dir = env::temp_dir().join("rusty_vault_test_salt");
+        let _ = fs::remove_dir_all(&dir);
         assert!(fs::create_dir(&dir).is_ok());
         defer! (
             assert!(fs::remove_dir_all(&dir).is_ok());
@@ -203,6 +191,6 @@ mod test {
         let sid1 = sid1.unwrap();
         let sid2 = sid2.unwrap();
         assert_eq!(sid1, sid2);
-        assert_eq!(sid1.len(), salt.config.hash_type.size()*2);
+        assert_eq!(sid1.len(), salt.config.hash_type.size() * 2);
     }
 }

@@ -1,7 +1,9 @@
 use std::default::Default;
 
-use crate::storage::{Backend, BackendEntry};
-use crate::errors::RvError;
+use crate::{
+    errors::RvError,
+    storage::{Backend, BackendEntry},
+};
 
 #[derive(Default)]
 pub struct MockBackend(());
