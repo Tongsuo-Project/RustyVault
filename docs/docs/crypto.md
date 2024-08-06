@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+title: Crypto Adaptor
+---
 # RustyVault Crypto Adaptor
 
 In RustyVault, we provide a mechanism for the users to build with selectable underlying cryptography libraries. This is the "crypto adaptor" mechanism.
