@@ -1,10 +1,15 @@
+---
+sidebar_position: 5
+title: 设计
+---
+
 # RustyVault Design
 
-根据：[RustyVault需求文档](.\/req.md)中的整体需求点，进行功能细化。本文档对RustyVault的整体架构进行描述。
+根据：[RustyVault需求文档](./req.md)中的整体需求点，进行功能细化。本文档对RustyVault的整体架构进行描述。
 
 # 结构图
 
-<img src="https://github.com/Tongsuo-Project/RustyVault/blob/main/doc/RustyVault-arch.png" width=50% height=50% />
+![RustyVault Architecture](/img/RustyVault-arch.png)
 
 说明如下：
 

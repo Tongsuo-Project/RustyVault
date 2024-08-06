@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+title: 动机
+---
 # 动机
 
 HashiCorp Vault是云原生领域被广泛使用的Secret Management产品，也是CNCF的项目。在实际使用中，Vault存在一些不足，例如：

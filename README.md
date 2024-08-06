@@ -60,4 +60,4 @@ Part of the features provided by RustyVault are as follows:
 
 ## Design
 
-Read the [design](./doc/design.md) document.
+Read the [design](./docs/docs/design.md) document.
