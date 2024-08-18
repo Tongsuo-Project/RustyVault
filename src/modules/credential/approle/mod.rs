@@ -1,3 +1,46 @@
+//! The approle auth method allows machines or apps to authenticate with RustyVault-defined roles.
+//! The open design of AppRole enables a varied set of workflows and configurations to handle
+//! large numbers of apps. This auth method is oriented to automated workflows (machines and
+//! services), and is less useful for human operators. We recommend using batch tokens with
+//! the AppRole auth method.
+//!
+//! An "AppRole" represents a set of Vault policies and login constraints that must be met to
+//! receive a token with those policies. The scope can be as narrow or broad as desired.
+//! An AppRole can be created for a particular machine, or even a particular user on that
+//! machine, or a service spread across machines. The credentials required for successful
+//! login depend upon the constraints set on the AppRole associated with the credentials.
+//!
+//! ## Credentials/Constraints
+//!
+//! ### RoleID
+//!
+//! RoleID is an identifier that selects the AppRole against which the other credentials are
+//! evaluated. When authenticating against this auth method's login endpoint, the RoleID is
+//! a required argument (via `role_id`) at all times. By default, RoleIDs are unique UUIDs,
+//! which allow them to serve as secondary secrets to the other credential information.
+//! However, they can be set to particular values to match introspected information by the
+//! client (for instance, the client's domain name).
+//!
+//! ### SecretID
+//!
+//! SecretID is a credential that is required by default for any login (via `secret_id`) and
+//! is intended to always be secret. (For advanced usage, requiring a SecretID can be disabled
+//! via an AppRole's `bind_secret_id` parameter, allowing machines with only knowledge of the
+//! RoleID, or matching other set constraints, to fetch a token). SecretIDs can be created
+//! against an AppRole either via generation of a 128-bit purely random UUID by the role
+//! itself (`Pull` mode) or via specific, custom values (`Push` mode).
+//! Similarly to tokens, SecretIDs have properties like usage-limit, TTLs and expirations.
+//!
+//! ### Further constraints
+//!
+//! `role_id` is a required credential at the login endpoint. AppRole pointed to by the `role_id`
+//! will have constraints set on it. This dictates other `required` credentials for login.
+//! The `bind_secret_id` constraint requires `secret_id` to be presented at the login endpoint.
+//! Going forward, this auth method can support more constraint parameters to support varied set
+//! of Apps.  Some constraints will not require a credential, but still enforce constraints for login.
+//! For example, `secret_id_bound_cidrs` will only allow logins coming from IP addresses belonging
+//! to configured CIDR blocks on the AppRole.
+
 use std::sync::{atomic::AtomicU32, Arc, RwLock};
 
 use as_any::Downcast;
