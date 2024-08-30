@@ -43,7 +43,7 @@ log = "0.4"
 env_logger = "0.10"
 hex = "0.4"
 humantime = "2.1"
-delay_timer = "0.11"
+delay_timer = "0.11.6"
 as-any = "0.3.1"
 pem = "3.0"
 chrono = "0.4"
@@ -60,8 +60,8 @@ base64 = "0.22"
 ipnetwork = "0.20"
 
 # optional dependencies
-openssl = { version = "0.10", optional = true }
-openssl-sys = { version = "0.9", optional = true }
+openssl = { version = "0.10.64", optional = true }
+openssl-sys = { version = "0.9.102", optional = true }
 
 # uncomment the following lines to use Tongsuo as underlying crypto adaptor
 #[patch.crates-io]

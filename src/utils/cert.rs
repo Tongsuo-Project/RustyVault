@@ -283,10 +283,16 @@ impl Certificate {
             AuthorityKeyIdentifier::new().keyid(true).issuer(false).build(&builder.x509v3_context(ca_cert, None))?;
         builder.append_extension(authority_key_id)?;
 
+        let digest = match self.key_type.as_str() {
+            "rsa" | "ec" => MessageDigest::sha256(),
+            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            "sm2" => MessageDigest::sm3(),
+            _ => return Err(RvError::ErrPkiKeyTypeInvalid),
+        };
         if ca_key.is_some() {
-            builder.sign(ca_key.as_ref().unwrap(), MessageDigest::sha256())?;
+            builder.sign(ca_key.as_ref().unwrap(), digest)?;
         } else {
-            builder.sign(private_key, MessageDigest::sha256())?;
+            builder.sign(private_key, digest)?;
         }
 
         Ok(builder.build())
@@ -300,12 +306,13 @@ impl Certificate {
         let key_bits = self.key_bits;
         let priv_key = match self.key_type.as_str() {
             "rsa" => {
-                if key_bits != 2048 && key_bits != 3072 && key_bits != 4096 {
-                    return Err(RvError::ErrPkiKeyBitsInvalid);
+                match key_bits {
+                    2048 | 3072 | 4096 => {
+                        let rsa_key = Rsa::generate(key_bits)?;
+                        PKey::from_rsa(rsa_key)?
+                    },
+                    _ => return Err(RvError::ErrPkiKeyBitsInvalid),
                 }
-                let rsa_key = Rsa::generate(key_bits)?;
-                let pkey = PKey::from_rsa(rsa_key)?;
-                pkey
             }
             "ec" => {
                 let curve_name = match key_bits {
@@ -313,18 +320,22 @@ impl Certificate {
                     256 => Nid::SECP256K1,
                     384 => Nid::SECP384R1,
                     521 => Nid::SECP521R1,
-                    _ => {
-                        return Err(RvError::ErrPkiKeyBitsInvalid);
-                    }
+                    _ => return Err(RvError::ErrPkiKeyBitsInvalid),
                 };
                 let ec_group = EcGroup::from_curve_name(curve_name)?;
                 let ec_key = EcKey::generate(ec_group.as_ref())?;
-                let pkey = PKey::from_ec_key(ec_key)?;
-                pkey
+                PKey::from_ec_key(ec_key)?
             }
-            _ => {
-                return Err(RvError::ErrPkiKeyTypeInvalid);
+            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            "sm2" => {
+                if key_bits != 256 {
+                    return Err(RvError::ErrPkiKeyBitsInvalid);
+                }
+                let ec_group = EcGroup::from_curve_name(Nid::SM2)?;
+                let ec_key = EcKey::generate(&ec_group)?;
+                PKey::from_ec_key(ec_key)?
             }
+            _ => return Err(RvError::ErrPkiKeyTypeInvalid),
         };
 
         let cert = self.to_x509(ca_cert, ca_key, &priv_key)?;
