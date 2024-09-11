@@ -150,6 +150,7 @@ impl PkiBackendInner {
             subject,
             dns_sans: common_names,
             ip_sans,
+            key_type: role_entry.key_type.clone(),
             key_bits: role_entry.key_bits,
             ..cert::Certificate::default()
         };
