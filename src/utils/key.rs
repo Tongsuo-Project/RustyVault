@@ -136,9 +136,7 @@ impl KeyBundle {
                 rand_bytes(&mut key)?;
                 key
             },
-            _ => {
-                return Err(RvError::ErrPkiKeyTypeInvalid);
-            }
+            _ => return Err(RvError::ErrPkiKeyTypeInvalid),
         };
 
         self.key = priv_key;
