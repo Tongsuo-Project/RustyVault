@@ -308,10 +308,8 @@ impl PkiBackendInner {
             key_bundle.key = hex::decode(&hex_bundle)?;
             key_bundle.bits = (key_bundle.key.len() as u32) * 8;
             match key_bundle.bits {
-                128 | 192 | 256 => {}
-                _ => {
-                    return Err(RvError::ErrPkiKeyBitsInvalid);
-                }
+                128 | 192 | 256 => {},
+                _ => return Err(RvError::ErrPkiKeyBitsInvalid),
             };
             let iv_value = req.get_data_or_default("iv")?;
             let is_iv_required = matches!(key_type, "aes-gcm" | "aes-cbc" | "sm4-gcm" | "sm4-ccm");

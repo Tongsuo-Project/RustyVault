@@ -129,10 +129,8 @@ impl KeyBundle {
                 let mut key = vec![0u8; key_bits as usize / 8];
                 rand_bytes(&mut key)?;
                 key
-            }
-            _ => {
-                return Err(RvError::ErrPkiKeyTypeInvalid);
-            }
+            },
+            _ => return Err(RvError::ErrPkiKeyTypeInvalid),
         };
 
         self.key = priv_key;

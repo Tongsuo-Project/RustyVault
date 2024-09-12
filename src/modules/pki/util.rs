@@ -41,9 +41,17 @@ pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
                 return Err(RvError::ErrPkiKeyBitsInvalid);
             }
         }
-        _ => {
-            return Err(RvError::ErrPkiKeyTypeInvalid);
+        #[cfg(feature = "crypto_adaptor_tongsuo")]
+        "sm2" => {
+            if key_bits == 0 {
+                key_bits = 256;
+            }
+
+            if key_bits != 256 {
+                return Err(RvError::ErrPkiKeyBitsInvalid);
+            }
         }
+        _ => return Err(RvError::ErrPkiKeyTypeInvalid),
     }
 
     let signature_bits = req.get_data_or_default("signature_bits")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
@@ -149,6 +157,7 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
         subject,
         dns_sans: common_names,
         ip_sans,
+        key_type: role_entry.key_type.clone(),
         key_bits: role_entry.key_bits,
         ..Default::default()
     };
