@@ -21,6 +21,7 @@ use crate::{core::Core, errors::RvError, logical::Request};
 
 pub mod logical;
 pub mod sys;
+pub mod metrics;
 
 pub const AUTH_COOKIE_NAME: &str = "token";
 pub const AUTH_HEADER_NAME: &str = "X-RustyVault-Token";
@@ -101,6 +102,7 @@ pub fn request_on_connect_handler(conn: &dyn Any, ext: &mut Extensions) {
 pub fn init_service(cfg: &mut web::ServiceConfig) {
     sys::init_sys_service(cfg);
     logical::init_logical_service(cfg);
+    metrics::init_metrics_service(cfg);
 }
 
 impl ResponseError for RvError {

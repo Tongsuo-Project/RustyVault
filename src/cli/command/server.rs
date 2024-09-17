@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use actix_web::{middleware::{self, from_fn}, web, App, HttpResponse, HttpServer};
 use anyhow::format_err;
 use clap::ArgMatches;
 use openssl::{
@@ -17,12 +17,7 @@ use openssl::{
 use sysexits::ExitCode;
 
 use crate::{
-    cli::config,
-    core::Core,
-    errors::RvError,
-    http,
-    storage,
-    EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
+    cli::config, core::Core, errors::RvError, http, metrics::{manager::MetricsManager, middleware::metrics_midleware}, storage, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK
 };
 
 pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";
@@ -113,7 +108,15 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
 
     let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
-    let core = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
+    let metrics_manager = Arc::new(RwLock::new(MetricsManager::new()));
+    let system_metrics = Arc::clone(&metrics_manager.read().unwrap().system_metrics);
+
+
+    let core = Arc::new(RwLock::new(Core {
+        physical: backend,
+        barrier: Arc::new(barrier),
+        ..Default::default()
+    }));
 
     {
         let mut c = core.write()?;
@@ -123,7 +126,9 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
     let mut http_server = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
+            .wrap(from_fn(metrics_midleware))
             .app_data(web::Data::new(Arc::clone(&core)))
+            .app_data(web::Data::new(Arc::clone(&metrics_manager)))
             .configure(http::init_service)
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
@@ -182,7 +187,12 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
 
     log::info!("rusty_vault server starts, waiting for request...");
 
-    server.block_on(async { http_server.run().await })?;
+    server.block_on(async {
+        tokio::spawn(async {
+            system_metrics.start_collecting().await;
+        });
+        http_server.run().await
+    })?;
     let _ = server.run();
 
     Ok(())
