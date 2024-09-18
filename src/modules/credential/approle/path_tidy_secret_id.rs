@@ -243,9 +243,9 @@ impl AppRoleBackendInner {
 #[cfg(test)]
 mod test {
     use std::{
-        thread,
         default::Default,
         sync::{Arc, Mutex},
+        thread,
         time::{Duration, Instant},
     };
 
@@ -254,13 +254,13 @@ mod test {
     use tokio::runtime::Builder;
 
     use super::{
-        *,
         super::{path_role::RoleEntry, AppRoleModule},
+        *,
     };
     use crate::{
         logical::{Operation, Request},
         storage::{Storage, StorageEntry},
-        test_utils::{test_rusty_vault_init, test_mount_auth_api},
+        test_utils::{test_mount_auth_api, test_rusty_vault_init},
     };
 
     #[test]

@@ -1,6 +1,4 @@
-use std::{
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use as_any::Downcast;
 use derive_more::Deref;
@@ -131,7 +129,7 @@ mod test {
     use crate::{
         core::Core,
         logical::{Operation, Request},
-        test_utils::{test_rusty_vault_init, test_read_api, test_write_api, test_delete_api, test_mount_auth_api},
+        test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
     fn test_write_user(core: &Core, token: &str, path: &str, username: &str, password: &str, ttl: i32) {

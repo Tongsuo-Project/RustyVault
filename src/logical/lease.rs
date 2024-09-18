@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
-use serde::{Deserialize, Serialize};
 use better_default::Default;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Lease {

@@ -6,9 +6,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use better_default::Default;
 use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
 use serde::{Deserialize, Serialize};
-use better_default::Default;
 
 use super::{AppRoleBackendInner, SECRET_ID_ACCESSOR_LOCAL_PREFIX, SECRET_ID_ACCESSOR_PREFIX, SECRET_ID_LOCAL_PREFIX};
 use crate::{

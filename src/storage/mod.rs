@@ -91,7 +91,8 @@ pub mod test {
     use serde_json::Value;
 
     use crate::{
-        test_utils::TEST_DIR, storage::{new_backend, Backend, BackendEntry},
+        storage::{new_backend, Backend, BackendEntry},
+        test_utils::TEST_DIR,
     };
 
     #[test]

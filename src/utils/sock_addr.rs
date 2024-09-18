@@ -70,6 +70,12 @@ impl fmt::Display for SockAddrMarshaler {
     }
 }
 
+impl PartialEq for SockAddrMarshaler {
+    fn eq(&self, other: &Self) -> bool {
+        self.sock_addr.equal(&*other.sock_addr)
+    }
+}
+
 impl Serialize for SockAddrMarshaler {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

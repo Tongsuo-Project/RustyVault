@@ -316,10 +316,7 @@ impl AESGCMBarrier {
 #[cfg(test)]
 mod test {
     use super::{super::*, *};
-
-    use crate::{
-        test_utils::test_backend,
-    };
+    use crate::test_utils::test_backend;
 
     #[test]
     fn test_encrypt_decrypt() {

@@ -1,11 +1,8 @@
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
+use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use derive_more::{Deref, DerefMut};
 
 use super::{lease::Lease, Backend, Request, Response};
 use crate::errors::RvError;

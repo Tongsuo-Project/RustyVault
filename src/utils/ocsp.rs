@@ -1,8 +1,5 @@
 use better_default::Default;
-
-use openssl::{
-    x509::X509,
-};
+use openssl::x509::X509;
 
 #[repr(u32)]
 #[derive(Debug)]
