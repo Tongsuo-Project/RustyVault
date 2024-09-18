@@ -259,6 +259,7 @@ mod test {
     #[test]
     fn test_userpass_module() {
         let dir = env::temp_dir().join("rusty_vault_credential_userpass_module");
+        let _ = fs::remove_dir_all(&dir).is_ok();
         assert!(fs::create_dir(&dir).is_ok());
         defer! (
             assert!(fs::remove_dir_all(&dir).is_ok());

@@ -14,8 +14,10 @@ type SecretOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Optio
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretData {
+    #[serde(flatten)]
     pub lease: Lease,
     pub lease_id: String,
+    #[serde(skip)]
     pub internal_data: Map<String, Value>,
 }
 
