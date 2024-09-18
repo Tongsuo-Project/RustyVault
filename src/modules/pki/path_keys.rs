@@ -5,11 +5,12 @@ use serde_json::{json, Value};
 
 use super::{PkiBackend, PkiBackendInner};
 use crate::{
+    context::Context,
     errors::RvError,
     logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
-    utils::key::{KeyBundle, EncryptExtraData},
+    utils::key::{EncryptExtraData, KeyBundle},
 };
 
 const PKI_CONFIG_KEY_PREFIX: &str = "config/key/";
@@ -292,11 +293,11 @@ impl PkiBackendInner {
                 "rsa" => {
                     let rsa = Rsa::private_key_from_pem(&key_bundle.key)?;
                     key_bundle.bits = rsa.size() * 8;
-                },
+                }
                 "ec" | "sm2" => {
                     let ec_key = EcKey::private_key_from_pem(&key_bundle.key)?;
                     key_bundle.bits = ec_key.group().degree();
-                },
+                }
                 _ => {
                     return Err(RvError::ErrPkiKeyTypeInvalid);
                 }
@@ -351,7 +352,8 @@ impl PkiBackendInner {
         let data_value = req.get_data("data")?;
         let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+        let key_bundle =
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.sign(&decoded_data)?;
@@ -372,7 +374,8 @@ impl PkiBackendInner {
         let signature_value = req.get_data("signature")?;
         let signature = signature_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+        let key_bundle =
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let decoded_signature = hex::decode(signature.as_bytes())?;
@@ -394,7 +397,8 @@ impl PkiBackendInner {
         let aad_value = req.get_data_or_default("aad")?;
         let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+        let key_bundle =
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.encrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
@@ -415,7 +419,8 @@ impl PkiBackendInner {
         let aad_value = req.get_data_or_default("aad")?;
         let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        let key_bundle = self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+        let key_bundle =
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.decrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;

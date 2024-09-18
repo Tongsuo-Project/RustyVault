@@ -16,7 +16,8 @@ pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
             ttl = parse_duration(ttl_str)?;
         }
     }
-    let not_before_duration_u64 = req.get_data_or_default("not_before_duration")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+    let not_before_duration_u64 =
+        req.get_data_or_default("not_before_duration")?.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
     let not_before_duration = Duration::from_secs(not_before_duration_u64);
     let key_type_value = req.get_data_or_default("key_type")?;
     let key_type = key_type_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
@@ -58,10 +59,13 @@ pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
     let country = req.get_data_or_default("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
     let province = req.get_data_or_default("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
     let locality = req.get_data_or_default("locality")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let organization = req.get_data_or_default("organization")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let organization =
+        req.get_data_or_default("organization")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
     let ou = req.get_data_or_default("ou")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let street_address = req.get_data_or_default("street_address")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
-    let postal_code = req.get_data_or_default("postal_code")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let street_address =
+        req.get_data_or_default("street_address")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
+    let postal_code =
+        req.get_data_or_default("postal_code")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
     let not_after = req.get_data_or_default("not_after")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
 
     let role_entry = RoleEntry {
