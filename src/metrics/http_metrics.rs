@@ -43,9 +43,8 @@ pub struct HttpMetrics {
 impl HttpMetrics {
     pub fn new(registry: &mut Registry) -> Self {
         let requests = Family::<HttpLabel, Counter>::default();
-        let histogram = Family::<HttpLabel, Histogram>::new_with_constructor(|| {
-           Histogram::new(linear_buckets(0.1, 0.1, 10))
-        });
+        let histogram =
+            Family::<HttpLabel, Histogram>::new_with_constructor(|| Histogram::new(linear_buckets(0.1, 0.1, 10)));
 
         registry.register(
             "http_request_count",
@@ -62,11 +61,11 @@ impl HttpMetrics {
         Self { requests, histogram }
     }
 
-    pub fn increment_request_count(&self, label:&HttpLabel) {
+    pub fn increment_request_count(&self, label: &HttpLabel) {
         self.requests.get_or_create(label).inc();
     }
 
-    pub fn observe_duration(&self, label:&HttpLabel, duration: f64,) {
+    pub fn observe_duration(&self, label: &HttpLabel, duration: f64) {
         self.histogram.get_or_create(label).observe(duration);
     }
 }

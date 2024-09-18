@@ -7,7 +7,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use actix_web::{middleware::{self, from_fn}, web, App, HttpResponse, HttpServer};
+use actix_web::{
+    middleware::{self, from_fn},
+    web, App, HttpResponse, HttpServer,
+};
 use anyhow::format_err;
 use clap::ArgMatches;
 use openssl::{
@@ -17,7 +20,12 @@ use openssl::{
 use sysexits::ExitCode;
 
 use crate::{
-    cli::config, core::Core, errors::RvError, http, metrics::{manager::MetricsManager, middleware::metrics_midleware}, storage, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK
+    cli::config,
+    core::Core,
+    errors::RvError,
+    http,
+    metrics::{manager::MetricsManager, middleware::metrics_midleware},
+    storage, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
 };
 
 pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";
@@ -110,7 +118,6 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
 
     let metrics_manager = Arc::new(RwLock::new(MetricsManager::new()));
     let system_metrics = Arc::clone(&metrics_manager.read().unwrap().system_metrics);
-
 
     let core = Arc::new(RwLock::new(Core {
         physical: backend,
