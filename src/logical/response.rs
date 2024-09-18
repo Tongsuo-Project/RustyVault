@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
+use better_default::Default;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use better_default::Default;
 
 use crate::{
     errors::RvError,

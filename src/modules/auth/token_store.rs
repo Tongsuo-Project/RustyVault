@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use derive_more::Deref;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
 use regex::Regex;
-use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -19,10 +19,11 @@ use crate::{
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
+    rv_error_response,
     new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
     router::Router,
     storage::{Storage, StorageEntry},
-    utils::{generate_uuid, is_str_subset, sha1},
+    utils::{generate_uuid, is_str_subset, sha1, policy::sanitize_policies},
 };
 
 const TOKEN_LOOKUP_PREFIX: &str = "id/";
@@ -660,6 +661,12 @@ impl Handler for TokenStore {
 
             if auth.ttl > MAX_LEASE_DURATION_SECS {
                 auth.ttl = MAX_LEASE_DURATION_SECS;
+            }
+
+            sanitize_policies(&mut auth.policies, !auth.no_default_policy);
+
+            if auth.policies.contains(&"root".to_string()) {
+                return Err(rv_error_response!("auth methods cannot create root tokens"));
             }
 
             let mut te = TokenEntry {

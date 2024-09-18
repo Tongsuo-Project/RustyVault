@@ -1,14 +1,14 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use better_default::Default;
 use humantime::parse_duration;
 use serde::{Deserialize, Serialize};
-use better_default::Default;
 
 use super::{util::DEFAULT_MAX_TTL, PkiBackend, PkiBackendInner};
 use crate::{
     context::Context,
     errors::RvError,
-    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    logical::{Backend, Field, FieldType, field::FieldTrait, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
     utils::{deserialize_duration, serialize_duration},
@@ -46,6 +46,8 @@ pub struct RoleEntry {
     pub use_csr_sans: bool,
     #[default(true)]
     pub use_csr_common_name: bool,
+    pub key_usage: Vec<String>,
+    pub ext_key_usage: Vec<String>,
     pub country: String,
     pub province: String,
     pub locality: String,
@@ -175,6 +177,24 @@ key_type: 2048 (default), 3072, or 4096; with ec key_type: 224, 256 (default),
 The number of bits to use in the signature algorithm; accepts 256 for SHA-2-256,
 384 for SHA-2-384, and 512 for SHA-2-512. defaults to 0 to automatically detect
 based on key length (SHA-2-256 for RSA keys, and matching the curve size for NIST P-Curves)."#
+                },
+                "key_usage": {
+                    field_type: FieldType::CommaStringSlice,
+                    default: "DigitalSignature,KeyAgreement,KeyEncipherment",
+                    description: r#"
+A comma-separated string or list of key usages (not extended key usages).
+Valid values can be found at https://golang.org/pkg/crypto/x509/#KeyUsage
+-- simply drop the "KeyUsage" part of the name.
+To remove all key usages from being set, set this value to an empty list. See also RFC 5280 Section 4.2.1.3.
+                    "#
+                },
+                "ext_key_usage": {
+                    field_type: FieldType::CommaStringSlice,
+                    description: r#"
+A comma-separated string or list of extended key usages. Valid values can be found at
+https://golang.org/pkg/crypto/x509/#ExtKeyUsage -- simply drop the "ExtKeyUsage" part of the name.
+To remove all key usages from being set, set this value to an empty list. See also RFC 5280 Section 4.2.1.12.
+                    "#
                 },
                 "not_before_duration": {
                     field_type: FieldType::Int,
@@ -372,6 +392,10 @@ impl PkiBackendInner {
         let use_csr_sans = req.get_data_or_default("use_csr_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
         let use_csr_common_name =
             req.get_data_or_default("use_csr_common_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let key_usage =
+            req.get_data_or_default("key_usage")?.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let ext_key_usage =
+            req.get_data_or_default("ext_key_usage")?.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         let country = req.get_data_or_default("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
         let province =
             req.get_data_or_default("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
@@ -408,6 +432,8 @@ impl PkiBackendInner {
             client_flag,
             use_csr_sans,
             use_csr_common_name,
+            key_usage,
+            ext_key_usage,
             country,
             province,
             locality,

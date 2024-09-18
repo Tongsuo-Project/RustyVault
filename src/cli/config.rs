@@ -312,7 +312,6 @@ mod test {
     use std::{env, fs, io::prelude::*};
 
     use super::*;
-
     use crate::test_utils::TEST_DIR;
 
     fn write_file(path: &str, config: &str) -> Result<(), RvError> {

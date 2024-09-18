@@ -148,7 +148,7 @@ mod test {
     use super::*;
     use crate::{
         core::Core,
-        test_utils::{test_rusty_vault_init, test_read_api, test_write_api, test_delete_api, test_mount_api},
+        test_utils::{test_delete_api, test_mount_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
     fn config_ca(core: &Core, token: &str, path: &str) {
@@ -166,12 +166,12 @@ mod test {
         assert!(resp.is_ok());
     }
 
-    fn config_role(core: &Core, token: &str, path: &str, role_name: &str) {
+    fn config_role(core: &Core, token: &str, path: &str, role_name: &str, key_type: &str, key_bits: u32) {
         let role_data = json!({
             "ttl": "60d",
             "max_ttl": "365d",
-            "key_type": "rsa",
-            "key_bits": 4096,
+            "key_type": key_type,
+            "key_bits": key_bits,
             "country": "CN",
             "province": "Beijing",
             "locality": "Beijing",
@@ -183,7 +183,8 @@ mod test {
         .clone();
 
         // config role
-        assert!(test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data)).is_ok());
+        assert!(test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data))
+            .is_ok());
     }
 
     fn generate_root(core: &Core, token: &str, path: &str, exported: bool, key_type: &str, key_bits: u32, is_ok: bool) {
@@ -422,7 +423,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         config_ca(&core, token, path);
 
         // config role
-        config_role(&core, token, path, role_name);
+        config_role(&core, token, path, role_name, "rsa", 4096);
 
         let resp = test_read_api(&core, token, &format!("{}roles/{}", path, role_name), true);
         assert!(resp.as_ref().unwrap().is_some());
@@ -460,7 +461,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         config_ca(&core, token, path);
 
         // config role
-        config_role(&core, token, path, role_name);
+        config_role(&core, token, path, role_name, "rsa", 4096);
 
         let dns_sans = vec!["test.com", "a.test.com", "b.test.com"];
         let issue_data = json!({
@@ -557,7 +558,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         config_ca(&core, token, path);
 
         // config role
-        config_role(&core, token, path, role_name);
+        config_role(&core, token, path, role_name, "rsa", 4096);
 
         generate_root(&core, token, path, true, "rsa", 4096, true);
         generate_root(&core, token, path, false, "rsa", 4096, true);
@@ -568,6 +569,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
     }
 
     #[cfg(feature = "crypto_adaptor_tongsuo")]
+    #[test]
     fn test_pki_sm2_generate_root() {
         let (root_token, c) = test_rusty_vault_init("test_pki_generate_root");
         let token = &root_token;
@@ -582,7 +584,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         config_ca(&core, token, path);
 
         // config role
-        config_role(&core, token, path, role_name);
+        config_role(&core, token, path, role_name, "sm2", 256);
 
         generate_root(&core, token, path, true, "sm2", 256, true);
         generate_root(&core, token, path, false, "sm2", 256, true);

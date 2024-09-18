@@ -1,8 +1,8 @@
 //! This module is a Rust replica of
 //! <https://github.com/hashicorp/vault/blob/main/sdk/helper/salt/salt.go>
 
-use derivative::Derivative;
 use better_default::Default;
+use derivative::Derivative;
 use openssl::{
     hash::{hash, MessageDigest},
     nid::Nid,

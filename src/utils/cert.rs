@@ -1,5 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use better_default::Default;
 use foreign_types::ForeignType;
 use lazy_static::lazy_static;
 use libc::c_int;
@@ -19,9 +20,12 @@ use openssl::{
         X509Builder, X509Extension, X509Name, X509NameBuilder, X509Ref, X509,
     },
 };
+use openssl_sys::{
+    X509_get_extended_key_usage, X509_get_extension_flags, EXFLAG_XKUSAGE,
+    stack_st_X509, X509_STORE_CTX,
+};
 use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::ByteBuf;
-use better_default::Default;
 
 use crate::errors::RvError;
 
@@ -32,6 +36,7 @@ lazy_static! {
 
 extern "C" {
     pub fn X509_check_ca(x509: *mut openssl_sys::X509) -> c_int;
+    pub fn X509_STORE_CTX_set0_trusted_stack(ctx: *mut X509_STORE_CTX, chain: *mut stack_st_X509);
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -100,7 +105,6 @@ fn deserialize_pkey<'de, D>(deserializer: D) -> Result<PKey<openssl::pkey::Priva
 where
     D: serde::Deserializer<'de>,
 {
-    //let pem_bytes: &[u8] = Deserialize::deserialize(deserializer)?;
     let pem_bytes: &[u8] = &ByteBuf::deserialize(deserializer)?;
     PKey::private_key_from_pem(pem_bytes).map_err(serde::de::Error::custom)
 }
@@ -113,6 +117,17 @@ pub fn generate_serial_number() -> BigNum {
     let mut sn = BigNum::new().unwrap();
     sn.rand(159, MsbOption::MAYBE_ZERO, false).unwrap();
     sn
+}
+
+pub fn has_x509_ext_key_usage(x509: &X509) -> bool {
+    unsafe { X509_get_extension_flags(x509.as_ptr()) & EXFLAG_XKUSAGE != 0 }
+}
+
+pub fn has_x509_ext_key_usage_flag(x509: &X509, flag: u32) -> bool {
+    unsafe {
+        (X509_get_extension_flags(x509.as_ptr()) & EXFLAG_XKUSAGE != 0)
+            && (X509_get_extended_key_usage(x509.as_ptr()) & flag) != 0
+    }
 }
 
 impl CertBundle {
@@ -168,7 +183,7 @@ impl CertBundle {
 
 #[derive(Default)]
 pub struct Certificate {
-    #[default(3)]
+    #[default(0x2)]
     pub version: i32,
     #[default(generate_serial_number())]
     pub serial_number: BigNum,
@@ -216,8 +231,7 @@ impl Certificate {
         builder.set_pubkey(private_key)?;
 
         let not_before_dur = self.not_before.duration_since(UNIX_EPOCH)?;
-        let not_before_sec = not_before_dur.as_secs() - 30;
-        let not_before = Asn1Time::from_unix(not_before_sec as i64)?;
+        let not_before = Asn1Time::from_unix(not_before_dur.as_secs() as i64)?;
         builder.set_not_before(&not_before)?;
 
         let not_after_dur = self.not_after.duration_since(UNIX_EPOCH)?;
@@ -242,7 +256,9 @@ impl Certificate {
             san_ext.uri(uri.as_str());
         }
 
-        builder.append_extension(san_ext.build(&builder.x509v3_context(ca_cert, None))?)?;
+        if (self.dns_sans.len() | self.email_sans.len() | self.ip_sans.len() | self.uri_sans.len()) > 0 {
+            builder.append_extension(san_ext.build(&builder.x509v3_context(ca_cert, None))?)?;
+        }
 
         for ext in &self.extensions {
             builder.append_extension2(ext)?;

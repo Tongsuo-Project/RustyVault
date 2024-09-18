@@ -259,9 +259,9 @@ mod test {
 
     use super::*;
     use crate::{
-        test_utils::test_backend,
         logical::{field::FieldTrait, Field, FieldType, PathOperation},
         new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal, storage,
+        test_utils::test_backend,
     };
 
     struct MyTest;

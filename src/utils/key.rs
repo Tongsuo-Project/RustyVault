@@ -1,3 +1,4 @@
+use better_default::Default;
 use openssl::{
     ec::{EcGroup, EcKey},
     hash::MessageDigest,
@@ -9,7 +10,6 @@ use openssl::{
     symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher},
 };
 use serde::{Deserialize, Serialize};
-use better_default::Default;
 
 use crate::{errors::RvError, utils::generate_uuid};
 

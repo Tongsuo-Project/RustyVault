@@ -217,15 +217,10 @@ mod test {
     use crate::{
         core::Core,
         logical::{field::FieldTrait, Operation, Request},
-        test_utils::{test_rusty_vault_init, test_read_api, test_write_api, test_delete_api, test_mount_auth_api},
+        test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
-    pub fn test_read_role(
-        core: &Core,
-        token: &str,
-        path: &str,
-        role_name: &str,
-    ) -> Result<Option<Response>, RvError> {
+    pub fn test_read_role(core: &Core, token: &str, path: &str, role_name: &str) -> Result<Option<Response>, RvError> {
         let resp = test_read_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true);
         assert!(resp.is_ok());
         resp
@@ -470,13 +465,8 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(
-            core,
-            token,
-            format!("auth/{}/role/{}", path, role_name).as_str(),
-            true,
-            Some(data.clone()),
-        );
+        let resp =
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()));
         assert!(resp.is_ok());
 
         // Get the role field
@@ -503,13 +493,8 @@ mod test {
         // Update the role
         data["token_num_uses"] = Value::from(0);
         data["token_type"] = Value::from("batch");
-        let resp = test_write_api(
-            core,
-            token,
-            format!("auth/{}/role/{}", path, role_name).as_str(),
-            true,
-            Some(data.clone()),
-        );
+        let resp =
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()));
         assert!(resp.is_ok());
 
         // Get the role field

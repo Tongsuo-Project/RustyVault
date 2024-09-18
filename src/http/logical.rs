@@ -83,17 +83,16 @@ async fn logical_request_handler(
     }
 
     let core = core.read()?;
-    let resp = core.handle_request(&mut r)?;
-
-    if r.operation == Operation::Read && resp.is_none() {
-        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    let res = core.handle_request(&mut r)?;
+    match res {
+        Some(resp) => response_logical(&resp, &r.path),
+        None => {
+            if matches!(r.operation, Operation::Read | Operation::List) {
+                return Ok(response_error(StatusCode::NOT_FOUND, ""));
+            }
+            Ok(response_ok(None, None))
+        }
     }
-
-    if resp.is_none() {
-        return Ok(response_ok(None, None));
-    }
-
-    response_logical(&resp.unwrap(), &r.path)
 }
 
 fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError> {

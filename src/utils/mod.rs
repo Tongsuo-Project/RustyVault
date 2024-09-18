@@ -17,13 +17,13 @@ pub mod crypto;
 pub mod ip_sock_addr;
 pub mod key;
 pub mod locks;
+pub mod ocsp;
 pub mod policy;
 pub mod salt;
 pub mod sock_addr;
 pub mod string;
 pub mod token_util;
 pub mod unix_sock_addr;
-pub mod ocsp;
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];

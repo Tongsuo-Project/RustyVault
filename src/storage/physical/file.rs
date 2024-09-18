@@ -137,13 +137,8 @@ impl FileBackend {
 
 #[cfg(test)]
 mod test {
-    use super::{
-        super::super::test::{test_backend_curd, test_backend_list_prefix},
-    };
-
-    use crate::{
-        test_utils::test_backend,
-    };
+    use super::super::super::test::{test_backend_curd, test_backend_list_prefix};
+    use crate::test_utils::test_backend;
 
     #[test]
     fn test_file_backend() {

@@ -5,11 +5,11 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use better_default::Default;
 use delay_timer::prelude::*;
 use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use better_default::Default;
 
 use super::TokenStore;
 use crate::{

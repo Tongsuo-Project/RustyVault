@@ -106,10 +106,7 @@ mod test {
     use rand::{thread_rng, Rng};
 
     use super::{super::*, *};
-
-    use crate::{
-        test_utils::test_backend,
-    };
+    use crate::test_utils::test_backend;
 
     #[test]
     fn test_new_barrier_view() {
