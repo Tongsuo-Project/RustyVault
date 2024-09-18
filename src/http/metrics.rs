@@ -10,7 +10,7 @@ pub async fn metrics_handler(metrics_manager: web::Data<Arc<RwLock<MetricsManage
 
     let mut buffer = String::new();
     if let Err(e) = encode(&mut buffer, &registry) {
-        eprintln!("Failed to encode metrics: {}", e);
+        log::error!("Failed to encode metrics: {}", e);
         return HttpResponse::InternalServerError().finish();
     }
 
