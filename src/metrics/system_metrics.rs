@@ -1,11 +1,12 @@
-use std::sync::{atomic::AtomicU64, Arc, Mutex};
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
+use std::sync::{atomic::AtomicU64, Arc, Mutex};
 use sysinfo::{Disks, Networks, System};
 use tokio::time::{self, Duration};
 
 pub struct SystemMetrics {
     system: Arc<Mutex<System>>,
+    collection_interval: u64,
     cpu_usage: Gauge<f64, AtomicU64>,
     total_memory: Gauge<f64, AtomicU64>,
     used_memory: Gauge<f64, AtomicU64>,
@@ -18,7 +19,7 @@ pub struct SystemMetrics {
 }
 
 impl SystemMetrics {
-    pub fn new(registry: &mut Registry) -> Self {
+    pub fn new(registry: &mut Registry, collection_interval: u64) -> Self {
         let cpu_usage = Gauge::<f64, AtomicU64>::default();
 
         let total_memory = Gauge::<f64, AtomicU64>::default();
@@ -48,11 +49,23 @@ impl SystemMetrics {
 
         let system = Arc::new(Mutex::new(System::new_all()));
 
-        Self { system, cpu_usage, total_memory, used_memory, free_memory, total_disk_available, total_disk_space, network_in, network_out, load_avg }
+        Self {
+            system,
+            collection_interval,
+            cpu_usage,
+            total_memory,
+            used_memory,
+            free_memory,
+            total_disk_available,
+            total_disk_space,
+            network_in,
+            network_out,
+            load_avg,
+        }
     }
 
     pub async fn start_collecting(self: Arc<Self>) {
-        let mut interval = time::interval(Duration::from_secs(5));
+        let mut interval = time::interval(Duration::from_secs(self.collection_interval));
 
         loop {
             interval.tick().await;

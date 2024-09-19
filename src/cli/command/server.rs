@@ -116,7 +116,7 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
 
     let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
-    let metrics_manager = Arc::new(RwLock::new(MetricsManager::new()));
+    let metrics_manager = Arc::new(RwLock::new(MetricsManager::new(config.collection_interval)));
     let system_metrics = Arc::clone(&metrics_manager.read().unwrap().system_metrics);
 
     let core = Arc::new(RwLock::new(Core {
