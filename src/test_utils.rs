@@ -313,7 +313,6 @@ mod tests {
         let dir = env::temp_dir().join(*TEST_DIR);
         let _ = fs::remove_dir_all(&dir);
         let _ = rustls::crypto::ring::default_provider().install_default();
-        println!("create rusty_vault_test dir: {}", dir.to_string_lossy().into_owned());
         assert!(fs::create_dir(&dir).is_ok());
     }
 
