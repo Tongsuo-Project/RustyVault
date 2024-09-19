@@ -12,6 +12,7 @@ pub enum MetricsMethod {
     POST,
     PUT,
     DELETE,
+    LIST,
     OTHER,
 }
 
@@ -22,6 +23,7 @@ impl EncodeLabelValue for MetricsMethod {
             MetricsMethod::POST => writer.write_str("post"),
             MetricsMethod::PUT => writer.write_str("put"),
             MetricsMethod::DELETE => writer.write_str("delete"),
+            MetricsMethod::LIST => writer.write_str("list"),
             MetricsMethod::OTHER => writer.write_str("other"),
         }
     }
