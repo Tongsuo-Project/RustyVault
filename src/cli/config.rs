@@ -36,8 +36,12 @@ pub struct Config {
     pub daemon_user: String,
     #[serde(default)]
     pub daemon_group: String,
-    #[serde(default)]
+    #[serde(default = "default_collection_interval")]
     pub collection_interval: u64,
+}
+
+fn default_collection_interval() -> u64 {
+    15
 }
 
 /// A struct that contains several configurable options for networking stuffs
