@@ -1,5 +1,6 @@
-use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use derive_more::Deref;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -18,10 +19,11 @@ use crate::{
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
+    rv_error_response,
     new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
     router::Router,
     storage::{Storage, StorageEntry},
-    utils::{generate_uuid, is_str_subset, sha1},
+    utils::{generate_uuid, is_str_subset, sha1, policy::sanitize_policies},
 };
 
 const TOKEN_LOOKUP_PREFIX: &str = "id/";
@@ -59,7 +61,7 @@ struct TokenReqData {
     renewable: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TokenEntry {
     pub id: String,
     pub parent: String,
@@ -71,6 +73,7 @@ pub struct TokenEntry {
     pub ttl: u64,
 }
 
+#[derive(Default)]
 pub struct TokenStoreInner {
     pub router: Arc<Router>,
     pub view: Option<Arc<dyn Storage + Send + Sync>>,
@@ -78,50 +81,10 @@ pub struct TokenStoreInner {
     pub expiration: Arc<ExpirationManager>,
 }
 
+#[derive(Default, Deref)]
 pub struct TokenStore {
+    #[deref]
     pub inner: Arc<TokenStoreInner>,
-}
-
-impl Deref for TokenStore {
-    type Target = TokenStoreInner;
-
-    fn deref(&self) -> &TokenStoreInner {
-        &self.inner
-    }
-}
-
-impl Default for TokenEntry {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            parent: String::new(),
-            policies: Vec::new(),
-            path: String::new(),
-            meta: HashMap::new(),
-            display_name: String::new(),
-            num_uses: 0,
-            ttl: 0,
-        }
-    }
-}
-
-impl Default for TokenStoreInner {
-    fn default() -> Self {
-        Self {
-            router: Arc::new(Router::new()),
-            view: None,
-            salt: String::new(),
-            expiration: Arc::new(ExpirationManager::default()),
-        }
-    }
-}
-
-impl Default for TokenStore {
-    fn default() -> Self {
-        let inner = TokenStoreInner { ..TokenStoreInner::default() };
-
-        Self { inner: Arc::new(inner) }
-    }
 }
 
 impl TokenStore {
@@ -133,7 +96,7 @@ impl TokenStore {
         let mut inner = TokenStoreInner::default();
 
         let view = core.system_view.as_ref().unwrap().new_sub_view(TOKEN_SUB_PATH);
-        let salt = view.as_storage().get(TOKEN_SALT_LOCATION)?;
+        let salt = view.get(TOKEN_SALT_LOCATION)?;
 
         if salt.is_some() {
             inner.salt = String::from_utf8_lossy(&salt.unwrap().value).to_string();
@@ -142,7 +105,7 @@ impl TokenStore {
         if inner.salt.as_str() == "" {
             inner.salt = generate_uuid();
             let raw = StorageEntry { key: TOKEN_SALT_LOCATION.to_string(), value: inner.salt.as_bytes().to_vec() };
-            view.as_storage().put(&raw)?;
+            view.put(&raw)?;
         }
 
         inner.router = Arc::clone(&core.router);
@@ -698,6 +661,12 @@ impl Handler for TokenStore {
 
             if auth.ttl > MAX_LEASE_DURATION_SECS {
                 auth.ttl = MAX_LEASE_DURATION_SECS;
+            }
+
+            sanitize_policies(&mut auth.policies, !auth.no_default_policy);
+
+            if auth.policies.contains(&"root".to_string()) {
+                return Err(rv_error_response!("auth methods cannot create root tokens"));
             }
 
             let mut te = TokenEntry {

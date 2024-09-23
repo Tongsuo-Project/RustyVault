@@ -30,19 +30,13 @@ struct Auth {
     renewable: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct LogicalResponse {
     renewable: bool,
     lease_id: String,
     lease_duration: u64,
     auth: Option<Auth>,
     data: HashMap<String, Value>,
-}
-
-impl Default for LogicalResponse {
-    fn default() -> Self {
-        Self { renewable: false, lease_id: String::new(), lease_duration: 0, auth: None, data: HashMap::new() }
-    }
 }
 
 async fn logical_request_handler(
@@ -88,18 +82,15 @@ async fn logical_request_handler(
         }
     }
 
-    let core = core.read()?;
-    let resp = core.handle_request(&mut r)?;
-
-    if r.operation == Operation::Read && resp.is_none() {
-        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    match core.read()?.handle_request(&mut r)? {
+        Some(resp) => response_logical(&resp, &r.path),
+        None => {
+            if matches!(r.operation, Operation::Read | Operation::List) {
+                return Ok(response_error(StatusCode::NOT_FOUND, ""));
+            }
+            Ok(response_ok(None, None))
+        }
     }
-
-    if resp.is_none() {
-        return Ok(response_ok(None, None));
-    }
-
-    response_logical(&resp.unwrap(), &r.path)
 }
 
 fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError> {

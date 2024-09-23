@@ -311,9 +311,8 @@ fn check_config(config: &Config) -> Result<(), RvError> {
 mod test {
     use std::{env, fs, io::prelude::*};
 
-    use go_defer::defer;
-
     use super::*;
+    use crate::test_utils::TEST_DIR;
 
     fn write_file(path: &str, config: &str) -> Result<(), RvError> {
         let mut file = fs::File::create(path)?;
@@ -327,11 +326,8 @@ mod test {
 
     #[test]
     fn test_load_config() {
-        let dir = env::temp_dir().join("rusty_vault_config_test");
+        let dir = env::temp_dir().join(*TEST_DIR).join("test_load_config");
         assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-        assert!(fs::remove_dir_all(&dir).is_ok());
-        );
 
         let file_path = dir.join("config.hcl");
         let path = file_path.to_str().unwrap_or("config.hcl");
@@ -418,11 +414,8 @@ mod test {
 
     #[test]
     fn test_load_config_dir() {
-        let dir = env::temp_dir().join("rusty_vault_config_dir_test");
+        let dir = env::temp_dir().join(*TEST_DIR).join("test_load_config_dir");
         assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-        assert!(fs::remove_dir_all(&dir).is_ok());
-        );
 
         let file_path = dir.join("config1.hcl");
         let path = file_path.to_str().unwrap_or("config1.hcl");
@@ -475,11 +468,8 @@ mod test {
 
     #[test]
     fn test_load_config_tls() {
-        let dir = env::temp_dir().join("rusty_vault_tls_config_test");
+        let dir = env::temp_dir().join(*TEST_DIR).join("test_load_config_tls");
         assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-        assert!(fs::remove_dir_all(&dir).is_ok());
-        );
 
         let file_path = dir.join("config.hcl");
         let path = file_path.to_str().unwrap_or("config.hcl");

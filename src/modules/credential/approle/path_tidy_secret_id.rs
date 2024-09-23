@@ -243,18 +243,14 @@ impl AppRoleBackendInner {
 #[cfg(test)]
 mod test {
     use std::{
-        collections::HashMap,
         default::Default,
-        env, fs,
-        sync::{Arc, Mutex, RwLock},
+        sync::{Arc, Mutex},
         thread,
         time::{Duration, Instant},
     };
 
     use actix_rt::System;
     use as_any::Downcast;
-    use go_defer::defer;
-    use serde_json::{json, Map, Value};
     use tokio::runtime::Builder;
 
     use super::{
@@ -262,99 +258,18 @@ mod test {
         *,
     };
     use crate::{
-        core::{Core, SealConfig},
         logical::{Operation, Request},
-        storage::{self, Storage, StorageEntry},
+        storage::{Storage, StorageEntry},
+        test_utils::{test_mount_auth_api, test_rusty_vault_init},
     };
-
-    fn test_write_api(
-        core: &Core,
-        token: &str,
-        path: &str,
-        is_ok: bool,
-        data: Option<Map<String, Value>>,
-    ) -> Result<Option<Response>, RvError> {
-        let mut req = Request::new(path);
-        req.operation = Operation::Write;
-        req.client_token = token.to_string();
-        req.body = data;
-
-        let resp = core.handle_request(&mut req);
-        println!("write resp: {:?}", resp);
-        assert_eq!(resp.is_ok(), is_ok);
-        resp
-    }
-
-    fn mount_approle_auth(core: Arc<RwLock<Core>>, token: &str, path: &str) {
-        let core = core.read().unwrap();
-
-        let auth_data = json!({
-            "type": "approle",
-        })
-        .as_object()
-        .unwrap()
-        .clone();
-
-        let resp = test_write_api(&core, token, format!("sys/auth/{}", path).as_str(), true, Some(auth_data));
-        assert!(resp.is_ok());
-    }
-
-    fn rusty_vault_init(dir: &str) -> (String, Arc<RwLock<Core>>) {
-        let root_token;
-
-        println!("rusty_vault_init, dir: {}", dir);
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
-
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-
-        let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
-
-        {
-            let mut core = c.write().unwrap();
-            assert!(core.config(Arc::clone(&c), None).is_ok());
-
-            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
-
-            let result = core.init(&seal_config);
-            assert!(result.is_ok());
-            let init_result = result.unwrap();
-            println!("init_result: {:?}", init_result);
-
-            let mut unsealed = false;
-            for i in 0..seal_config.secret_threshold {
-                let key = &init_result.secret_shares[i as usize];
-                let unseal = core.unseal(key);
-                assert!(unseal.is_ok());
-                unsealed = unseal.unwrap();
-            }
-
-            root_token = init_result.root_token;
-            println!("root_token: {:?}", root_token);
-
-            assert!(unsealed);
-        }
-
-        (root_token, c)
-    }
 
     #[test]
     fn test_approle_tidy_dangling_accessors_normal() {
-        let dir = env::temp_dir().join("rusty_vault_credential_approle_tidy_dangling_accessors_normal");
-        let _ = fs::remove_dir_all(&dir);
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let (root_token, core) = rusty_vault_init(dir.to_string_lossy().into_owned().as_str());
+        let (root_token, core) = test_rusty_vault_init("test_approle_tidy_dangling_accessors_normal");
+        let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        mount_approle_auth(core.clone(), &root_token, "approle");
-        let c = core.read().unwrap();
+        test_mount_auth_api(&c, &root_token, "approle", "approle/");
 
         let module = c.module_manager.get_module("approle").unwrap();
         let approle_mod = module.read().unwrap();
@@ -437,18 +352,11 @@ mod test {
 
     #[test]
     fn test_approle_tidy_dangling_accessors_race() {
-        let dir = env::temp_dir().join("rusty_vault_credential_approle_tidy_dangling_accessors_race");
-        let _ = fs::remove_dir_all(&dir);
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let (root_token, core) = rusty_vault_init(dir.to_string_lossy().into_owned().as_str());
+        let (root_token, core) = test_rusty_vault_init("test_approle_tidy_dangling_accessors_race");
+        let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        mount_approle_auth(core.clone(), &root_token, "approle");
-        let c = core.read().unwrap();
+        test_mount_auth_api(&c, &root_token, "approle", "approle/");
 
         let module = c.module_manager.get_module("approle").unwrap();
         let approle_mod = module.read().unwrap();
