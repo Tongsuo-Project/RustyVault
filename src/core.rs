@@ -447,100 +447,10 @@ impl Core {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, env, fs, sync::Arc};
-
-    use go_defer::defer;
-    use serde_json::Value;
-
-    use super::*;
-    use crate::storage;
+    use crate::test_utils::test_rusty_vault_init;
 
     #[test]
     fn test_core_init() {
-        let dir = env::temp_dir().join("rusty_vault_core_init");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-        let router = Arc::new(Router::new());
-        let mounts = MountTable::new();
-        let core = Arc::new(RwLock::new(Core {
-            self_ref: None,
-            physical: backend,
-            barrier: Arc::new(barrier),
-            system_view: None,
-            mounts: Arc::new(mounts),
-            router: router.clone(),
-            handlers: RwLock::new(vec![router]),
-            logical_backends: Mutex::new(HashMap::new()),
-            module_manager: ModuleManager::new(),
-            sealed: true,
-            unseal_key_shares: Vec::new(),
-        }));
-
-        {
-            let mut c = core.write().unwrap();
-            assert!(c.config(Arc::clone(&core), None).is_ok());
-
-            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
-
-            let result = c.init(&seal_config);
-            assert!(result.is_ok());
-            let init_result = result.unwrap();
-
-            let mut unsealed = false;
-            for i in 0..seal_config.secret_threshold {
-                let key = &init_result.secret_shares[i as usize];
-                let unseal = c.unseal(key);
-                assert!(unseal.is_ok());
-                unsealed = unseal.unwrap();
-            }
-
-            assert!(unsealed);
-        }
-    }
-
-    #[test]
-    fn test_core_logical_backend() {
-        let dir = env::temp_dir().join("rusty_vault_core_logical_backend");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-
-        let core = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
-
-        {
-            let mut c = core.write().unwrap();
-            assert!(c.config(Arc::clone(&core), None).is_ok());
-
-            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
-
-            let result = c.init(&seal_config);
-            assert!(result.is_ok());
-            let init_result = result.unwrap();
-
-            let mut unsealed = false;
-            for i in 0..seal_config.secret_threshold {
-                let key = &init_result.secret_shares[i as usize];
-                let unseal = c.unseal(key);
-                assert!(unseal.is_ok());
-                unsealed = unseal.unwrap();
-            }
-
-            assert!(unsealed);
-        }
+        let _ = test_rusty_vault_init("test_core_init");
     }
 }

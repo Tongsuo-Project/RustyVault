@@ -17,6 +17,7 @@ pub mod crypto;
 pub mod ip_sock_addr;
 pub mod key;
 pub mod locks;
+pub mod ocsp;
 pub mod policy;
 pub mod salt;
 pub mod sock_addr;

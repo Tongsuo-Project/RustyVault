@@ -47,21 +47,24 @@ delay_timer = "0.11.6"
 as-any = "0.3.1"
 pem = "3.0"
 chrono = "0.4"
-zeroize = { version = "1.7.0", features= ["zeroize_derive"] }
+zeroize = { version = "1.7.0", features = ["zeroize_derive"] }
 diesel = { version = "2.1.4", features = ["mysql", "r2d2"], optional = true }
 r2d2 = { version = "0.8.9", optional = true }
 r2d2-diesel = { version = "1.0.0", optional = true }
 bcrypt = "0.15"
 url = "2.5"
-ureq = "2.9"
+ureq = { version = "2.10", features = ["json"] }
+rustls = "0.23"
+rustls-pemfile = "2.1"
 glob = "0.3"
-serde_asn1_der = "0.8"
 base64 = "0.22"
 ipnetwork = "0.20"
 blake2b_simd = "1.0"
 derive_more = "0.99.17"
 dashmap = "5.5"
-tokio = "1.38"
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros"] }
+ctor = "0.2.8"
+better_default = "1.0.5"
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }

@@ -211,81 +211,57 @@ impl Module for AppRoleModule {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        collections::HashMap,
-        default::Default,
-        env, fs,
-        sync::{Arc, RwLock},
-    };
-
-    use go_defer::defer;
-    use serde_json::{json, Map, Value};
+    use serde_json::{json, Value};
 
     use super::*;
     use crate::{
-        core::{Core, SealConfig},
+        core::Core,
         logical::{field::FieldTrait, Operation, Request},
-        storage,
+        test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
-    fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
-        let mut req = Request::new(path);
-        req.operation = Operation::Read;
-        req.client_token = token.to_string();
-        let resp = core.handle_request(&mut req);
-        assert_eq!(resp.is_ok(), is_ok);
+    pub fn test_read_role(core: &Core, token: &str, path: &str, role_name: &str) -> Result<Option<Response>, RvError> {
+        let resp = test_read_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true);
+        assert!(resp.is_ok());
         resp
     }
 
-    fn test_write_api(
+    pub fn test_write_role(
         core: &Core,
         token: &str,
         path: &str,
-        is_ok: bool,
-        data: Option<Map<String, Value>>,
-    ) -> Result<Option<Response>, RvError> {
-        let mut req = Request::new(path);
-        req.operation = Operation::Write;
-        req.client_token = token.to_string();
-        req.body = data;
-
-        let resp = core.handle_request(&mut req);
-        println!("resp: {:?}", resp);
-        assert_eq!(resp.is_ok(), is_ok);
-        resp
-    }
-
-    fn test_mount_approle_auth(core: Arc<RwLock<Core>>, token: &str, path: &str) {
-        let core = core.read().unwrap();
-
-        let auth_data = json!({
-            "type": "approle",
+        role_name: &str,
+        role_id: &str,
+        policies: &str,
+        expect: bool,
+    ) {
+        let mut role_data = json!({
+            "role_id": role_id,
+            "policies": policies,
+            "secret_id_num_uses": 10,
+            "secret_id_ttl":      300,
+            "token_ttl":          400,
+            "token_max_ttl":      500,
         })
         .as_object()
         .unwrap()
         .clone();
 
-        let resp = test_write_api(&core, token, format!("sys/auth/{}", path).as_str(), true, Some(auth_data));
-        assert!(resp.is_ok());
+        if role_id == "" {
+            role_data.remove("role_id");
+        }
+
+        let _ =
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), expect, Some(role_data));
     }
 
-    fn test_read_role(
-        core: Arc<RwLock<Core>>,
-        token: &str,
-        path: &str,
-        role_name: &str,
-    ) -> Result<Option<Response>, RvError> {
-        let core = core.read().unwrap();
-
-        let resp = test_read_api(&core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true);
-        assert!(resp.is_ok());
-        resp
+    pub fn test_delete_role(core: &Core, token: &str, path: &str, role_name: &str) {
+        assert!(test_delete_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None).is_ok());
     }
 
-    fn generate_secret_id(core: Arc<RwLock<Core>>, token: &str, role_name: &str) -> (String, String) {
-        let core = core.read().unwrap();
+    pub fn generate_secret_id(core: &Core, token: &str, path: &str, role_name: &str) -> (String, String) {
         let resp =
-            test_write_api(&core, token, format!("auth/approle/role/{}/secret-id", role_name).as_str(), true, None);
+            test_write_api(core, token, format!("auth/{}/role/{}/secret-id", path, role_name).as_str(), true, None);
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -294,15 +270,13 @@ mod test {
         (secret_id.to_string(), secret_id_accessor.to_string())
     }
 
-    fn test_login(
-        core: Arc<RwLock<Core>>,
+    pub fn test_login(
+        core: &Core,
         path: &str,
         role_id: &str,
         secret_id: &str,
         is_ok: bool,
     ) -> Result<Option<Response>, RvError> {
-        let core = core.read().unwrap();
-
         let data = json!({
             "role_id": role_id,
             "secret_id": secret_id,
@@ -329,25 +303,23 @@ mod test {
         resp
     }
 
-    fn test_approle(c: Arc<RwLock<Core>>, token: &str, path: &str, role_name: &str) {
-        let core = c.read().unwrap();
-
+    fn test_approle(core: &Core, token: &str, path: &str, role_name: &str) {
         // Create a role
-        let resp = test_write_api(&core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None);
+        let resp = test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None);
         assert!(resp.is_ok());
 
         // Get the role-id
-        let resp = test_read_api(&core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true);
+        let resp = test_read_api(core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true);
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data;
         let role_id = resp_data.unwrap()["role_id"].clone();
         let role_id = role_id.as_str().unwrap();
 
         // Create a secret-id
-        let (secret_id, secret_id_accessor) = generate_secret_id(Arc::clone(&c), token, role_name);
+        let (secret_id, secret_id_accessor) = generate_secret_id(core, token, path, role_name);
 
         // Ensure login works
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true);
 
         // Destroy secret ID accessor
         let data = json!({
@@ -357,7 +329,7 @@ mod test {
         .unwrap()
         .clone();
         let resp = test_write_api(
-            &core,
+            core,
             token,
             format!("auth/{}/role/{}/secret-id-accessor/destroy", path, role_name).as_str(),
             true,
@@ -366,13 +338,13 @@ mod test {
         assert!(resp.is_ok());
 
         // Login again using the accessor's corresponding secret ID should fail
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false);
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(Arc::clone(&c), token, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
 
         // Ensure login works
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true);
 
         // Destroy secret ID
         let data = json!({
@@ -382,7 +354,7 @@ mod test {
         .unwrap()
         .clone();
         let resp = test_write_api(
-            &core,
+            core,
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name).as_str(),
             true,
@@ -391,13 +363,13 @@ mod test {
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false);
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(Arc::clone(&c), token, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
 
         // Ensure login works
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true);
 
         // Destroy the secret ID using lower cased role name
         let data = json!({
@@ -407,7 +379,7 @@ mod test {
         .unwrap()
         .clone();
         let resp = test_write_api(
-            &core,
+            core,
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_lowercase()).as_str(),
             true,
@@ -416,13 +388,13 @@ mod test {
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false);
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(Arc::clone(&c), token, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
 
         // Ensure login works
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true);
 
         // Destroy the secret ID using upper cased role name
         let data = json!({
@@ -432,7 +404,7 @@ mod test {
         .unwrap()
         .clone();
         let resp = test_write_api(
-            &core,
+            core,
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_uppercase()).as_str(),
             true,
@@ -441,13 +413,13 @@ mod test {
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false);
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(Arc::clone(&c), token, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
 
         // Ensure login works
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true);
 
         // Destroy the secret ID using mixed case name
         let data = json!({
@@ -466,7 +438,7 @@ mod test {
             mixed_case_name.replace_range(0..1, &inverted_case_char);
         }
         let resp = test_write_api(
-            &core,
+            core,
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, mixed_case_name).as_str(),
             true,
@@ -475,12 +447,10 @@ mod test {
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false);
     }
 
-    fn test_approle_role_service(c: Arc<RwLock<Core>>, token: &str, path: &str, role_name: &str) {
-        let core = c.read().unwrap();
-
+    fn test_approle_role_service(core: &Core, token: &str, path: &str, role_name: &str) {
         // Create a role
         let mut data = json!({
             "bind_secret_id":       true,
@@ -495,17 +465,12 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(
-            &core,
-            token,
-            format!("auth/{}/role/{}", path, role_name).as_str(),
-            true,
-            Some(data.clone()),
-        );
+        let resp =
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()));
         assert!(resp.is_ok());
 
         // Get the role field
-        let resp = test_read_role(c.clone(), token, path, role_name);
+        let resp = test_read_role(core, token, path, role_name);
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["bind_secret_id"].as_bool().unwrap(), data["bind_secret_id"].as_bool().unwrap());
         assert_eq!(resp_data["secret_id_num_uses"].as_i64().unwrap(), data["secret_id_num_uses"].as_i64().unwrap());
@@ -528,17 +493,12 @@ mod test {
         // Update the role
         data["token_num_uses"] = Value::from(0);
         data["token_type"] = Value::from("batch");
-        let resp = test_write_api(
-            &core,
-            token,
-            format!("auth/{}/role/{}", path, role_name).as_str(),
-            true,
-            Some(data.clone()),
-        );
+        let resp =
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()));
         assert!(resp.is_ok());
 
         // Get the role field
-        let resp = test_read_role(c.clone(), token, path, role_name);
+        let resp = test_read_role(core, token, path, role_name);
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["bind_secret_id"].as_bool().unwrap(), data["bind_secret_id"].as_bool().unwrap());
         assert_eq!(resp_data["secret_id_num_uses"].as_i64().unwrap(), data["secret_id_num_uses"].as_i64().unwrap());
@@ -559,82 +519,36 @@ mod test {
         assert_eq!(resp_data["token_type"].as_str().unwrap(), data["token_type"].as_str().unwrap());
 
         // Get the role-id
-        let resp = test_read_api(&core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true);
+        let resp = test_read_api(core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true);
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data;
         let role_id = resp_data.unwrap()["role_id"].clone();
         let role_id = role_id.as_str().unwrap();
 
         // Create a secret-id
-        let (secret_id, _secret_id_accessor) = generate_secret_id(Arc::clone(&c), token, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
 
         // Ensure login works
-        let _ = test_login(Arc::clone(&c), path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true);
 
         // Get the role field
-        let resp = test_read_role(c.clone(), token, path, role_name);
+        let resp = test_read_role(core, token, path, role_name);
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         println!("resp_data: {:?}", resp_data);
     }
 
-    fn rusty_vault_init(dir: &str) -> (String, Arc<RwLock<Core>>) {
-        let root_token;
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
-
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-
-        let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
-
-        {
-            let mut core = c.write().unwrap();
-            assert!(core.config(Arc::clone(&c), None).is_ok());
-
-            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
-
-            let result = core.init(&seal_config);
-            assert!(result.is_ok());
-            let init_result = result.unwrap();
-            println!("init_result: {:?}", init_result);
-
-            let mut unsealed = false;
-            for i in 0..seal_config.secret_threshold {
-                let key = &init_result.secret_shares[i as usize];
-                let unseal = core.unseal(key);
-                assert!(unseal.is_ok());
-                unsealed = unseal.unwrap();
-            }
-
-            root_token = init_result.root_token;
-            println!("root_token: {:?}", root_token);
-
-            assert!(unsealed);
-        }
-
-        (root_token, c)
-    }
-
     #[test]
-    fn test_approle_module() {
-        let dir = env::temp_dir().join("rusty_vault_credential_approle_module");
-        let _ = fs::remove_dir_all(&dir);
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let (root_token, core) = rusty_vault_init(dir.to_string_lossy().into_owned().as_str());
+    fn test_credential_approle_module() {
+        let (root_token, core) = test_rusty_vault_init("test_approle_module");
+        let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_approle_auth(core.clone(), &root_token, "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle/");
 
-        test_approle(core.clone(), &root_token, "approle", "samplerolename");
-        test_approle(core.clone(), &root_token, "approle", "SAMPLEROLENAME");
-        test_approle(core.clone(), &root_token, "approle", "SampleRoleName");
+        test_approle(&core, &root_token, "approle", "samplerolename");
+        test_approle(&core, &root_token, "approle", "SAMPLEROLENAME");
+        test_approle(&core, &root_token, "approle", "SampleRoleName");
 
-        test_approle_role_service(core.clone(), &root_token, "approle", "testrole");
+        test_approle_role_service(&core, &root_token, "approle", "testrole");
     }
 }

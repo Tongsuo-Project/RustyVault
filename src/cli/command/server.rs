@@ -158,6 +158,10 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
             builder.set_ciphersuites("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256")?;
         }
 
+        if !listener.tls_disable_client_certs {
+            builder.set_verify_callback(SslVerifyMode::PEER, |_, _| true);
+        }
+
         if listener.tls_require_and_verify_client_cert {
             builder.set_verify_callback(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT, move |p, _x| {
                 return p;

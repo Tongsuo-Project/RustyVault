@@ -67,9 +67,17 @@ pub fn request_on_connect_handler(conn: &dyn Any, ext: &mut Extensions) {
             return;
         }
 
-        if let Some(cert_stack) = tls_stream.ssl().verified_chain() {
+        if let Some(cert_stack) = tls_stream.ssl().peer_cert_chain() {
             let certs: Vec<X509> = cert_stack.iter().map(X509Ref::to_owned).collect();
             cert_chain = Some(certs);
+        }
+
+        if let Some(cert) = tls_stream.ssl().peer_certificate() {
+            if let Some(ref mut chain) = cert_chain {
+                chain.push(cert);
+            } else {
+                cert_chain = Some(vec![cert]);
+            }
         }
 
         ext.insert(Connection {
@@ -106,9 +114,10 @@ pub fn init_service(cfg: &mut web::ServiceConfig) {
 impl ResponseError for RvError {
     // builds the actual response to send back when an error occurs
     fn error_response(&self) -> HttpResponse {
-        let mut status = StatusCode::INTERNAL_SERVER_ERROR;
+        let mut status = self.response_status();
         let text: String;
         if let RvError::ErrResponse(resp_text) = self {
+            status = StatusCode::from_u16(400).unwrap();
             text = resp_text.clone();
         } else if let RvError::ErrResponseStatus(status_code, resp_text) = self {
             status = StatusCode::from_u16(status_code.clone()).unwrap();

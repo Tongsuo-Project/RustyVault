@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use better_default::Default;
 use humantime::parse_duration;
 use serde::{Deserialize, Serialize};
 
@@ -7,33 +8,46 @@ use super::{util::DEFAULT_MAX_TTL, PkiBackend, PkiBackendInner};
 use crate::{
     context::Context,
     errors::RvError,
-    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    logical::{Backend, Field, FieldType, field::FieldTrait, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
     utils::{deserialize_duration, serialize_duration},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RoleEntry {
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub ttl: Duration,
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[default(DEFAULT_MAX_TTL)]
     pub max_ttl: Duration,
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub not_before_duration: Duration,
+    #[default("rsa".to_string())]
     pub key_type: String,
+    #[default(2048)]
     pub key_bits: u32,
+    #[default(256)]
     pub signature_bits: u32,
     pub use_pss: bool,
+    #[default(true)]
     pub allow_localhost: bool,
+    #[default(true)]
     pub allow_bare_domains: bool,
+    #[default(true)]
     pub allow_subdomains: bool,
+    #[default(true)]
     pub allow_any_name: bool,
+    #[default(true)]
     pub allow_ip_sans: bool,
     pub server_flag: bool,
     pub client_flag: bool,
+    #[default(true)]
     pub use_csr_sans: bool,
+    #[default(true)]
     pub use_csr_common_name: bool,
+    pub key_usage: Vec<String>,
+    pub ext_key_usage: Vec<String>,
     pub country: String,
     pub province: String,
     pub locality: String,
@@ -41,42 +55,10 @@ pub struct RoleEntry {
     pub ou: String,
     pub street_address: String,
     pub postal_code: String,
+    #[default(true)]
     pub no_store: bool,
     pub generate_lease: bool,
     pub not_after: String,
-}
-
-impl Default for RoleEntry {
-    fn default() -> Self {
-        Self {
-            ttl: Duration::from_secs(0),
-            max_ttl: DEFAULT_MAX_TTL,
-            not_before_duration: Duration::from_secs(0),
-            key_type: "rsa".to_string(),
-            key_bits: 2048,
-            signature_bits: 256,
-            use_pss: false,
-            allow_localhost: true,
-            allow_bare_domains: true,
-            allow_subdomains: true,
-            allow_any_name: true,
-            allow_ip_sans: true,
-            server_flag: false,
-            client_flag: false,
-            use_csr_sans: true,
-            use_csr_common_name: true,
-            country: "".to_string(),
-            province: "".to_string(),
-            locality: "".to_string(),
-            organization: "".to_string(),
-            ou: "".to_string(),
-            street_address: "".to_string(),
-            postal_code: "".to_string(),
-            no_store: true,
-            generate_lease: false,
-            not_after: "".to_string(),
-        }
-    }
 }
 
 impl PkiBackend {
@@ -195,6 +177,24 @@ key_type: 2048 (default), 3072, or 4096; with ec key_type: 224, 256 (default),
 The number of bits to use in the signature algorithm; accepts 256 for SHA-2-256,
 384 for SHA-2-384, and 512 for SHA-2-512. defaults to 0 to automatically detect
 based on key length (SHA-2-256 for RSA keys, and matching the curve size for NIST P-Curves)."#
+                },
+                "key_usage": {
+                    field_type: FieldType::CommaStringSlice,
+                    default: "DigitalSignature,KeyAgreement,KeyEncipherment",
+                    description: r#"
+A comma-separated string or list of key usages (not extended key usages).
+Valid values can be found at https://golang.org/pkg/crypto/x509/#KeyUsage
+-- simply drop the "KeyUsage" part of the name.
+To remove all key usages from being set, set this value to an empty list. See also RFC 5280 Section 4.2.1.3.
+                    "#
+                },
+                "ext_key_usage": {
+                    field_type: FieldType::CommaStringSlice,
+                    description: r#"
+A comma-separated string or list of extended key usages. Valid values can be found at
+https://golang.org/pkg/crypto/x509/#ExtKeyUsage -- simply drop the "ExtKeyUsage" part of the name.
+To remove all key usages from being set, set this value to an empty list. See also RFC 5280 Section 4.2.1.12.
+                    "#
                 },
                 "not_before_duration": {
                     field_type: FieldType::Int,
@@ -392,6 +392,10 @@ impl PkiBackendInner {
         let use_csr_sans = req.get_data_or_default("use_csr_sans")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
         let use_csr_common_name =
             req.get_data_or_default("use_csr_common_name")?.as_bool().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let key_usage =
+            req.get_data_or_default("key_usage")?.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let ext_key_usage =
+            req.get_data_or_default("ext_key_usage")?.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         let country = req.get_data_or_default("country")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
         let province =
             req.get_data_or_default("province")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
@@ -428,6 +432,8 @@ impl PkiBackendInner {
             client_flag,
             use_csr_sans,
             use_csr_common_name,
+            key_usage,
+            ext_key_usage,
             country,
             province,
             locality,

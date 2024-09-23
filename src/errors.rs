@@ -9,6 +9,7 @@ use std::{
 };
 
 use thiserror::Error;
+use actix_web::http::StatusCode;
 
 #[derive(Error, Debug)]
 pub enum RvError {
@@ -260,6 +261,27 @@ pub enum RvError {
         source: actix_web::http::header::ToStrError,
     },
 
+    #[error("Some url error happened, {:?}", .source)]
+    UrlError {
+        #[from]
+        source: url::ParseError,
+    },
+
+    #[error("Some rustls error happened, {:?}", .source)]
+    RustlsError {
+        #[from]
+        source: rustls::Error,
+    },
+
+    #[error("Some rustls_pemfile error happened")]
+    RustlsPemFileError(rustls_pemfile::Error),
+
+    #[error("Some string utf8 error happened, {:?}", .source)]
+    StringUtf8Error {
+        #[from]
+        source: std::string::FromUtf8Error,
+    },
+
     /// Database Errors Begin
     ///
     #[error("Database type is not support now. Please try postgressql or mysql again.")]
@@ -289,6 +311,21 @@ pub enum RvError {
     ErrResponseStatus(u16, String),
     #[error("Unknown error.")]
     ErrUnknown,
+}
+
+impl RvError {
+    pub fn response_status(&self) -> StatusCode {
+        match self {
+            RvError::ErrRequestNoData
+                | RvError::ErrRequestNoDataField
+                | RvError::ErrRequestInvalid
+                | RvError::ErrRequestClientTokenMissing
+                | RvError::ErrRequestFieldNotFound
+                | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
+            RvError::ErrPermissionDenied => StatusCode::FORBIDDEN,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
 }
 
 impl PartialEq for RvError {
@@ -390,4 +427,24 @@ impl<T> From<PoisonError<RwLockReadGuard<'_, T>>> for RvError {
     fn from(_: PoisonError<RwLockReadGuard<'_, T>>) -> Self {
         RvError::ErrRwLockReadPoison
     }
+}
+
+impl From<rustls_pemfile::Error> for RvError {
+    fn from(err: rustls_pemfile::Error) -> Self {
+        RvError::RustlsPemFileError(err)
+    }
+}
+
+#[macro_export]
+macro_rules! rv_error_response {
+    ($message:expr) => {
+        RvError::ErrResponse($message.to_string())
+    };
+}
+
+#[macro_export]
+macro_rules! rv_error_response_status {
+    ($status:expr, $message:expr) => {
+        RvError::ErrResponseStatus($status, $message.to_string())
+    };
 }

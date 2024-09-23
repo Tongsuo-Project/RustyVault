@@ -2,10 +2,11 @@
 //! manipulating certificates as a CA or encrypting a piece of data by using a public key.
 
 use std::{
-    ops::Deref,
     sync::{atomic::AtomicU64, Arc, RwLock},
     time::Duration,
 };
+
+use derive_more::Deref;
 
 use crate::{
     core::Core,
@@ -45,16 +46,10 @@ pub struct PkiBackendInner {
     pub revoked_cert_count: AtomicU64,
 }
 
+#[derive(Deref)]
 pub struct PkiBackend {
+    #[deref]
     pub inner: Arc<PkiBackendInner>,
-}
-
-impl Deref for PkiBackend {
-    type Target = PkiBackendInner;
-
-    fn deref(&self) -> &PkiBackendInner {
-        &self.inner
-    }
 }
 
 impl PkiBackend {
@@ -145,24 +140,194 @@ impl Module for PkiModule {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        collections::HashMap,
-        default::Default,
-        env, fs,
-        sync::{Arc, RwLock},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-    use go_defer::defer;
     use openssl::{asn1::Asn1Time, ec::EcKey, nid::Nid, pkey::PKey, rsa::Rsa, x509::X509};
-    use serde_json::{json, Map, Value};
+    use serde_json::{json, Value};
 
     use super::*;
     use crate::{
-        core::{Core, SealConfig},
-        logical::{Operation, Request},
-        storage,
+        core::Core,
+        test_utils::{test_delete_api, test_mount_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
+
+    fn config_ca(core: &Core, token: &str, path: &str) {
+        let ca_pem_bundle = format!("{}{}", CA_CERT_PEM, CA_KEY_PEM);
+
+        let ca_data = json!({
+            "pem_bundle": ca_pem_bundle,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        // config ca
+        let resp = test_write_api(&core, token, format!("{}config/ca", path).as_str(), true, Some(ca_data));
+        assert!(resp.is_ok());
+    }
+
+    fn config_role(core: &Core, token: &str, path: &str, role_name: &str, key_type: &str, key_bits: u32) {
+        let role_data = json!({
+            "ttl": "60d",
+            "max_ttl": "365d",
+            "key_type": key_type,
+            "key_bits": key_bits,
+            "country": "CN",
+            "province": "Beijing",
+            "locality": "Beijing",
+            "organization": "OpenAtom",
+            "no_store": false,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        // config role
+        assert!(test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data))
+            .is_ok());
+    }
+
+    fn generate_root(core: &Core, token: &str, path: &str, exported: bool, key_type: &str, key_bits: u32, is_ok: bool) {
+        let common_name = "test-ca";
+        let req_data = json!({
+            "common_name": common_name,
+            "ttl": "365d",
+            "country": "cn",
+            "key_type": key_type,
+            "key_bits": key_bits,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        println!("generate root req_data: {:?}, is_ok: {}", req_data, is_ok);
+        let resp = test_write_api(
+            core,
+            token,
+            format!("{}root/generate/{}", path, if exported { "exported" } else { "internal" }).as_str(),
+            is_ok,
+            Some(req_data),
+        );
+        if !is_ok {
+            return;
+        }
+        let resp_body = resp.unwrap();
+        assert!(resp_body.is_some());
+        let data = resp_body.unwrap().data;
+        assert!(data.is_some());
+        let key_data = data.unwrap();
+        println!("generate root result: {:?}", key_data);
+
+        let resp_ca_pem = test_read_api(core, token, format!("{}ca/pem", path).as_str(), true);
+        let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
+
+        let ca_cert = X509::from_pem(resp_ca_pem_cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
+        let subject = ca_cert.subject_name();
+        let cn = subject.entries_by_nid(Nid::COMMONNAME).next().unwrap();
+        assert_eq!(cn.data().as_slice(), common_name.as_bytes());
+
+        let not_after = Asn1Time::days_from_now(365).unwrap();
+        let ttl_diff = ca_cert.not_after().diff(&not_after);
+        assert!(ttl_diff.is_ok());
+        let ttl_diff = ttl_diff.unwrap();
+        assert_eq!(ttl_diff.days, 0);
+
+        if exported {
+            assert!(key_data["private_key_type"].as_str().is_some());
+            assert_eq!(key_data["private_key_type"].as_str().unwrap(), key_type);
+            assert!(key_data["private_key"].as_str().is_some());
+            let private_key_pem = key_data["private_key"].as_str().unwrap();
+            match key_type {
+                "rsa" => {
+                    let rsa_key = Rsa::private_key_from_pem(private_key_pem.as_bytes());
+                    assert!(rsa_key.is_ok());
+                    assert_eq!(rsa_key.unwrap().size() * 8, key_bits);
+                }
+                "ec" => {
+                    let ec_key = EcKey::private_key_from_pem(private_key_pem.as_bytes());
+                    assert!(ec_key.is_ok());
+                    assert_eq!(ec_key.unwrap().group().degree(), key_bits);
+                }
+                _ => {}
+            }
+        } else {
+            assert!(key_data.get("private_key").is_none());
+        }
+    }
+
+    fn delete_root(core: &Core, token: &str, path: &str, is_ok: bool) {
+        let resp = test_delete_api(core, token, format!("{}root", path).as_str(), is_ok, None);
+        if !is_ok {
+            return;
+        }
+        assert!(resp.is_ok());
+
+        let resp_ca_pem = test_read_api(core, token, format!("{}ca/pem", path).as_str(), false);
+        assert_eq!(resp_ca_pem.unwrap_err(), RvError::ErrPkiCaNotConfig);
+    }
+
+    fn issue_cert_by_generate_root(core: &Core, token: &str, path: &str, role_name: &str, key_type: &str, key_bits: u32) {
+        let dns_sans = vec!["test.com", "a.test.com", "b.test.com"];
+        let issue_data = json!({
+            "ttl": "10d",
+            "common_name": "test.com",
+            "alt_names": "a.test.com,b.test.com",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        // issue cert
+        let resp = test_write_api(core, token, format!("{}issue/{}", path, role_name).as_str(), true, Some(issue_data));
+        assert!(resp.is_ok());
+        let resp_body = resp.unwrap();
+        assert!(resp_body.is_some());
+        let data = resp_body.unwrap().data;
+        assert!(data.is_some());
+        let cert_data = data.unwrap();
+        let cert = X509::from_pem(cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
+        let alt_names = cert.subject_alt_names();
+        assert!(alt_names.is_some());
+        let alt_names = alt_names.unwrap();
+        assert_eq!(alt_names.len(), dns_sans.len());
+        for alt_name in alt_names {
+            assert!(dns_sans.contains(&alt_name.dnsname().unwrap()));
+        }
+        assert_eq!(cert_data["private_key_type"].as_str().unwrap(), key_type);
+        let priv_key = PKey::private_key_from_pem(cert_data["private_key"].as_str().unwrap().as_bytes()).unwrap();
+        assert_eq!(priv_key.bits(), key_bits);
+        assert!(priv_key.public_eq(&cert.public_key().unwrap()));
+        let serial_number = cert.serial_number().to_bn().unwrap();
+        let serial_number_hex = serial_number.to_hex_str().unwrap();
+        assert_eq!(
+            cert_data["serial_number"].as_str().unwrap().replace(":", "").to_lowercase().as_str(),
+            serial_number_hex.to_lowercase().as_str()
+        );
+        let expiration_time = Asn1Time::from_unix(cert_data["expiration"].as_i64().unwrap()).unwrap();
+        let ttl_compare = cert.not_after().compare(&expiration_time);
+        assert!(ttl_compare.is_ok());
+        assert_eq!(ttl_compare.unwrap(), std::cmp::Ordering::Equal);
+        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let expiration_ttl = cert_data["expiration"].as_u64().unwrap();
+        let ttl = expiration_ttl - now_timestamp;
+        let expect_ttl = 10 * 24 * 60 * 60;
+        assert!(ttl <= expect_ttl);
+        assert!((ttl + 10) > expect_ttl);
+
+        let authority_key_id = cert.authority_key_id();
+        assert!(authority_key_id.is_some());
+
+        println!("authority_key_id: {:?}", authority_key_id.unwrap().as_slice());
+
+        let resp_ca_pem = test_read_api(core, token, format!("{}ca/pem", path).as_str(), true);
+        let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
+
+        let ca_cert = X509::from_pem(resp_ca_pem_cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
+        let subject = ca_cert.subject_name();
+        let cn = subject.entries_by_nid(Nid::COMMONNAME).next().unwrap();
+        assert_eq!(cn.data().as_slice(), "test-ca".as_bytes());
+        println!("ca subject_key_id: {:?}", ca_cert.subject_key_id().unwrap().as_slice());
+        assert_eq!(ca_cert.subject_key_id().unwrap().as_slice(), authority_key_id.unwrap().as_slice());
+    }
 
     const CA_CERT_PEM: &str = r#"
 -----BEGIN CERTIFICATE-----
@@ -213,73 +378,21 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 2k24wuH7oUtLlvf05p4cqfEx
 -----END PRIVATE KEY-----"#;
 
-    fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
-        let mut req = Request::new(path);
-        req.operation = Operation::Read;
-        req.client_token = token.to_string();
-        let resp = core.handle_request(&mut req);
-        assert_eq!(resp.is_ok(), is_ok);
-        resp
-    }
+    #[test]
+    fn test_pki_config_ca() {
+        let (root_token, c) = test_rusty_vault_init("test_pki_config_ca");
+        let token = &root_token;
+        let core = c.read().unwrap();
+        let path = "pki/";
 
-    fn test_write_api(
-        core: &Core,
-        token: &str,
-        path: &str,
-        is_ok: bool,
-        data: Option<Map<String, Value>>,
-    ) -> Result<Option<Response>, RvError> {
-        let mut req = Request::new(path);
-        req.operation = Operation::Write;
-        req.client_token = token.to_string();
-        req.body = data;
-
-        let resp = core.handle_request(&mut req);
-        println!("path: {}, req.body: {:?}, resp: {:?}", path, req.body, resp);
-        assert_eq!(resp.is_ok(), is_ok);
-        resp
-    }
-
-    fn test_delete_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
-        let mut req = Request::new(path);
-        req.operation = Operation::Delete;
-        req.client_token = token.to_string();
-        let resp = core.handle_request(&mut req);
-        assert_eq!(resp.is_ok(), is_ok);
-        resp
-    }
-
-    fn test_pki_mount(core: Arc<RwLock<Core>>, token: &str, path: &str) {
-        let core = core.read().unwrap();
-        // mount pki backend to path
-        let mount_data = json!({
-            "type": "pki",
-        })
-        .as_object()
-        .unwrap()
-        .clone();
-
-        let resp = test_write_api(&core, token, &format!("sys/mounts/{}/", path), true, Some(mount_data));
-        assert!(resp.is_ok());
-    }
-
-    fn test_pki_config_ca(core: Arc<RwLock<Core>>, token: &str, path: &str) {
-        let core = core.read().unwrap();
-
-        let ca_pem_bundle = format!("{}{}", CA_CERT_PEM, CA_KEY_PEM);
-
-        let ca_data = json!({
-            "pem_bundle": ca_pem_bundle,
-        })
-        .as_object()
-        .unwrap()
-        .clone();
+        // mount pki backend to path: pki/
+        test_mount_api(&core, token, "pki", path);
 
         // config ca
-        let resp = test_write_api(&core, token, &format!("{}/config/ca", path), true, Some(ca_data));
-        assert!(resp.is_ok());
-        let resp_ca = test_read_api(&core, token, &format!("{}/ca", path), true);
-        let resp_ca_pem = test_read_api(&core, token, &format!("{}/ca/pem", path), true);
+        config_ca(&core, token, path);
+
+        let resp_ca = test_read_api(&core, token, format!("{}ca", path).as_str(), true);
+        let resp_ca_pem = test_read_api(&core, token, format!("{}ca/pem", path).as_str(), true);
         let resp_ca_cert_data = resp_ca.unwrap().unwrap().data.unwrap();
         let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
         assert!(resp_ca_cert_data.get("private_key").is_none());
@@ -295,27 +408,24 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert_eq!(resp_ca_cert_data["certificate"].as_str().unwrap().trim(), CA_CERT_PEM.trim());
     }
 
-    fn test_pki_config_role(core: Arc<RwLock<Core>>, token: &str, path: &str, key_type: &str, key_bits: u64) {
-        let core = core.read().unwrap();
+    #[test]
+    fn test_pki_config_role() {
+        let (root_token, c) = test_rusty_vault_init("test_pki_config_role");
+        let token = &root_token;
+        let core = c.read().unwrap();
+        let path = "pki/";
+        let role_name = "test";
 
-        let role_data = json!({
-            "ttl": "60d",
-            "max_ttl": "365d",
-            "key_type": key_type,
-            "key_bits": key_bits,
-            "country": "CN",
-            "province": "Beijing",
-            "locality": "Beijing",
-            "organization": "OpenAtom",
-            "no_store": false,
-        })
-        .as_object()
-        .unwrap()
-        .clone();
+        // mount pki backend to path: pki/
+        test_mount_api(&core, token, "pki", path);
+
+        // config ca
+        config_ca(&core, token, path);
 
         // config role
-        assert!(test_write_api(&core, token, &format!("{}/roles/test", path), true, Some(role_data)).is_ok());
-        let resp = test_read_api(&core, token, &format!("{}/roles/test", path), true);
+        config_role(&core, token, path, role_name, "rsa", 4096);
+
+        let resp = test_read_api(&core, token, &format!("{}roles/{}", path, role_name), true);
         assert!(resp.as_ref().unwrap().is_some());
         let resp = resp.unwrap();
         assert!(resp.is_some());
@@ -323,11 +433,12 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert!(data.is_some());
         let role_data = data.unwrap();
         println!("role_data: {:?}", role_data);
+
         assert_eq!(role_data["ttl"].as_u64().unwrap(), 60 * 24 * 60 * 60);
         assert_eq!(role_data["max_ttl"].as_u64().unwrap(), 365 * 24 * 60 * 60);
         assert_eq!(role_data["not_before_duration"].as_u64().unwrap(), 30);
-        assert_eq!(role_data["key_type"].as_str().unwrap(), key_type);
-        assert_eq!(role_data["key_bits"].as_u64().unwrap(), key_bits);
+        assert_eq!(role_data["key_type"].as_str().unwrap(), "rsa");
+        assert_eq!(role_data["key_bits"].as_u64().unwrap(), 4096);
         assert_eq!(role_data["country"].as_str().unwrap(), "CN");
         assert_eq!(role_data["province"].as_str().unwrap(), "Beijing");
         assert_eq!(role_data["locality"].as_str().unwrap(), "Beijing");
@@ -335,8 +446,22 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert_eq!(role_data["no_store"].as_bool().unwrap(), false);
     }
 
-    fn test_pki_issue_cert(core: Arc<RwLock<Core>>, token: &str, path: &str, key_type: &str, key_bits: u32) {
-        let core = core.read().unwrap();
+    #[test]
+    fn test_pki_issue_cert() {
+        let (root_token, c) = test_rusty_vault_init("test_pki_issue_cert");
+        let token = &root_token;
+        let core = c.read().unwrap();
+        let path = "pki/";
+        let role_name = "test";
+
+        // mount pki backend to path: pki/
+        test_mount_api(&core, token, "pki", path);
+
+        // config ca
+        config_ca(&core, token, path);
+
+        // config role
+        config_role(&core, token, path, role_name, "rsa", 4096);
 
         let dns_sans = vec!["test.com", "a.test.com", "b.test.com"];
         let issue_data = json!({
@@ -349,7 +474,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         .clone();
 
         // issue cert
-        let resp = test_write_api(&core, token, &format!("{}/issue/test", path), true, Some(issue_data));
+        let resp = test_write_api(&core, token, &format!("{}issue/{}", path, role_name), true, Some(issue_data));
         assert!(resp.is_ok());
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
@@ -364,9 +489,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         for alt_name in alt_names {
             assert!(dns_sans.contains(&alt_name.dnsname().unwrap()));
         }
-        assert_eq!(cert_data["private_key_type"].as_str().unwrap(), key_type);
+        assert_eq!(cert_data["private_key_type"].as_str().unwrap(), "rsa");
         let priv_key = PKey::private_key_from_pem(cert_data["private_key"].as_str().unwrap().as_bytes()).unwrap();
-        assert_eq!(priv_key.bits(), key_bits);
+        assert_eq!(priv_key.bits(), 4096);
         assert!(priv_key.public_eq(&cert.public_key().unwrap()));
         let serial_number = cert.serial_number().to_bn().unwrap();
         let serial_number_hex = serial_number.to_hex_str().unwrap();
@@ -390,13 +515,13 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let resp_lowercase = test_read_api(
             &core,
             token,
-            format!("{}/cert/{}", path, serial_number_hex.to_lowercase().as_str()).as_str(),
+            format!("{}cert/{}", path, serial_number_hex.to_lowercase().as_str()).as_str(),
             true,
         );
         let resp_uppercase = test_read_api(
             &core,
             token,
-            format!("{}/cert/{}", path, serial_number_hex.to_uppercase().as_str()).as_str(),
+            format!("{}cert/{}", path, serial_number_hex.to_uppercase().as_str()).as_str(),
             true,
         );
         println!("resp_uppercase: {:?}", resp_uppercase);
@@ -416,6 +541,57 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             cert_data["serial_number"].as_str().unwrap(),
             resp_lowercase_cert_data["serial_number"].as_str().unwrap()
         );
+    }
+
+    #[test]
+    fn test_pki_generate_root() {
+        let (root_token, c) = test_rusty_vault_init("test_pki_generate_root");
+        let token = &root_token;
+        let core = c.read().unwrap();
+        let path = "pki/";
+        let role_name = "test";
+
+        // mount pki backend to path: pki/
+        test_mount_api(&core, token, "pki", path);
+
+        // config ca
+        config_ca(&core, token, path);
+
+        // config role
+        config_role(&core, token, path, role_name, "rsa", 4096);
+
+        generate_root(&core, token, path, true, "rsa", 4096, true);
+        generate_root(&core, token, path, false, "rsa", 4096, true);
+
+        issue_cert_by_generate_root(&core, token, path, role_name, "rsa", 4096);
+
+        delete_root(&core, token, path, true);
+    }
+
+    #[cfg(feature = "crypto_adaptor_tongsuo")]
+    #[test]
+    fn test_pki_sm2_generate_root() {
+        let (root_token, c) = test_rusty_vault_init("test_pki_generate_root");
+        let token = &root_token;
+        let core = c.read().unwrap();
+        let path = "sm2pki/";
+        let role_name = "test";
+
+        // mount pki backend to path: pki/
+        test_mount_api(&core, token, "pki", path);
+
+        // config ca
+        config_ca(&core, token, path);
+
+        // config role
+        config_role(&core, token, path, role_name, "sm2", 256);
+
+        generate_root(&core, token, path, true, "sm2", 256, true);
+        generate_root(&core, token, path, false, "sm2", 256, true);
+
+        issue_cert_by_generate_root(&core, token, path, role_name, "sm2", 256);
+
+        delete_root(&core, token, path, true);
     }
 
     fn test_pki_generate_key_case(
@@ -440,7 +616,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let resp = test_write_api(
             core,
             token,
-            format!("{}/keys/generate/{}", path, if exported { "exported" } else { "internal" }).as_str(),
+            &format!("{}/keys/generate/{}", path, if exported { "exported" } else { "internal" }),
             is_ok,
             Some(req_data),
         );
@@ -667,8 +843,15 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert!(test_write_api(core, token, &format!("{}/keys/decrypt", path), false, Some(req_data)).is_err());
     }
 
-    fn test_pki_generate_key(core: Arc<RwLock<Core>>, token: &str, path: &str) {
-        let core = core.read().unwrap();
+    #[test]
+    fn test_pki_generate_key() {
+        let (root_token, c) = test_rusty_vault_init("test_pki_generate_key");
+        let token = &root_token;
+        let core = c.read().unwrap();
+        let path = "pki";
+
+        // mount pki backend to path: pki/
+        test_mount_api(&core, token, "pki", path);
 
         //test generate rsa key
         test_pki_generate_key_case(&core, token, path, "rsa-2048", "rsa", 2048, true, true);
@@ -759,8 +942,16 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         test_pki_encrypt_decrypt(&core, token, path, "aes-ecb-256-bad-key-name", "rusty_vault test".as_bytes(), false);
     }
 
-    fn test_pki_import_key(core: Arc<RwLock<Core>>, token: &str, path: &str) {
-        let core = core.read().unwrap();
+    #[test]
+    fn test_pki_import_key() {
+        let (root_token, c) = test_rusty_vault_init("test_pki_import_key");
+        let token = &root_token;
+        let core = c.read().unwrap();
+        let path = "pki";
+
+        // mount pki backend to path: pki/
+        test_mount_api(&core, token, "pki", path);
+
         //test import rsa key
         test_pki_import_key_case(
             &core,
@@ -1447,221 +1638,5 @@ xxxxxxxxxxxxxx
         test_pki_encrypt_decrypt(&core, token, path, "aes-ecb-128-import", "rusty_vault test".as_bytes(), true);
         test_pki_encrypt_decrypt(&core, token, path, "aes-ecb-192-import", "rusty_vault test".as_bytes(), true);
         test_pki_encrypt_decrypt(&core, token, path, "aes-ecb-256-import", "rusty_vault test".as_bytes(), true);
-    }
-
-    fn test_pki_generate_root(core: Arc<RwLock<Core>>, token: &str, path: &str, key_type: &str, key_bits: u32, exported: bool, is_ok: bool) {
-        let core = core.read().unwrap();
-
-        let common_name = "test-ca";
-        let req_data = json!({
-            "common_name": common_name,
-            "ttl": "365d",
-            "country": "cn",
-            "key_type": key_type,
-            "key_bits": key_bits,
-        })
-        .as_object()
-        .unwrap()
-        .clone();
-        println!("generate root req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(
-            &core,
-            token,
-            format!("{}/root/generate/{}", path, if exported { "exported" } else { "internal" }).as_str(),
-            is_ok,
-            Some(req_data),
-        );
-        if !is_ok {
-            return;
-        }
-        let resp_body = resp.unwrap();
-        assert!(resp_body.is_some());
-        let data = resp_body.unwrap().data;
-        assert!(data.is_some());
-        let key_data = data.unwrap();
-        println!("generate root result: {:?}", key_data);
-
-        let resp_ca_pem = test_read_api(&core, token, &format!("{}/ca/pem", path), true);
-        let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
-
-        let ca_cert = X509::from_pem(resp_ca_pem_cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
-        let subject = ca_cert.subject_name();
-        let cn = subject.entries_by_nid(Nid::COMMONNAME).next().unwrap();
-        assert_eq!(cn.data().as_slice(), common_name.as_bytes());
-
-        let not_after = Asn1Time::days_from_now(365).unwrap();
-        let ttl_diff = ca_cert.not_after().diff(&not_after);
-        assert!(ttl_diff.is_ok());
-        let ttl_diff = ttl_diff.unwrap();
-        assert_eq!(ttl_diff.days, 0);
-
-        if exported {
-            assert!(key_data["private_key_type"].as_str().is_some());
-            assert_eq!(key_data["private_key_type"].as_str().unwrap(), key_type);
-            assert!(key_data["private_key"].as_str().is_some());
-            let private_key_pem = key_data["private_key"].as_str().unwrap();
-            match key_type {
-                "rsa" => {
-                    let rsa_key = Rsa::private_key_from_pem(private_key_pem.as_bytes());
-                    assert!(rsa_key.is_ok());
-                    assert_eq!(rsa_key.unwrap().size() * 8, key_bits);
-                }
-                "sm2" | "ec" => {
-                    let ec_key = EcKey::private_key_from_pem(private_key_pem.as_bytes());
-                    assert!(ec_key.is_ok());
-                    assert_eq!(ec_key.unwrap().group().degree(), key_bits);
-                }
-                _ => {}
-            }
-        } else {
-            assert!(key_data.get("private_key").is_none());
-        }
-    }
-
-    fn test_pki_delete_root(core: Arc<RwLock<Core>>, token: &str, path: &str, is_ok: bool) {
-        let core = core.read().unwrap();
-
-        let resp = test_delete_api(&core, token, &format!("{}/root", path), is_ok);
-        if !is_ok {
-            return;
-        }
-        assert!(resp.is_ok());
-
-        let resp_ca_pem = test_read_api(&core, token, &format!("{}/ca/pem", path), false);
-        assert_eq!(resp_ca_pem.unwrap_err(), RvError::ErrPkiCaNotConfig);
-    }
-
-    fn test_pki_issue_cert_by_generate_root(core: Arc<RwLock<Core>>, token: &str, path: &str, key_type: &str, key_bits: u32) {
-        let core = core.read().unwrap();
-
-        let dns_sans = vec!["test.com", "a.test.com", "b.test.com"];
-        let issue_data = json!({
-            "ttl": "10d",
-            "common_name": "test.com",
-            "alt_names": "a.test.com,b.test.com",
-        })
-        .as_object()
-        .unwrap()
-        .clone();
-
-        // issue cert
-        let resp = test_write_api(&core, token, &format!("{}/issue/test", path), true, Some(issue_data));
-        assert!(resp.is_ok());
-        let resp_body = resp.unwrap();
-        assert!(resp_body.is_some());
-        let data = resp_body.unwrap().data;
-        assert!(data.is_some());
-        let cert_data = data.unwrap();
-        let cert = X509::from_pem(cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
-        let alt_names = cert.subject_alt_names();
-        assert!(alt_names.is_some());
-        let alt_names = alt_names.unwrap();
-        assert_eq!(alt_names.len(), dns_sans.len());
-        for alt_name in alt_names {
-            assert!(dns_sans.contains(&alt_name.dnsname().unwrap()));
-        }
-        assert_eq!(cert_data["private_key_type"].as_str().unwrap(), key_type);
-        let priv_key = PKey::private_key_from_pem(cert_data["private_key"].as_str().unwrap().as_bytes()).unwrap();
-        assert_eq!(priv_key.bits(), key_bits);
-        assert!(priv_key.public_eq(&cert.public_key().unwrap()));
-        let serial_number = cert.serial_number().to_bn().unwrap();
-        let serial_number_hex = serial_number.to_hex_str().unwrap();
-        assert_eq!(
-            cert_data["serial_number"].as_str().unwrap().replace(":", "").to_lowercase().as_str(),
-            serial_number_hex.to_lowercase().as_str()
-        );
-        let expiration_time = Asn1Time::from_unix(cert_data["expiration"].as_i64().unwrap()).unwrap();
-        let ttl_compare = cert.not_after().compare(&expiration_time);
-        assert!(ttl_compare.is_ok());
-        assert_eq!(ttl_compare.unwrap(), std::cmp::Ordering::Equal);
-        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let expiration_ttl = cert_data["expiration"].as_u64().unwrap();
-        let ttl = expiration_ttl - now_timestamp;
-        let expect_ttl = 10 * 24 * 60 * 60;
-        assert!(ttl <= expect_ttl);
-        assert!((ttl + 10) > expect_ttl);
-
-        let authority_key_id = cert.authority_key_id();
-        assert!(authority_key_id.is_some());
-
-        println!("authority_key_id: {:?}", authority_key_id.unwrap().as_slice());
-
-        let resp_ca_pem = test_read_api(&core, token, &format!("{}/ca/pem", path), true);
-        let resp_ca_pem_cert_data = resp_ca_pem.unwrap().unwrap().data.unwrap();
-
-        let ca_cert = X509::from_pem(resp_ca_pem_cert_data["certificate"].as_str().unwrap().as_bytes()).unwrap();
-        let subject = ca_cert.subject_name();
-        let cn = subject.entries_by_nid(Nid::COMMONNAME).next().unwrap();
-        assert_eq!(cn.data().as_slice(), "test-ca".as_bytes());
-        println!("ca subject_key_id: {:?}", ca_cert.subject_key_id().unwrap().as_slice());
-        assert_eq!(ca_cert.subject_key_id().unwrap().as_slice(), authority_key_id.unwrap().as_slice());
-    }
-
-    #[test]
-    fn test_pki_module() {
-        let dir = env::temp_dir().join("rusty_vault_pki_module");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut root_token = String::new();
-        println!("root_token: {:?}", root_token);
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
-
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-
-        let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
-
-        {
-            let mut core = c.write().unwrap();
-            assert!(core.config(Arc::clone(&c), None).is_ok());
-
-            let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
-
-            let result = core.init(&seal_config);
-            assert!(result.is_ok());
-            let init_result = result.unwrap();
-            println!("init_result: {:?}", init_result);
-
-            let mut unsealed = false;
-            for i in 0..seal_config.secret_threshold {
-                let key = &init_result.secret_shares[i as usize];
-                let unseal = core.unseal(key);
-                assert!(unseal.is_ok());
-                unsealed = unseal.unwrap();
-            }
-
-            root_token = init_result.root_token;
-
-            assert!(unsealed);
-        }
-
-        {
-            println!("root_token: {:?}", root_token);
-            test_pki_mount(Arc::clone(&c), &root_token, "pki");
-            test_pki_config_ca(Arc::clone(&c), &root_token, "pki");
-            test_pki_config_role(Arc::clone(&c), &root_token, "pki", "rsa", 4096);
-            test_pki_issue_cert(Arc::clone(&c), &root_token, "pki", "rsa", 4096);
-            test_pki_generate_key(Arc::clone(&c), &root_token, "pki");
-            test_pki_import_key(Arc::clone(&c), &root_token, "pki");
-            test_pki_generate_root(Arc::clone(&c), &root_token, "pki", "rsa", 4096, true, true);
-            test_pki_generate_root(Arc::clone(&c), &root_token, "pki", "rsa", 4096, false, true);
-            test_pki_issue_cert_by_generate_root(Arc::clone(&c), &root_token, "pki", "rsa", 4096);
-            test_pki_delete_root(Arc::clone(&c), &root_token, "pki", true);
-
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
-            {
-                test_pki_mount(Arc::clone(&c), &root_token, "sm2pki");
-                test_pki_generate_root(Arc::clone(&c), &root_token, "sm2pki", "sm2", 256, true, true);
-                test_pki_config_role(Arc::clone(&c), &root_token, "sm2pki", "sm2", 256);
-                test_pki_issue_cert_by_generate_root(Arc::clone(&c), &root_token, "sm2pki", "sm2", 256);
-                test_pki_delete_root(Arc::clone(&c), &root_token, "sm2pki", true);
-            }
-        }
     }
 }

@@ -37,17 +37,11 @@ pub trait Storage: Send + Sync {
 }
 
 /// This struct is used to describe a specific storage entry
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StorageEntry {
     pub key: String,
     pub value: Vec<u8>,
-}
-
-impl Default for StorageEntry {
-    fn default() -> Self {
-        Self { key: String::new(), value: Vec::new() }
-    }
 }
 
 impl StorageEntry {
@@ -94,18 +88,17 @@ pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Bac
 pub mod test {
     use std::{collections::HashMap, env, fs};
 
-    use go_defer::defer;
     use serde_json::Value;
 
-    use crate::storage::{new_backend, Backend, BackendEntry};
+    use crate::{
+        storage::{new_backend, Backend, BackendEntry},
+        test_utils::TEST_DIR,
+    };
 
     #[test]
     fn test_new_backend() {
-        let dir = env::temp_dir().join("rusty_vault_test_new_backend");
+        let dir = env::temp_dir().join(*TEST_DIR).join("new_backend");
         assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
 
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
@@ -117,7 +110,7 @@ pub mod test {
         assert!(!backend.is_ok());
     }
 
-    pub fn test_backend(backend: &dyn Backend) {
+    pub fn test_backend_curd(backend: &dyn Backend) {
         // Should be empty
         let keys = backend.list("");
         assert!(keys.is_ok());
