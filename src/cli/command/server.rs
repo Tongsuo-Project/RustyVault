@@ -20,12 +20,9 @@ use openssl::{
 use sysexits::ExitCode;
 
 use crate::{
-    cli::config,
-    core::Core,
-    errors::RvError,
-    http,
+    cli::config, core::Core, errors::RvError, http, storage, 
+    EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
     metrics::{manager::MetricsManager, middleware::metrics_midleware},
-    storage, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
 };
 
 pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";

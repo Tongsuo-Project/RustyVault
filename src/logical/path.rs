@@ -1,12 +1,13 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use super::{request::Request, response::Response, Backend, Field, Operation};
-use crate::errors::RvError;
+use crate::{context::Context, errors::RvError};
 
 type PathOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
 #[derive(Debug, Clone)]
 pub struct Path {
+    pub ctx: Arc<Context>,
     pub pattern: String,
     pub fields: HashMap<String, Arc<Field>>,
     pub operations: Vec<PathOperation>,
@@ -27,7 +28,13 @@ impl fmt::Debug for PathOperation {
 
 impl Path {
     pub fn new(pattern: &str) -> Self {
-        Self { pattern: pattern.to_string(), fields: HashMap::new(), operations: Vec::new(), help: String::new() }
+        Self {
+            ctx: Arc::new(Context::new()),
+            pattern: pattern.to_string(),
+            fields: HashMap::new(),
+            operations: Vec::new(),
+            help: String::new(),
+        }
     }
 
     pub fn get_field(&self, key: &str) -> Option<Arc<Field>> {
@@ -165,6 +172,7 @@ macro_rules! new_path_internal {
     ({ $($tt:tt)+ }) => {
         {
             let mut path = Path {
+                ctx: Arc::new(Context::new()),
                 pattern: String::new(),
                 fields: HashMap::new(),
                 operations: Vec::new(),
