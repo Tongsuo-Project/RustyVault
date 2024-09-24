@@ -26,10 +26,7 @@ use crate::{
     module_manager::ModuleManager,
     modules::{
         auth::AuthModule,
-        credential::{
-            userpass::UserPassModule,
-            approle::AppRoleModule,
-        },
+        credential::{cert::CertModule, approle::AppRoleModule, userpass::UserPassModule},
         pki::PkiModule,
     },
     mount::MountTable,
@@ -123,6 +120,10 @@ impl Core {
         // add credential module: approle
         let approle_module = AppRoleModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(approle_module))))?;
+
+        // add credential module: cert
+        let cert_module = CertModule::new(self);
+        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
 
         Ok(())
     }
