@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use better_default::Default;
 use serde_json::{Map, Value};
 use tokio::task::JoinHandle;
 
@@ -10,9 +11,11 @@ use crate::{
     storage::{Storage, StorageEntry},
 };
 
+#[derive(Default)]
 pub struct Request {
     pub id: String,
     pub name: String,
+    #[default(Operation::Read)]
     pub operation: Operation,
     pub path: String,
     pub match_path: Option<Arc<Path>>,
@@ -25,27 +28,6 @@ pub struct Request {
     pub secret: Option<SecretData>,
     pub auth: Option<Auth>,
     pub tasks: Vec<JoinHandle<()>>,
-}
-
-impl Default for Request {
-    fn default() -> Self {
-        Request {
-            id: String::new(),
-            name: String::new(),
-            operation: Operation::Read,
-            path: String::new(),
-            match_path: None,
-            headers: None,
-            body: None,
-            data: None,
-            client_token: String::new(),
-            storage: None,
-            connection: None,
-            secret: None,
-            auth: None,
-            tasks: Vec::new(),
-        }
-    }
 }
 
 impl Request {

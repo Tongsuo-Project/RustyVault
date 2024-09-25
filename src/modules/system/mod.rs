@@ -3,11 +3,11 @@
 
 use std::{
     collections::HashMap,
-    ops::Deref,
     sync::{Arc, RwLock},
 };
 
 use as_any::Downcast;
+use derive_more::Deref;
 use serde_json::{from_value, json, Map, Value};
 
 use crate::{
@@ -36,16 +36,10 @@ pub struct SystemBackendInner {
     pub core: Arc<RwLock<Core>>,
 }
 
+#[derive(Deref)]
 pub struct SystemBackend {
+    #[deref]
     pub inner: Arc<SystemBackendInner>,
-}
-
-impl Deref for SystemBackend {
-    type Target = SystemBackendInner;
-
-    fn deref(&self) -> &SystemBackendInner {
-        &self.inner
-    }
 }
 
 impl SystemBackend {
@@ -475,8 +469,7 @@ impl SystemBackendInner {
         let path = path.as_str().unwrap();
 
         let core = self.core.read()?;
-        let storage = core.barrier.as_storage();
-        let entry = storage.get(path)?;
+        let entry = core.barrier.get(path)?;
         if entry.is_none() {
             return Ok(None);
         }
@@ -499,11 +492,10 @@ impl SystemBackendInner {
         let value = value.as_str().unwrap();
 
         let core = self.core.read()?;
-        let storage = core.barrier.as_storage();
 
         let entry = StorageEntry { key: path.to_string(), value: value.as_bytes().to_vec() };
 
-        storage.put(&entry)?;
+        core.barrier.put(&entry)?;
 
         Ok(None)
     }
@@ -514,9 +506,8 @@ impl SystemBackendInner {
         let path = path.as_str().unwrap();
 
         let core = self.core.read()?;
-        let storage = core.barrier.as_storage();
 
-        storage.delete(path)?;
+        core.barrier.delete(path)?;
 
         Ok(None)
     }

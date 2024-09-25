@@ -10,20 +10,42 @@ use crate::{
     utils::{deserialize_duration, serialize_duration, sock_addr::SockAddrMarshaler},
 };
 
+/*
+const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
+const MAX_LEASE_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
+*/
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenParams {
     pub token_type: String,
+
+    // The TTL to user for the token
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_ttl: Duration,
+
+    // The max TTL to use for the token
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_max_ttl: Duration,
+
+    // If set, the token entry will have an explicit maximum TTL set, rather than deferring to role/mount values
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_explicit_max_ttl: Duration,
+
+    // If non-zero, tokens created using this role will be able to be renewed forever,
+    // but will have a fixed renewal period of this value
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_period: Duration,
+
+    // If set, core will not automatically add default to the policy list
     pub token_no_default_policy: bool,
+
+    // The maximum number of times a token issued from this role may be used.
     pub token_num_uses: u64,
+
+    // The policies to set
     pub token_policies: Vec<String>,
+
+    // The set of CIDRs that tokens generated using this role will be bound to
     pub token_bound_cidrs: Vec<SockAddrMarshaler>,
 }
 
@@ -178,29 +200,21 @@ impl TokenParams {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, env, fs, sync::Arc};
+    use std::sync::Arc;
 
-    use go_defer::defer;
     use serde_json::json;
 
     use super::*;
     use crate::{
         logical::{Operation, Path},
-        storage::{self, barrier_aes_gcm::AESGCMBarrier},
+        storage::barrier_aes_gcm::AESGCMBarrier,
+        test_utils::test_backend,
     };
 
     #[test]
     fn test_token_util() {
-        let dir = env::temp_dir().join("rusty_vault_test_token_util");
-        assert!(fs::create_dir(&dir).is_ok());
-        defer! (
-            assert!(fs::remove_dir_all(&dir).is_ok());
-        );
-
-        let mut conf: HashMap<String, Value> = HashMap::new();
-        conf.insert("path".to_string(), Value::String(dir.to_string_lossy().into_owned()));
-
-        let backend = storage::new_backend("file", &conf).unwrap();
+        // init the storage backend
+        let backend = test_backend("test_token_util");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 

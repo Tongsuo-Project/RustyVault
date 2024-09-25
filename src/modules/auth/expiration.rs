@@ -1,12 +1,13 @@
 use std::{
     collections::HashMap,
-    ops::Deref,
     path::PathBuf,
     sync::{Arc, RwLock},
     time::{Duration, SystemTime},
 };
 
+use better_default::Default;
 use delay_timer::prelude::*;
+use derive_more::Deref;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -16,7 +17,7 @@ use crate::{
     errors::RvError,
     logical::{Auth, Request, Response, SecretData},
     router::Router,
-    storage::{barrier_view::BarrierView, StorageEntry},
+    storage::{barrier_view::BarrierView, Storage, StorageEntry},
     utils::{deserialize_system_time, generate_uuid, serialize_system_time},
 };
 
@@ -44,6 +45,7 @@ struct LeaseEntry {
     pub expire_time: SystemTime,
 }
 
+#[derive(Default)]
 pub struct ExpirationTask {
     pub last_task_id: u64,
     pub task_id_map: HashMap<String, u64>,
@@ -51,53 +53,22 @@ pub struct ExpirationTask {
     pub task_timer: DelayTimer,
 }
 
+#[derive(Default)]
 pub struct ExpirationManagerInner {
     pub router: Option<Arc<Router>>,
     pub id_view: Option<Arc<BarrierView>>,
     pub token_view: Option<Arc<BarrierView>>,
+    #[default(Arc::new(RwLock::new(None)))]
     pub token_store: Arc<RwLock<Option<Arc<TokenStore>>>>,
+    #[default(RwLock::new(ExpirationTask::default()))]
     pub task: RwLock<ExpirationTask>,
 }
 
+#[derive(Default, Deref)]
 pub struct ExpirationManager {
+    #[deref]
+    #[default(Arc::new(ExpirationManagerInner::default()))]
     pub inner: Arc<ExpirationManagerInner>,
-}
-
-impl Default for ExpirationTask {
-    fn default() -> Self {
-        Self {
-            last_task_id: 0,
-            task_id_map: HashMap::new(),
-            task_id_remove_pending: Vec::new(),
-            task_timer: DelayTimerBuilder::default().build(),
-        }
-    }
-}
-
-impl Default for ExpirationManagerInner {
-    fn default() -> Self {
-        Self {
-            router: None,
-            id_view: None,
-            token_view: None,
-            token_store: Arc::new(RwLock::new(None)),
-            task: RwLock::new(ExpirationTask::default()),
-        }
-    }
-}
-
-impl Default for ExpirationManager {
-    fn default() -> Self {
-        Self { inner: Arc::new(ExpirationManagerInner::default()) }
-    }
-}
-
-impl Deref for ExpirationManager {
-    type Target = ExpirationManagerInner;
-
-    fn deref(&self) -> &ExpirationManagerInner {
-        &self.inner
-    }
 }
 
 impl LeaseEntry {
@@ -460,7 +431,7 @@ impl ExpirationManagerInner {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let id_view = self.id_view.as_ref().unwrap().as_storage();
+        let id_view = self.id_view.as_ref().unwrap();
 
         let raw = id_view.get(lease_id)?;
         if raw.is_none() {
@@ -477,7 +448,7 @@ impl ExpirationManagerInner {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let id_view = self.id_view.as_ref().unwrap().as_storage();
+        let id_view = self.id_view.as_ref().unwrap();
 
         let value = serde_json::to_string(&le)?;
 
@@ -491,7 +462,7 @@ impl ExpirationManagerInner {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let id_view = self.id_view.as_ref().unwrap().as_storage();
+        let id_view = self.id_view.as_ref().unwrap();
 
         id_view.delete(lease_id)
     }
@@ -504,7 +475,7 @@ impl ExpirationManagerInner {
 
         let token_store = token_store.as_ref().unwrap();
 
-        let token_view = self.token_view.as_ref().unwrap().as_storage();
+        let token_view = self.token_view.as_ref().unwrap();
 
         let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
 
@@ -512,23 +483,6 @@ impl ExpirationManagerInner {
 
         token_view.put(&entry)
     }
-
-    /*
-    fn remove_index_by_token(&self, token: &str, lease_id: &str) -> Result<(), RvError> {
-        let token_store = self.token_store.read()?;
-        if token_store.is_none() || self.token_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let token_store = token_store.as_ref().unwrap();
-
-        let token_view = self.token_view.as_ref().unwrap().as_storage();
-
-        let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
-
-        token_view.delete(&key)
-    }
-    */
 
     fn lookup_by_token(&self, token: &str) -> Result<Vec<String>, RvError> {
         let token_store = self.token_store.read()?;
@@ -538,7 +492,7 @@ impl ExpirationManagerInner {
 
         let token_store = token_store.as_ref().unwrap();
 
-        let token_view = self.token_view.as_ref().unwrap().as_storage();
+        let token_view = self.token_view.as_ref().unwrap();
         let prefix = format!("{}/", token_store.salt_id(token));
         let sub_keys = token_view.list(&prefix)?;
 
