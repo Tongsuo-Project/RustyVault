@@ -4,24 +4,24 @@ use std::sync::{atomic::AtomicU64, Arc, Mutex};
 use sysinfo::{Disks, Networks, System};
 use tokio::time::{self, Duration};
 
-const CPU_USAGE_PERCENT: &str = "cpu_usage_percent";
-const CPU_USAGE_PERCENT_HELP: &str = "CPU usage percent";
-const TOTAL_MEMORY: &str = "total_memory";
-const TOTAL_MEMORY_HELP: &str = "Total memory";
-const USED_MEMORY: &str = "used_memory";
-const USED_MEMORY_HELP: &str = "Used memory";
-const FREE_MEMORY: &str = "free_memory";
-const FREE_MEMORY_HELP: &str = "Free memory";
-const TOTAL_DISK_SPACE: &str = "total_disk_space";
-const TOTAL_DISK_SPACE_HELP: &str = "Total disk space";
-const TOTAL_DISK_AVAILABLE: &str = "total_disk_available";
-const TOTAL_DISK_AVAILABLE_HELP: &str = "Total disk available";
-const NETWORK_IN: &str = "network_in";
-const NETWORK_IN_HELP: &str = "Network in";
-const NETWORK_OUT: &str = "network_out";
-const NETWORK_OUT_HELP: &str = "Network out";
-const LOAD_AVERAGE: &str = "load_average";
-const LOAD_AVERAGE_HELP: &str = "System load average";
+pub const CPU_USAGE_PERCENT: &str = "cpu_usage_percent";
+pub const CPU_USAGE_PERCENT_HELP: &str = "CPU usage percent";
+pub const TOTAL_MEMORY: &str = "total_memory";
+pub const TOTAL_MEMORY_HELP: &str = "Total memory";
+pub const USED_MEMORY: &str = "used_memory";
+pub const USED_MEMORY_HELP: &str = "Used memory";
+pub const FREE_MEMORY: &str = "free_memory";
+pub const FREE_MEMORY_HELP: &str = "Free memory";
+pub const TOTAL_DISK_SPACE: &str = "total_disk_space";
+pub const TOTAL_DISK_SPACE_HELP: &str = "Total disk space";
+pub const TOTAL_DISK_AVAILABLE: &str = "total_disk_available";
+pub const TOTAL_DISK_AVAILABLE_HELP: &str = "Total disk available";
+pub const NETWORK_IN: &str = "network_in";
+pub const NETWORK_IN_HELP: &str = "Network in";
+pub const NETWORK_OUT: &str = "network_out";
+pub const NETWORK_OUT_HELP: &str = "Network out";
+pub const LOAD_AVERAGE: &str = "load_average";
+pub const LOAD_AVERAGE_HELP: &str = "System load average";
 
 pub struct SystemMetrics {
     system: Arc<Mutex<System>>,

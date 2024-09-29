@@ -6,10 +6,10 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::{linear_buckets, Histogram};
 use prometheus_client::registry::Registry;
 
-const HTTP_REQUEST_COUNT: &str = "http_request_count";
-const HTTP_REQUEST_COUNT_HELP: &str = "Number of HTTP requests received, labeled by method and status";
-const HTTP_REQUEST_DURATION_SECONDS: &str = "http_request_duration_seconds";
-const HTTP_REQUEST_DURATION_SECONDS_HELP: &str = "Duration of HTTP requests, labeled by method and status";
+pub const HTTP_REQUEST_COUNT: &str = "http_request_count";
+pub const HTTP_REQUEST_COUNT_HELP: &str = "Number of HTTP requests received, labeled by method and status";
+pub const HTTP_REQUEST_DURATION_SECONDS: &str = "http_request_duration_seconds";
+pub const HTTP_REQUEST_DURATION_SECONDS_HELP: &str = "Duration of HTTP requests, labeled by method and status";
     
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum MetricsMethod {
