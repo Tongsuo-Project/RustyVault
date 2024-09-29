@@ -1,7 +1,7 @@
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
 use std::sync::{atomic::AtomicU64, Arc, Mutex};
-use sysinfo::{Disks, Networks, System};
+use sysinfo::{Disks, System};
 use tokio::time::{self, Duration};
 
 pub const CPU_USAGE_PERCENT: &str = "cpu_usage_percent";
@@ -16,10 +16,10 @@ pub const TOTAL_DISK_SPACE: &str = "total_disk_space";
 pub const TOTAL_DISK_SPACE_HELP: &str = "Total disk space";
 pub const TOTAL_DISK_AVAILABLE: &str = "total_disk_available";
 pub const TOTAL_DISK_AVAILABLE_HELP: &str = "Total disk available";
-pub const NETWORK_IN: &str = "network_in";
-pub const NETWORK_IN_HELP: &str = "Network in";
-pub const NETWORK_OUT: &str = "network_out";
-pub const NETWORK_OUT_HELP: &str = "Network out";
+// pub const NETWORK_IN: &str = "network_in";
+// pub const NETWORK_IN_HELP: &str = "Network in";
+// pub const NETWORK_OUT: &str = "network_out";
+// pub const NETWORK_OUT_HELP: &str = "Network out";
 pub const LOAD_AVERAGE: &str = "load_average";
 pub const LOAD_AVERAGE_HELP: &str = "System load average";
 
@@ -32,8 +32,8 @@ pub struct SystemMetrics {
     free_memory: Gauge<f64, AtomicU64>,
     total_disk_available: Gauge<f64, AtomicU64>,
     total_disk_space: Gauge<f64, AtomicU64>,
-    network_in: Gauge<f64, AtomicU64>,
-    network_out: Gauge<f64, AtomicU64>,
+    // network_in: Gauge<f64, AtomicU64>,
+    // network_out: Gauge<f64, AtomicU64>,
     load_avg: Gauge<f64, AtomicU64>,
 }
 
@@ -48,8 +48,8 @@ impl SystemMetrics {
         let total_disk_space = Gauge::<f64, AtomicU64>::default();
         let total_disk_available = Gauge::<f64, AtomicU64>::default();
 
-        let network_in = Gauge::<f64, AtomicU64>::default();
-        let network_out = Gauge::<f64, AtomicU64>::default();
+        // let network_in = Gauge::<f64, AtomicU64>::default();
+        // let network_out = Gauge::<f64, AtomicU64>::default();
         let load_avg = Gauge::<f64, AtomicU64>::default();
 
         registry.register(CPU_USAGE_PERCENT, CPU_USAGE_PERCENT_HELP, cpu_usage.clone());
@@ -61,8 +61,8 @@ impl SystemMetrics {
         registry.register(TOTAL_DISK_SPACE, TOTAL_DISK_SPACE_HELP, total_disk_space.clone());
         registry.register(TOTAL_DISK_AVAILABLE, TOTAL_DISK_AVAILABLE_HELP, total_disk_available.clone());
 
-        registry.register(NETWORK_IN, NETWORK_IN_HELP, network_in.clone());
-        registry.register(NETWORK_OUT, NETWORK_OUT_HELP, network_out.clone());
+        // registry.register(NETWORK_IN, NETWORK_IN_HELP, network_in.clone());
+        // registry.register(NETWORK_OUT, NETWORK_OUT_HELP, network_out.clone());
 
         registry.register(LOAD_AVERAGE, LOAD_AVERAGE_HELP, load_avg.clone());
 
@@ -77,8 +77,8 @@ impl SystemMetrics {
             free_memory,
             total_disk_available,
             total_disk_space,
-            network_in,
-            network_out,
+            // network_in,
+            // network_out,
             load_avg,
         }
     }
@@ -112,16 +112,17 @@ impl SystemMetrics {
         self.total_disk_available.set(total_available_space as f64);
         self.total_disk_space.set(total_disk_space as f64);
 
-        let mut total_network_in = 0;
-        let mut total_network_out = 0;
+        // let mut total_network_in = 0;
+        // let mut total_network_out = 0;
 
-        for (_, n) in Networks::new_with_refreshed_list().list() {
-            total_network_in += n.received();
-            total_network_out += n.transmitted();
-        }
+        // TODO: network data stays at zero all the time
+        // for (_, n) in Networks::new_with_refreshed_list().list() {
+        //     total_network_in += n.received();
+        //     total_network_out += n.transmitted();
+        // }
 
-        self.network_in.set(total_network_in as f64);
-        self.network_out.set(total_network_out as f64);
+        // self.network_in.set(total_network_in as f64);
+        // self.network_out.set(total_network_out as f64);
 
         self.load_avg.set(System::load_average().one as f64);
     }
