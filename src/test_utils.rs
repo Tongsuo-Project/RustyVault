@@ -1,34 +1,30 @@
+use libc::c_int;
 use std::{
     collections::HashMap,
     default::Default,
-    env, fs, thread,
+    env, fs,
     io::prelude::*,
     path::Path,
-    sync::{Arc, RwLock, Barrier},
+    sync::{Arc, Barrier, RwLock},
+    thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use libc::c_int;
 
+use actix_web::{
+    dev::Server,
+    middleware::{self, from_fn},
+    web, App, HttpResponse, HttpServer,
+};
+use anyhow::format_err;
 use foreign_types::ForeignType;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
-use serde_json::{json, Map, Value};
-use actix_web::{middleware, web, dev::Server, App, HttpResponse, HttpServer};
-use ureq::AgentBuilder;
-use rustls::{
-    ClientConfig,
-    RootCertStore,
-    pki_types::{
-        CertificateDer,
-        PrivateKeyDer,
-    }
-};
-use tokio::sync::oneshot;
-use anyhow::format_err;
 use openssl::{
-    rsa::Rsa,
-    pkey::{PKey, Private},
+    asn1::{Asn1Object, Asn1OctetString, Asn1Time},
     hash::MessageDigest,
+    pkey::{PKey, Private},
+    rsa::Rsa,
+    ssl::{SslAcceptor, SslFiletype, SslMethod, SslVerifyMode, SslVersion},
     x509::{
         extension::{
             AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
@@ -36,18 +32,24 @@ use openssl::{
         },
         X509Extension, X509NameBuilder, X509Ref, X509,
     },
-    ssl::{SslAcceptor, SslFiletype, SslMethod, SslVersion, SslVerifyMode},
-    asn1::{Asn1Time, Asn1Object, Asn1OctetString},
 };
+use rustls::{
+    pki_types::{CertificateDer, PrivateKeyDer},
+    ClientConfig, RootCertStore,
+};
+use serde_json::{json, Map, Value};
+use tokio::sync::oneshot;
+use ureq::AgentBuilder;
 
 use crate::{
-    http,
     core::{Core, SealConfig},
     errors::RvError,
+    http,
     logical::{Operation, Request, Response},
+    metrics::{manager::MetricsManager, middleware::metrics_midleware, system_metrics::SystemMetrics},
+    rv_error_response,
     storage::{self, Backend},
     utils::cert::Certificate,
-    rv_error_response,
 };
 
 lazy_static! {
@@ -97,9 +99,21 @@ impl TestHttpServer {
         let mut test_tls_config = None;
 
         if tls_enable {
-            (ca_cert_pem, ca_key_pem) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
-            (server_cert_pem, server_key_pem) = new_test_cert(false, true, true, "localhost", Some("localhost"), Some("127.0.0.1"),
-                                                              None, None, Some(ca_cert_pem.clone()), Some(ca_key_pem.clone())).unwrap();
+            (ca_cert_pem, ca_key_pem) =
+                new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
+            (server_cert_pem, server_key_pem) = new_test_cert(
+                false,
+                true,
+                true,
+                "localhost",
+                Some("localhost"),
+                Some("127.0.0.1"),
+                None,
+                None,
+                Some(ca_cert_pem.clone()),
+                Some(ca_key_pem.clone()),
+            )
+            .unwrap();
 
             let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
             let test_certs_dir = env::temp_dir().join(format!("{}/certs/{}-{}", *TEST_DIR, name, now).as_str());
@@ -119,10 +133,7 @@ impl TestHttpServer {
             let mut key_file = fs::File::create(&key_path).unwrap();
             assert!(key_file.write_all(server_key_pem.as_bytes()).is_ok());
 
-            test_tls_config = Some(TestTlsConfig {
-                cert_path,
-                key_path,
-            });
+            test_tls_config = Some(TestTlsConfig { cert_path, key_path });
 
             scheme = "https";
         }
@@ -133,6 +144,88 @@ impl TestHttpServer {
         barrier.wait();
 
         let url_prefix = format!("{}://{}/v1", scheme, listen_addr);
+
+        Self {
+            name: name.to_string(),
+            core,
+            root_token,
+            tls_enable,
+            ca_cert_pem,
+            ca_key_pem,
+            server_cert_pem,
+            server_key_pem,
+            listen_addr,
+            url_prefix,
+            mount_path: "".into(),
+            stop_tx: Some(stop_tx),
+            thread: Some(server_thread),
+        }
+    }
+
+    pub fn new_with_prometheus(name: &str, tls_enable: bool) -> Self {
+        let barrier = Arc::new(Barrier::new(2));
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let (root_token, core) = test_rusty_vault_init(name);
+
+        let mut scheme = "http";
+        let mut ca_cert_pem = "".into();
+        let mut ca_key_pem = "".into();
+        let mut server_cert_pem = "".into();
+        let mut server_key_pem = "".into();
+        let mut test_tls_config = None;
+
+        if tls_enable {
+            (ca_cert_pem, ca_key_pem) =
+                new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
+            (server_cert_pem, server_key_pem) = new_test_cert(
+                false,
+                true,
+                true,
+                "localhost",
+                Some("localhost"),
+                Some("127.0.0.1"),
+                None,
+                None,
+                Some(ca_cert_pem.clone()),
+                Some(ca_key_pem.clone()),
+            )
+            .unwrap();
+
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+            let test_certs_dir = env::temp_dir().join(format!("{}/certs/{}-{}", *TEST_DIR, name, now).as_str());
+            let dir = test_certs_dir.to_string_lossy().into_owned();
+            assert!(fs::create_dir_all(&test_certs_dir).is_ok());
+
+            let ca_path = format!("{}/ca.crt", dir);
+            let cert_path = format!("{}/server.crt", dir);
+            let key_path = format!("{}/key.pem", dir);
+
+            let mut ca_file = fs::File::create(&ca_path).unwrap();
+            assert!(ca_file.write_all(ca_cert_pem.as_bytes()).is_ok());
+
+            let mut cert_file = fs::File::create(&cert_path).unwrap();
+            assert!(cert_file.write_all(server_cert_pem.as_bytes()).is_ok());
+
+            let mut key_file = fs::File::create(&key_path).unwrap();
+            assert!(key_file.write_all(server_key_pem.as_bytes()).is_ok());
+
+            test_tls_config = Some(TestTlsConfig { cert_path, key_path });
+
+            scheme = "https";
+        }
+
+        let collection_interval: u64 = 15;
+        let metrics_manager = Arc::new(RwLock::new(MetricsManager::new(collection_interval)));
+        let system_metrics = Arc::clone(&metrics_manager.read().unwrap().system_metrics);
+
+        let (server, listen_addr) =
+            new_test_http_server_with_prometheus(core.clone(), metrics_manager, test_tls_config).unwrap();
+        let server_thread =
+            start_test_http_server_with_prometheus(server, Arc::clone(&barrier), stop_rx, system_metrics);
+
+        barrier.wait();
+
+        let url_prefix = format!("{}://{}", scheme, listen_addr);
 
         Self {
             name: name.to_string(),
@@ -181,7 +274,12 @@ impl TestHttpServer {
         Ok((status, resp))
     }
 
-    pub fn login(&self, path: &str, data: Option<Map<String, Value>>, tls_client_auth: Option<TestTlsClientAuth>) -> Result<(u16, Value), RvError> {
+    pub fn login(
+        &self,
+        path: &str,
+        data: Option<Map<String, Value>>,
+        tls_client_auth: Option<TestTlsClientAuth>,
+    ) -> Result<(u16, Value), RvError> {
         self.request("POST", path, data, None, tls_client_auth)
     }
 
@@ -193,15 +291,32 @@ impl TestHttpServer {
         self.request("GET", path, None, token, None)
     }
 
-    pub fn write(&self, path: &str, data: Option<Map<String, Value>>, token: Option<&str>) -> Result<(u16, Value), RvError> {
+    pub fn write(
+        &self,
+        path: &str,
+        data: Option<Map<String, Value>>,
+        token: Option<&str>,
+    ) -> Result<(u16, Value), RvError> {
         self.request("POST", path, data, token, None)
     }
 
-    pub fn delete(&self, path: &str, data: Option<Map<String, Value>>, token: Option<&str>) -> Result<(u16, Value), RvError> {
+    pub fn delete(
+        &self,
+        path: &str,
+        data: Option<Map<String, Value>>,
+        token: Option<&str>,
+    ) -> Result<(u16, Value), RvError> {
         self.request("DELETE", path, data, token, None)
     }
 
-    pub fn request(&self, method: &str, path: &str, data: Option<Map<String, Value>>, token: Option<&str>, tls_client_auth: Option<TestTlsClientAuth>) -> Result<(u16, Value), RvError> {
+    pub fn request(
+        &self,
+        method: &str,
+        path: &str,
+        data: Option<Map<String, Value>>,
+        token: Option<&str>,
+        tls_client_auth: Option<TestTlsClientAuth>,
+    ) -> Result<(u16, Value), RvError> {
         let url = format!("{}/{}", self.url_prefix, path);
         println!("request url: {}, method: {}", url, method);
         let tk = token.unwrap_or(&self.root_token);
@@ -222,18 +337,18 @@ impl TestHttpServer {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
                             client_certs.push(cert.into());
-                        },
+                        }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
                     }
                 }
 
-                let client_key: PrivateKeyDer = match rustls_pemfile::read_one_from_slice(client_auth.key_pem.as_bytes())? {
-                    Some((rustls_pemfile::Item::Pkcs1Key(key), _)) => PrivateKeyDer::Pkcs1(key),
-                    Some((rustls_pemfile::Item::Pkcs8Key(key), _)) => PrivateKeyDer::Pkcs8(key),
-                    _ => return Err(rv_error_response!("client key format invalid")),
-                };
-
+                let client_key: PrivateKeyDer =
+                    match rustls_pemfile::read_one_from_slice(client_auth.key_pem.as_bytes())? {
+                        Some((rustls_pemfile::Item::Pkcs1Key(key), _)) => PrivateKeyDer::Pkcs1(key),
+                        Some((rustls_pemfile::Item::Pkcs8Key(key), _)) => PrivateKeyDer::Pkcs8(key),
+                        _ => return Err(rv_error_response!("client key format invalid")),
+                    };
 
                 tls_config = ClientConfig::builder()
                     .with_root_certificates(ca_store)
@@ -246,9 +361,7 @@ impl TestHttpServer {
                 let mut root_store = RootCertStore::empty();
                 root_store.add(root_cert)?;
 
-                tls_config = ClientConfig::builder()
-                    .with_root_certificates(root_store)
-                    .with_no_client_auth();
+                tls_config = ClientConfig::builder().with_root_certificates(root_store).with_no_client_auth();
             }
 
             let agent = AgentBuilder::new()
@@ -266,11 +379,7 @@ impl TestHttpServer {
             req = req.set("X-RustyVault-Token", tk);
         }
 
-        let response_result = if let Some(send_data) = data {
-            req.send_json(send_data)
-        } else {
-            req.call()
-        };
+        let response_result = if let Some(send_data) = data { req.send_json(send_data) } else { req.call() };
 
         match response_result {
             Ok(response) => {
@@ -279,12 +388,105 @@ impl TestHttpServer {
                     return Ok((status, json!("")));
                 }
                 let json: Value = response.into_json()?;
-                return Ok((status, json))
-            },
+                return Ok((status, json));
+            }
             Err(ureq::Error::Status(code, response)) => {
                 let json: Value = response.into_json()?;
-                return Ok((code, json))
-            },
+                return Ok((code, json));
+            }
+            Err(e) => {
+                println!("Request failed: {}", e);
+                return Err(RvError::UreqError { source: e });
+            }
+        }
+    }
+
+    pub fn request_prometheus(
+        &self,
+        method: &str,
+        path: &str,
+        data: Option<Map<String, Value>>,
+        token: Option<&str>,
+        tls_client_auth: Option<TestTlsClientAuth>,
+    ) -> Result<(u16, Value), RvError> {
+        let url = format!("{}/{}", self.url_prefix, path);
+        println!("request url: {}, method: {}", url, method);
+        let tk = token.unwrap_or(&self.root_token);
+        let mut req = if self.tls_enable {
+            // Create rustls ClientConfig
+            let tls_config;
+            if let Some(client_auth) = tls_client_auth {
+                let ca_pem = pem::parse(client_auth.ca_pem.as_bytes())?;
+                let ca_cert = CertificateDer::from_slice(ca_pem.contents());
+
+                let mut ca_store = RootCertStore::empty();
+                ca_store.add(ca_cert)?;
+
+                let mut client_certs = vec![];
+                let mut cert_pem = client_auth.cert_pem.as_bytes();
+                loop {
+                    match rustls_pemfile::read_one_from_slice(cert_pem)? {
+                        Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
+                            cert_pem = rest;
+                            client_certs.push(cert.into());
+                        }
+                        None => break,
+                        _ => return Err(rv_error_response!("client cert format invalid")),
+                    }
+                }
+
+                let client_key: PrivateKeyDer =
+                    match rustls_pemfile::read_one_from_slice(client_auth.key_pem.as_bytes())? {
+                        Some((rustls_pemfile::Item::Pkcs1Key(key), _)) => PrivateKeyDer::Pkcs1(key),
+                        Some((rustls_pemfile::Item::Pkcs8Key(key), _)) => PrivateKeyDer::Pkcs8(key),
+                        _ => return Err(rv_error_response!("client key format invalid")),
+                    };
+
+                tls_config = ClientConfig::builder()
+                    .with_root_certificates(ca_store)
+                    .with_client_auth_cert(client_certs, client_key)?;
+            } else {
+                let cert_pem = pem::parse(self.ca_cert_pem.as_bytes())?;
+                let root_cert = CertificateDer::from_slice(cert_pem.contents());
+
+                // Configure the root certificate
+                let mut root_store = RootCertStore::empty();
+                root_store.add(root_cert)?;
+
+                tls_config = ClientConfig::builder().with_root_certificates(root_store).with_no_client_auth();
+            }
+
+            let agent = AgentBuilder::new()
+                .timeout_connect(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .tls_config(Arc::new(tls_config))
+                .build();
+            agent.request(&method.to_uppercase(), &url)
+        } else {
+            ureq::request(&method.to_uppercase(), &url)
+        };
+
+        req = req.set("Accept", "application/json");
+        if !path.ends_with("/login") {
+            req = req.set("X-RustyVault-Token", tk);
+        }
+
+        let response_result = if let Some(send_data) = data { req.send_json(send_data) } else { req.call() };
+
+        match response_result {
+            Ok(response) => {
+                let status = response.status();
+                if status == 204 {
+                    return Ok((status, json!("")));
+                }
+                let text = response.into_string()?;
+                let wrapped_json = json!({"metrics":text});
+                return Ok((status, wrapped_json));
+            }
+            Err(ureq::Error::Status(code, response)) => {
+                let json: Value = response.into_json()?;
+                return Ok((code, json));
+            }
             Err(e) => {
                 println!("Request failed: {}", e);
                 return Err(RvError::UreqError { source: e });
@@ -333,7 +535,7 @@ pub fn new_test_cert(
     uri_sans: Option<&str>,
     ttl: Option<&str>,
     ca_cert_pem: Option<String>,
-    ca_key_pem: Option<String>
+    ca_key_pem: Option<String>,
 ) -> Result<(String, String), RvError> {
     let not_before = SystemTime::now();
     let not_after = not_before + parse_duration(ttl.unwrap_or("5d"))?;
@@ -346,13 +548,7 @@ pub fn new_test_cert(
 
     let subject = subject_name.build();
 
-    let mut cert = Certificate {
-        not_before,
-        not_after,
-        subject,
-        is_ca,
-        ..Default::default()
-    };
+    let mut cert = Certificate { not_before, not_after, subject, is_ca, ..Default::default() };
 
     if let Some(dns) = dns_sans {
         cert.dns_sans = dns.split(',').map(|s| s.trim().to_string()).collect();
@@ -373,14 +569,11 @@ pub fn new_test_cert(
             let ca_cert = X509::from_pem(cert_pem.as_bytes())?;
             let ca_key = PKey::private_key_from_pem(key_pem.as_bytes())?;
             cert_to_x509(&cert, client_auth, server_auth, Some(&ca_cert), Some(&ca_key), &pkey)?
-        },
-        _ => cert_to_x509(&cert, client_auth, server_auth, None, None, &pkey)?
+        }
+        _ => cert_to_x509(&cert, client_auth, server_auth, None, None, &pkey)?,
     };
 
-    Ok((
-        String::from_utf8(x509.to_pem()?)?,
-        String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?,
-    ))
+    Ok((String::from_utf8(x509.to_pem()?)?, String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?))
 }
 
 pub fn new_test_cert_ext(
@@ -393,7 +586,7 @@ pub fn new_test_cert_ext(
     uri_sans: Option<&str>,
     ttl: Option<&str>,
     ca_cert_pem: Option<String>,
-    ca_key_pem: Option<String>
+    ca_key_pem: Option<String>,
 ) -> Result<(String, String), RvError> {
     let not_before = SystemTime::now();
     let not_after = not_before + parse_duration(ttl.unwrap_or("5d"))?;
@@ -407,35 +600,34 @@ pub fn new_test_cert_ext(
 
     let subject = subject_name.build();
 
-    let extensions = vec![X509Extension::new_from_der(
-        &Asn1Object::from_str("2.1.1.1").unwrap(),
-        false,
-        &Asn1OctetString::new_from_bytes(b"A UTF8String Extension").unwrap(),
-        ).unwrap(),
+    let extensions = vec![
         X509Extension::new_from_der(
-        &Asn1Object::from_str("2.1.1.2").unwrap(),
-        false,
-        &Asn1OctetString::new_from_bytes(b"A UTF8 Extension").unwrap(),
-        ).unwrap(),
+            &Asn1Object::from_str("2.1.1.1").unwrap(),
+            false,
+            &Asn1OctetString::new_from_bytes(b"A UTF8String Extension").unwrap(),
+        )
+        .unwrap(),
         X509Extension::new_from_der(
-        &Asn1Object::from_str("2.1.1.3").unwrap(),
-        false,
-        &Asn1OctetString::new_from_bytes(b"An IA5 Extension").unwrap(),
-        ).unwrap(),
+            &Asn1Object::from_str("2.1.1.2").unwrap(),
+            false,
+            &Asn1OctetString::new_from_bytes(b"A UTF8 Extension").unwrap(),
+        )
+        .unwrap(),
         X509Extension::new_from_der(
-        &Asn1Object::from_str("2.1.1.4").unwrap(),
-        false,
-        &Asn1OctetString::new_from_bytes(b"A Visible Extension").unwrap(),
-        ).unwrap()];
+            &Asn1Object::from_str("2.1.1.3").unwrap(),
+            false,
+            &Asn1OctetString::new_from_bytes(b"An IA5 Extension").unwrap(),
+        )
+        .unwrap(),
+        X509Extension::new_from_der(
+            &Asn1Object::from_str("2.1.1.4").unwrap(),
+            false,
+            &Asn1OctetString::new_from_bytes(b"A Visible Extension").unwrap(),
+        )
+        .unwrap(),
+    ];
 
-    let mut cert = Certificate {
-        not_before,
-        not_after,
-        subject,
-        is_ca,
-        extensions,
-        ..Default::default()
-    };
+    let mut cert = Certificate { not_before, not_after, subject, is_ca, extensions, ..Default::default() };
 
     if !is_ca {
         cert.email_sans = vec!["valid@example.com".into()];
@@ -460,14 +652,11 @@ pub fn new_test_cert_ext(
             let ca_cert = X509::from_pem(cert_pem.as_bytes())?;
             let ca_key = PKey::private_key_from_pem(key_pem.as_bytes())?;
             cert_to_x509(&cert, client_auth, server_auth, Some(&ca_cert), Some(&ca_key), &pkey)?
-        },
-        _ => cert_to_x509(&cert, client_auth, server_auth, None, None, &pkey)?
+        }
+        _ => cert_to_x509(&cert, client_auth, server_auth, None, None, &pkey)?,
     };
 
-    Ok((
-        String::from_utf8(x509.to_pem()?)?,
-        String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?,
-    ))
+    Ok((String::from_utf8(x509.to_pem()?)?, String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?))
 }
 
 pub fn cert_to_x509(
@@ -531,7 +720,7 @@ pub fn cert_to_x509(
         builder.append_extension(BasicConstraints::new().critical().build()?)?;
         builder.append_extension(
             KeyUsage::new().critical().non_repudiation().digital_signature().key_encipherment().build()?,
-            )?;
+        )?;
         let mut ext = &mut ExtendedKeyUsage::new();
         if client_auth {
             ext = ext.client_auth();
@@ -560,11 +749,7 @@ pub fn cert_to_x509(
     Ok(builder.build())
 }
 
-pub unsafe fn new_test_crl(
-    revoked_cert_pem: &str,
-    ca_cert_pem: &str,
-    ca_key_pem: &str,
-) -> Result<String, RvError> {
+pub unsafe fn new_test_crl(revoked_cert_pem: &str, ca_cert_pem: &str, ca_key_pem: &str) -> Result<String, RvError> {
     let revoked_cert = X509::from_pem(revoked_cert_pem.as_bytes())?;
     let ca_cert = X509::from_pem(ca_cert_pem.as_bytes())?;
     let ca_key = PKey::private_key_from_pem(ca_key_pem.as_bytes())?;
@@ -671,7 +856,10 @@ pub fn test_rusty_vault_init(name: &str) -> (String, Arc<RwLock<Core>>) {
     (root_token, c)
 }
 
-pub fn new_test_http_server(core: Arc<RwLock<Core>>, tls_config: Option<TestTlsConfig>) -> Result<(Server, String), RvError> {
+pub fn new_test_http_server(
+    core: Arc<RwLock<Core>>,
+    tls_config: Option<TestTlsConfig>,
+) -> Result<(Server, String), RvError> {
     let mut http_server = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
@@ -697,7 +885,9 @@ pub fn new_test_http_server(core: Arc<RwLock<Core>>, tls_config: Option<TestTlsC
         builder.set_min_proto_version(Some(SslVersion::TLS1_2))?;
         builder.set_max_proto_version(Some(SslVersion::TLS1_3))?;
 
-        builder.set_cipher_list("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:HIGH:!PSK:!SRP:!3DES")?;
+        builder.set_cipher_list(
+            "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:HIGH:!PSK:!SRP:!3DES",
+        )?;
 
         builder.set_verify_callback(SslVerifyMode::PEER, |_, _| true);
 
@@ -713,7 +903,61 @@ pub fn new_test_http_server(core: Arc<RwLock<Core>>, tls_config: Option<TestTlsC
     Ok((http_server.run(), addr_info))
 }
 
-pub fn start_test_http_server(server: Server, barrier: Arc<Barrier>, stop_rx: oneshot::Receiver<()>) -> thread::JoinHandle<()> {
+pub fn new_test_http_server_with_prometheus(
+    core: Arc<RwLock<Core>>,
+    metrics_manager: Arc<RwLock<MetricsManager>>,
+    tls_config: Option<TestTlsConfig>,
+) -> Result<(Server, String), RvError> {
+    let mut http_server = HttpServer::new(move || {
+        App::new()
+            .wrap(middleware::Logger::default())
+            .wrap(from_fn(metrics_midleware))
+            .app_data(web::Data::new(core.clone()))
+            .app_data(web::Data::new(Arc::clone(&metrics_manager)))
+            .configure(http::init_service)
+            .default_service(web::to(|| HttpResponse::NotFound()))
+    })
+    .on_connect(http::request_on_connect_handler);
+
+    if let Some(tls) = tls_config {
+        let cert_file: &Path = Path::new(&tls.cert_path);
+        let key_file: &Path = Path::new(&tls.key_path);
+
+        let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
+        builder
+            .set_private_key_file(key_file, SslFiletype::PEM)
+            .map_err(|err| format_err!("unable to read proxy key {} - {}", key_file.display(), err))?;
+        builder
+            .set_certificate_chain_file(cert_file)
+            .map_err(|err| format_err!("unable to read proxy cert {} - {}", cert_file.display(), err))?;
+        builder.check_private_key()?;
+
+        builder.set_min_proto_version(Some(SslVersion::TLS1_2))?;
+        builder.set_max_proto_version(Some(SslVersion::TLS1_3))?;
+
+        builder.set_cipher_list(
+            "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:HIGH:!PSK:!SRP:!3DES",
+        )?;
+
+        builder.set_verify_callback(SslVerifyMode::PEER, |_, _| true);
+
+        http_server = http_server.bind_openssl("127.0.0.1:0", builder)?;
+    } else {
+        http_server = http_server.bind("127.0.0.1:0")?;
+    }
+
+    let addr_info = http_server.addrs().first().unwrap().to_string();
+
+    println!("HTTP Server is running at {}", addr_info);
+
+    Ok((http_server.run(), addr_info))
+}
+
+pub fn start_test_http_server(
+    server: Server,
+    barrier: Arc<Barrier>,
+    stop_rx: oneshot::Receiver<()>,
+) -> thread::JoinHandle<()> {
     let server_thread = thread::spawn(move || {
         let sys = actix_web::rt::System::new();
 
@@ -730,6 +974,46 @@ pub fn start_test_http_server(server: Server, barrier: Arc<Barrier>, stop_rx: on
         let _ = sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
+                _ = stop_future => {
+                    actix_rt::System::current().stop();
+                }
+            }
+        });
+
+        let _ = sys.run().unwrap();
+        println!("HTTP Server has stopped.");
+    });
+
+    server_thread
+}
+
+pub fn start_test_http_server_with_prometheus(
+    server: Server,
+    barrier: Arc<Barrier>,
+    stop_rx: oneshot::Receiver<()>,
+    system_metrics: Arc<SystemMetrics>,
+) -> thread::JoinHandle<()> {
+    let server_thread = thread::spawn(move || {
+        let sys = actix_web::rt::System::new();
+
+        let server_future = async {
+            server.await.unwrap();
+        };
+
+        let stop_future = async {
+            stop_rx.await.ok();
+        };
+
+        let system_metrics_fucture = async {
+            system_metrics.start_collecting().await;
+        };
+
+        barrier.wait();
+
+        let _ = sys.block_on(async {
+            tokio::select! {
+                _ = server_future => {},
+                _ = system_metrics_fucture => {},
                 _ = stop_future => {
                     actix_rt::System::current().stop();
                 }
