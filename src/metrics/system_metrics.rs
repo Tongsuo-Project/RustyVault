@@ -4,6 +4,25 @@ use std::sync::{atomic::AtomicU64, Arc, Mutex};
 use sysinfo::{Disks, Networks, System};
 use tokio::time::{self, Duration};
 
+const CPU_USAGE_PERCENT: &str = "cpu_usage_percent";
+const CPU_USAGE_PERCENT_HELP: &str = "CPU usage percent";
+const TOTAL_MEMORY: &str = "total_memory";
+const TOTAL_MEMORY_HELP: &str = "Total memory";
+const USED_MEMORY: &str = "used_memory";
+const USED_MEMORY_HELP: &str = "Used memory";
+const FREE_MEMORY: &str = "free_memory";
+const FREE_MEMORY_HELP: &str = "Free memory";
+const TOTAL_DISK_SPACE: &str = "total_disk_space";
+const TOTAL_DISK_SPACE_HELP: &str = "Total disk space";
+const TOTAL_DISK_AVAILABLE: &str = "total_disk_available";
+const TOTAL_DISK_AVAILABLE_HELP: &str = "Total disk available";
+const NETWORK_IN: &str = "network_in";
+const NETWORK_IN_HELP: &str = "Network in";
+const NETWORK_OUT: &str = "network_out";
+const NETWORK_OUT_HELP: &str = "Network out";
+const LOAD_AVERAGE: &str = "load_average";
+const LOAD_AVERAGE_HELP: &str = "System load average";
+
 pub struct SystemMetrics {
     system: Arc<Mutex<System>>,
     collection_interval: u64,
@@ -33,19 +52,19 @@ impl SystemMetrics {
         let network_out = Gauge::<f64, AtomicU64>::default();
         let load_avg = Gauge::<f64, AtomicU64>::default();
 
-        registry.register("cpu_usage_percent", "CPU usage percent", cpu_usage.clone());
+        registry.register(CPU_USAGE_PERCENT, CPU_USAGE_PERCENT_HELP, cpu_usage.clone());
 
-        registry.register("total_memory", "Total memory", total_memory.clone());
-        registry.register("used_memory", "Used memory", used_memory.clone());
-        registry.register("free_memory", "Free memory", free_memory.clone());
+        registry.register(TOTAL_MEMORY, TOTAL_MEMORY_HELP, total_memory.clone());
+        registry.register(USED_MEMORY, USED_MEMORY_HELP, used_memory.clone());
+        registry.register(FREE_MEMORY, FREE_MEMORY_HELP, free_memory.clone());
 
-        registry.register("total_disk_space", "Total disk space", total_disk_space.clone());
-        registry.register("total_disk_available", "Total disk available", total_disk_available.clone());
+        registry.register(TOTAL_DISK_SPACE, TOTAL_DISK_SPACE_HELP, total_disk_space.clone());
+        registry.register(TOTAL_DISK_AVAILABLE, TOTAL_DISK_AVAILABLE_HELP, total_disk_available.clone());
 
-        registry.register("network_in_bytes", "Incoming network traffic in bytes", network_in.clone());
-        registry.register("network_out_bytes", "Outgoing network traffic in bytes", network_out.clone());
+        registry.register(NETWORK_IN, NETWORK_IN_HELP, network_in.clone());
+        registry.register(NETWORK_OUT, NETWORK_OUT_HELP, network_out.clone());
 
-        registry.register("load_average", "System load average", load_avg.clone());
+        registry.register(LOAD_AVERAGE, LOAD_AVERAGE_HELP, load_avg.clone());
 
         let system = Arc::new(Mutex::new(System::new_all()));
 
