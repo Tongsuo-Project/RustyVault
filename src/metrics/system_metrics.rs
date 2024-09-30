@@ -127,3 +127,60 @@ impl SystemMetrics {
         self.load_avg.set(System::load_average().one as f64);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::metrics::system_metrics::*;
+    use crate::test_utils::TestHttpServer;
+    use std::collections::HashMap;
+    use std::thread;
+    use std::time::Duration;
+
+    static SYS_METRICS_MAP: &[(&str, &str)] = &[
+        (CPU_USAGE_PERCENT, CPU_USAGE_PERCENT_HELP),
+        (TOTAL_MEMORY, TOTAL_MEMORY_HELP),
+        (USED_MEMORY, USED_MEMORY_HELP),
+        (FREE_MEMORY, FREE_MEMORY_HELP),
+        (TOTAL_DISK_SPACE, TOTAL_DISK_SPACE_HELP),
+        (TOTAL_DISK_AVAILABLE, TOTAL_DISK_AVAILABLE_HELP),
+        // (NETWORK_IN, NETWORK_IN_HELP),
+        // (NETWORK_OUT, NETWORK_OUT_HELP),
+        (LOAD_AVERAGE, LOAD_AVERAGE_HELP),
+    ];
+
+    fn parse_gauge(raw: &str) -> HashMap<String, f64> {
+        let mut gauge_map = HashMap::new();
+        let lines: Vec<&str> = raw.split('\n').collect();
+        let mut i = 0;
+
+        while i < lines.len() {
+            let line = lines[i];
+            if line.ends_with("gauge") {
+                let parts: Vec<&str> = lines[i + 1].split(" ").collect();
+                // println!("in parse_gauge {}:{}", parts[0], parts[1]);
+                let metric_name = parts[0].to_string();
+                let value: f64 = parts[1].parse().unwrap();
+                gauge_map.insert(metric_name, value);
+            }
+            i += 1;
+        }
+        gauge_map
+    }
+
+    #[test]
+    fn test_sys_metrics() {
+        let server = TestHttpServer::new_with_prometheus("test_sys_metrics", false);
+        let root_token = &server.root_token;
+        thread::sleep(Duration::from_secs(20));
+
+        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(&root_token), None).unwrap();
+        assert_eq!(status, 200);
+
+        let gauge_map = parse_gauge(resp["metrics"].as_str().unwrap());
+        assert_eq!(SYS_METRICS_MAP.len(), gauge_map.len());
+
+        for (_, value) in gauge_map {
+            assert!(value != 0.0);
+        }
+    }
+}
