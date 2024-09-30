@@ -1,3 +1,4 @@
+//! Define and implement operating system metrics, using [sysinfo](https://docs.rs/sysinfo/latest/sysinfo/) to capture.
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
 use std::sync::{atomic::AtomicU64, Arc, Mutex};

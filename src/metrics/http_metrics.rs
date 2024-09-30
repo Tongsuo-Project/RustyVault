@@ -1,3 +1,4 @@
+//! Define and implement HTTP metrics and corresponding methods.
 use std::fmt::Write;
 
 use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue, LabelValueEncoder};

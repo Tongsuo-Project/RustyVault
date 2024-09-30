@@ -1,3 +1,4 @@
+//! `MetricManager` holds the Prometheus registry and metrics.
 use crate::metrics::http_metrics::HttpMetrics;
 use crate::metrics::system_metrics::SystemMetrics;
 use prometheus_client::registry::Registry;
