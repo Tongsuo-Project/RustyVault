@@ -18,7 +18,7 @@
 //!
 //! Define your metrics under `src/metrics/` and register them with the `Registry` like this:
 //!
-//! ```rust
+//! ```text
 //! pub const HTTP_REQUEST_COUNT: &str = "http_request_count";
 //! pub const HTTP_REQUEST_COUNT_HELP: &str = "Number of HTTP requests received, labeled by method and status";
 //!
@@ -43,7 +43,7 @@
 //!
 //! Register the metrics within the `MetricsManager` struct:
 //!
-//! ```rust
+//! ```text
 //! pub struct MetricsManager {
 //!     pub registry: Arc<Mutex<Registry>>,
 //!     pub http_metrics: Arc<HttpMetrics>,
@@ -63,7 +63,7 @@
 //!
 //! Invoke methods to update metrics where relevant events occur. In this example, retrieve `MetricsManager` from the `app_data` in the Actix Web application:
 //!
-//! ```rust
+//! ```text
 //! if let Some(m) = res.request().app_data::<Data<Arc<RwLock<MetricsManager>>>>() {
 //!     let metrics_manager = m.read().unwrap();
 //!     metrics_manager.http_metrics.increment_request_count(&label);

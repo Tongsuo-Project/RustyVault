@@ -180,7 +180,8 @@ mod tests {
         let gauge_map = parse_gauge(resp["metrics"].as_str().unwrap());
         assert_eq!(SYS_METRICS_MAP.len(), gauge_map.len());
 
-        for (_, value) in gauge_map {
+        for (metric, value) in gauge_map {
+            println!("{}:{}", metric, value);
             assert!(value != 0.0);
         }
     }

@@ -3,14 +3,13 @@
 //! # Usage
 //! The actix-web middleware function could be used as following:
 //!
-//! ```rust
+//! ```text
 //! let mut http_server = HttpServer::new(move || {
 //!        App::new()
 //!            //skip
 //!            .wrap(from_fn(metrics_midleware))
 //!            //skip
 //!    })
-//!    .on_connect(http::request_on_connect_handler);
 //! ```
 use std::{
     sync::{Arc, RwLock},
