@@ -65,6 +65,8 @@ dashmap = "5.5"
 tokio = { version = "1.40", features = ["rt-multi-thread", "macros"] }
 ctor = "0.2.8"
 better_default = "1.0.5"
+prometheus-client = "0.22.3"
+sysinfo = "0.31.4"
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }

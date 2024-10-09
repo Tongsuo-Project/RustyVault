@@ -40,6 +40,7 @@ pub mod schema;
 pub mod shamir;
 pub mod storage;
 pub mod utils;
+pub mod metrics;
 
 #[cfg(test)]
 pub mod test_utils;
