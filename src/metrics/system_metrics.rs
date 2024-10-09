@@ -177,8 +177,13 @@ mod tests {
         let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(&root_token), None).unwrap();
         assert_eq!(status, 200);
 
-        let gauge_map = parse_gauge(resp["metrics"].as_str().unwrap());
+        let mut gauge_map = parse_gauge(resp["metrics"].as_str().unwrap());
         assert_eq!(SYS_METRICS_MAP.len(), gauge_map.len());
+
+        // load average is not available on Windows
+        if cfg!(target_os = "windows") {
+            gauge_map.remove("load_average");
+        }
 
         for (metric, value) in gauge_map {
             println!("{}:{}", metric, value);
