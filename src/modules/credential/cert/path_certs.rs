@@ -207,7 +207,7 @@ This endpoint allows you to create, read, update, and delete trusted certificate
 that are allowed to authenticate.
 
 Deleting a certificate will not revoke auth for prior authenticated connections.
-To do this, do a revoke on "login". If you don'log need to revoke login immediately,
+To do this, do a revoke on "login". If you don't need to revoke login immediately,
 then the next renew will cause the lease to expire.
                 "#
         });
@@ -262,7 +262,14 @@ impl CertBackendInner {
         let cert_entry = entry.unwrap();
         let mut cert_entry_data = serde_json::to_value(&cert_entry)?;
         let data = cert_entry_data.as_object_mut().unwrap();
-        //TODO
+
+        if cert_entry.policies.len() > 0 {
+            data["policies"] = data["token_policies"].clone();
+        }
+
+        if cert_entry.bound_cidrs.len() > 0 {
+            data["bound_cidrs"] = data["token_bound_cidrs"].clone();
+        }
 
         Ok(Some(Response::data_response(Some(data.clone()))))
     }
