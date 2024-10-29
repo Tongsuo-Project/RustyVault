@@ -15,12 +15,12 @@ use anyhow::format_err;
 use clap::ArgMatches;
 use openssl::{
     ssl::{SslAcceptor, SslFiletype, SslMethod, SslOptions, SslVerifyMode, SslVersion},
-    x509::X509,
+    x509::{X509, verify::X509VerifyFlags, store::X509StoreBuilder},
 };
 use sysexits::ExitCode;
 
 use crate::{
-    cli::config, core::Core, errors::RvError, http, storage, 
+    cli::config, core::Core, errors::RvError, http, storage,
     EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
     metrics::{manager::MetricsManager, middleware::metrics_midleware},
 };
@@ -181,12 +181,17 @@ pub fn main(config_path: &str) -> Result<(), RvError> {
             });
 
             if listener.tls_client_ca_file.len() > 0 {
+                let mut store = X509StoreBuilder::new()?;
+
                 let mut client_ca_file = File::open(&listener.tls_client_ca_file)?;
                 let mut client_ca_file_bytes = Vec::new();
                 client_ca_file.read_to_end(&mut client_ca_file_bytes)?;
-                let client_ca_x509 = X509::from_pem(&client_ca_file_bytes)?;
+                let client_ca_x509s = X509::stack_from_pem(&client_ca_file_bytes)?;
 
-                builder.add_client_ca(client_ca_x509.as_ref())?;
+                client_ca_x509s.iter().try_for_each(|cert| store.add_cert(cert.clone()))?;
+
+                store.set_flags(X509VerifyFlags::PARTIAL_CHAIN)?;
+                builder.set_verify_cert_store(store.build())?;
             }
         }
 
