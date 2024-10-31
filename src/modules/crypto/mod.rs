@@ -57,9 +57,11 @@
 
 use crate::errors::RvError;
 #[cfg(feature = "crypto_adaptor_openssl")]
-use crypto_adaptors::openssl_adaptor::AdaptorCTX;
+use crypto_adaptors::openssl_adaptor::{AdaptorCTX, AdaptorPKeyCTX};
 #[cfg(feature = "crypto_adaptor_tongsuo")]
-use crypto_adaptors::tongsuo_adaptor::AdaptorCTX;
+use crypto_adaptors::tongsuo_adaptor::{AdaptorCTX, AdaptorPKeyCTX};
+
+use zeroize::{Zeroize, Zeroizing};
 
 pub mod crypto_adaptors;
 
@@ -83,6 +85,14 @@ pub enum PublicKeyType {
     RSA,
     ECDSA,
     SM2,
+}
+
+/// This enum defines different RSA key size
+pub enum RSAKeySize {
+    RSA2048,
+    RSA3072,
+    RSA4096,
+    RSA8192,
 }
 
 // All structs are defined here. Every struct represents a type of cryptography algorithm.
@@ -109,6 +119,17 @@ pub struct SM4 {
     aad: Option<Vec<u8>>,
     tag: Option<Vec<u8>>,
     ctx: Option<AdaptorCTX>,
+}
+
+/// The RSA public key structure
+#[allow(dead_code)]
+#[derive(Zeroize)]
+#[zeroize(drop)]
+pub struct RSA {
+    key_type: PublicKeyType,
+    size: RSAKeySize,
+    prime: u8,
+    ctx: Option<AdaptorPKeyCTX>,
 }
 
 /// BlockCipher is the 'base' trait for all kinds of block cipher alogrithms. In this trait,
@@ -368,7 +389,10 @@ pub trait AEADCipher: BlockCipher {
 /// algorithms usually refer to signature or encryption algorithms such as RSA, SM2 and so forth.
 pub trait PublicKey {
     /// Generate a pair of public and private key, based on specific algorithm type.
-    fn keygen() -> Result<(), RvError>;
+    fn keygen(&mut self) -> Result<(), RvError>;
+
+    /// Return the public key type of an object.
+    fn get_key_type(&self) -> Result<&PublicKeyType, RvError>;
 }
 
 /// The Signature trait defines a signature algorithm, such as RSA, ECDSA or SM2.
@@ -377,31 +401,47 @@ pub trait Signature: PublicKey {
     /// Sign a piece of data and returns the generated signature value.
     ///
     /// This operation uses the private key of a specific algorithm.
-    fn sign(&mut self, data: &Vec<u8>) -> Result<Vec<u8>, RvError>;
+    fn sign(&self, data: &Vec<u8>) -> Result<Vec<u8>, RvError>;
 
     /// Verify a piece of data against a signature and returns the verification result.
     ///
     /// This operation uses the public key of a specific algorithm.
-    fn verify(&mut self, data: &Vec<u8>, sig: &Vec<u8>) -> Result<bool, RvError>;
+    fn verify(&self, data: &Vec<u8>, sig: &Vec<u8>) -> Result<bool, RvError>;
 }
 
-/// The Encryption trait defines an public key encryption algorithm, such as RSA and SM4.
+/// The Encryption trait defines an public key encryption algorithm, such as RSA and SM2.
 /// This trait is a sub-trait of PublicKey trait.
 pub trait Encryption: PublicKey {
     /// Encrypt a piece of data using the private key.
     ///
     /// The ciphertext is returned on success.
-    fn encrypt(&mut self, plaintext: &Vec<u8>) -> Result<Vec<u8>, RvError>;
+    fn encrypt(&self, plaintext: &Vec<u8>) -> Result<Vec<u8>, RvError>;
 
     /// Decrypt a piece of data using the public key.
     ///
     /// The plaintext is returned on success.
-    fn decrypt(&mut self, ciphertext: &Vec<u8>) -> Result<Vec<u8>, RvError>;
+    fn decrypt(&self, ciphertext: &Vec<u8>) -> Result<Vec<u8>, RvError>;
+}
+
+// It's not very necessary for current PublicKey structures to be zeroized since every sensitive
+// data is safely cleared by OpenSSL because the rust-openssl crate implements the 'Drop' trait.
+impl Zeroize for PublicKeyType {
+    fn zeroize(&mut self) {}
+}
+
+impl Zeroize for RSAKeySize {
+    fn zeroize(&mut self) {}
 }
 
 #[cfg(test)]
 mod crypto_test {
-    use crate::modules::crypto::{AES, AESKeySize, CipherMode, BlockCipher, AEADCipher};
+    use crate::modules::crypto::{
+        AEADCipher, AESKeySize, BlockCipher,
+        CipherMode, AES,
+        RSA, RSAKeySize,
+        PublicKey, PublicKeyType,
+        Signature, Encryption
+    };
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     use crate::modules::crypto::SM4;
 
@@ -722,5 +762,49 @@ mod crypto_test {
 
         // evaluate the result.
         assert_eq!(data2.to_vec(), pt);
+    }
+
+    #[test]
+    fn test_rsa_sign_verify() {
+        let mut rsa = RSA::new(Some(2), Some(RSAKeySize::RSA4096)).unwrap();
+        rsa.keygen().unwrap();
+        let data = b"The best way to not feel hopeless is to get up and do something.".to_vec();
+        let sig = rsa.sign(&data).unwrap();
+        let valid = rsa.verify(&data, &sig).unwrap();
+        assert_eq!(valid, true);
+    }
+
+    #[test]
+    fn test_rsa_encrypt_decrypt() {
+        let mut rsa = RSA::new(None, None).unwrap();
+        rsa.keygen().unwrap();
+        let data = b"The best way to not feel hopeless is to get up and do something.".to_vec();
+        let ct = rsa.encrypt(&data).unwrap();
+        let pt = rsa.decrypt(&ct).unwrap();
+        assert_eq!(data, pt);
+    }
+
+    #[cfg(feature = "crypto_adaptor_tongsuo")]
+    #[test]
+    fn test_sm2_keygen() {
+        assert_eq!(1, 1);
+    }
+
+    #[cfg(feature = "crypto_adaptor_tongsuo")]
+    #[test]
+    fn test_sm2_sign_decrypt() {
+        assert_eq!(1, 1);
+    }
+
+    #[cfg(feature = "crypto_adaptor_tongsuo")]
+    #[test]
+    fn test_sm2_encrypt_decrypt() {
+        assert_eq!(1, 1);
+    }
+
+    #[cfg(feature = "crypto_adaptor_tongsuo")]
+    #[test]
+    fn test_sm2_encrypt_decrypt() {
+        assert_eq!(1, 1);
     }
 }

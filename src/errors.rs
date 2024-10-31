@@ -13,6 +13,30 @@ use actix_web::http::StatusCode;
 
 #[derive(Error, Debug)]
 pub enum RvError {
+    #[error("RSA key generation failed.")]
+    ErrCryptoPKeyRSAKeyGenFailed,
+    #[error("Public key encryption failed.")]
+    ErrCryptoPKeyEncFailed,
+    #[error("Public key decryption failed.")]
+    ErrCryptoPKeyDecFailed,
+    #[error("Public key encryption init failed.")]
+    ErrCryptoPKeyEncInitFailed,
+    #[error("Public key decryption init failed.")]
+    ErrCryptoPKeyDecInitFailed,
+    #[error("Crypro module internal error.")]
+    ErrCryptoPKeyInternalError,
+    #[error("Verification failed.")]
+    ErrCryptoPKeyVerifyFailed,
+    #[error("Verification initialization failed.")]
+    ErrCryptoPKeyVerifyInitFailed,
+    #[error("Signing failed.")]
+    ErrCryptoPKeySignFailed,
+    #[error("Signing initialization failed.")]
+    ErrCryptoPKeySignInitFailed,
+    #[error("Invalid RSA key size.")]
+    ErrCryptoPKeyInvalidRSASize,
+    #[error("Public key operation not supported.")]
+    ErrCryptoPKeyOPNotSupported,
     #[error("Cipher operation update failed.")]
     ErrCryptoCipherUpdateFailed,
     #[error("Cipher operation finalization failed.")]

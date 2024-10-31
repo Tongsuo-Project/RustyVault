@@ -1,10 +1,21 @@
 //! This is the OpenSSL adaptor.
 
 use crate::errors::RvError;
-use crate::modules::crypto::{AEADCipher, AESKeySize, BlockCipher, CipherMode, AES};
+use crate::modules::crypto::{
+    AEADCipher, AESKeySize, BlockCipher,
+    CipherMode, AES,
+    RSA, RSAKeySize,
+    PublicKey, PublicKeyType,
+    Signature, Encryption
+};
 use openssl::symm::{Cipher, Crypter, Mode, encrypt, encrypt_aead, decrypt, decrypt_aead};
 use openssl::rand::rand_priv_bytes;
+use openssl::rsa::{Rsa, Padding};
+use openssl::pkey::{PKey, Private};
+use openssl::pkey_ctx::PkeyCtx;
 use crate::modules::crypto::crypto_adaptors::common;
+
+use zeroize::{Zeroize, Zeroizing};
 
 pub struct AdaptorCTX {
     ctx: Crypter,
@@ -79,5 +90,157 @@ impl AEADCipher for AES {
     }
     fn set_tag(&mut self, tag: Vec<u8>) -> Result<(), RvError> {
         common_aes_set_tag!(self, tag);
+    }
+}
+
+pub struct AdaptorPKeyCTX {
+    // The private key in OpenSSL context contains also the public key
+    private_key: PKey<Private>,
+}
+
+// Simply do nothing since OpenSSL will safely clean the memory of a PKEY object (Drop trait)
+impl Zeroize for AdaptorPKeyCTX {
+    fn zeroize(&mut self) {}
+}
+
+impl RSA {
+    /// This function is the constructor of the RSA struct, it returns a new RSA object on success.
+    ///
+    /// size: RSA key size. Valid options are RSA2048 (default), RSA3072, RSA4096, RSA8192.
+    /// prime: for multi-prime RSA usage (RFC 8017), default is 2.
+    pub fn new(
+        prime: Option<u8>,
+        size: Option<RSAKeySize>,
+    ) -> Result<Self, RvError> {
+        return Ok(
+            RSA {
+                key_type: PublicKeyType::RSA,
+                prime: prime.unwrap_or(2),
+                size: size.unwrap_or(RSAKeySize::RSA2048),
+                ctx: None,
+            }
+        );
+    }
+}
+
+impl PublicKey for RSA {
+    fn keygen(&mut self) -> Result<(), RvError> {
+        let bits: u32;
+        match &self.size {
+            RSAKeySize::RSA2048 =>  bits = 2048,
+            RSAKeySize::RSA3072 =>  bits = 3072,
+            RSAKeySize::RSA4096 =>  bits = 4096,
+            RSAKeySize::RSA8192 =>  bits = 8192,
+        }
+
+        let rsa = match Rsa::generate(bits) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyRSAKeyGenFailed),
+        };
+
+        let pkey = match PKey::from_rsa(rsa) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyRSAKeyGenFailed),
+        };
+
+        let adaptor_ctx = AdaptorPKeyCTX { private_key: pkey };
+        self.ctx = Some(adaptor_ctx);
+
+        return Ok(());
+    }
+
+    fn get_key_type(&self) -> Result<&PublicKeyType, RvError> {
+        return Ok(&self.key_type);
+    }
+}
+
+impl Signature for RSA {
+    fn sign(&self, data: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.sign_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignInitFailed),
+        }
+
+        let mut signature: Vec<u8> = Vec::new();
+        match ctx.sign_to_vec(data, &mut signature) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignFailed),
+        }
+
+        return Ok(signature);
+    }
+
+    fn verify(&self, data: &Vec<u8>, sig: &Vec<u8>) -> Result<bool, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.verify_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyInitFailed),
+        }
+
+        let valid = match ctx.verify(data, sig) {
+            Ok(ret) => ret,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyFailed),
+        };
+
+        return Ok(valid);
+    }
+}
+
+impl Encryption for RSA {
+    fn encrypt(&self, plaintext: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.encrypt_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyEncInitFailed),
+        }
+
+        let mut ciphertext: Vec<u8> = Vec::new();
+        match ctx.encrypt_to_vec(plaintext, &mut ciphertext) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyEncFailed),
+        }
+
+        return Ok(ciphertext);
+    }
+
+    fn decrypt(&self, ciphertext: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.decrypt_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyDecInitFailed),
+        }
+
+        let mut plaintext: Vec<u8> = Vec::new();
+        match ctx.decrypt_to_vec(ciphertext, &mut plaintext) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyDecFailed),
+        }
+
+        return Ok(plaintext);
     }
 }
