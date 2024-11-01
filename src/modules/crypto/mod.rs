@@ -84,6 +84,7 @@ pub enum AESKeySize {
 pub enum PublicKeyType {
     RSA,
     ECDSA,
+    EdDSA,
     SM2,
 }
 
@@ -93,6 +94,11 @@ pub enum RSAKeySize {
     RSA3072,
     RSA4096,
     RSA8192,
+}
+
+/// This enum defines various EC curve names
+pub enum ECCurveName {
+    prime256v1,
 }
 
 // All structs are defined here. Every struct represents a type of cryptography algorithm.
@@ -129,6 +135,16 @@ pub struct RSA {
     key_type: PublicKeyType,
     size: RSAKeySize,
     prime: u8,
+    ctx: Option<AdaptorPKeyCTX>,
+}
+
+/// The EC public key structure
+#[allow(dead_code)]
+#[derive(Zeroize)]
+#[zeroize(drop)]
+pub struct ECDSA {
+    key_type: PublicKeyType,
+    curve: ECCurveName,
     ctx: Option<AdaptorPKeyCTX>,
 }
 
@@ -433,6 +449,10 @@ impl Zeroize for RSAKeySize {
     fn zeroize(&mut self) {}
 }
 
+impl Zeroize for ECCurveName {
+    fn zeroize(&mut self) {}
+}
+
 #[cfg(test)]
 mod crypto_test {
     use crate::modules::crypto::{
@@ -440,7 +460,8 @@ mod crypto_test {
         CipherMode, AES,
         RSA, RSAKeySize,
         PublicKey, PublicKeyType,
-        Signature, Encryption
+        Signature, Encryption,
+        ECDSA, ECCurveName
     };
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     use crate::modules::crypto::SM4;
@@ -782,6 +803,16 @@ mod crypto_test {
         let ct = rsa.encrypt(&data).unwrap();
         let pt = rsa.decrypt(&ct).unwrap();
         assert_eq!(data, pt);
+    }
+
+    #[test]
+    fn test_ecdsa_sign_verify() {
+        let mut ecdsa = ECDSA::new(None).unwrap();
+        ecdsa.keygen().unwrap();
+        let data = b"The best way to not feel hopeless is to get up and do something.".to_vec();
+        let sig = ecdsa.sign(&data).unwrap();
+        let valid = ecdsa.verify(&data, &sig).unwrap();
+        assert_eq!(valid, true);
     }
 
     #[cfg(feature = "crypto_adaptor_tongsuo")]

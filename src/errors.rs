@@ -13,6 +13,8 @@ use actix_web::http::StatusCode;
 
 #[derive(Error, Debug)]
 pub enum RvError {
+    #[error("EC key generation failed.")]
+    ErrCryptoPKeyECKeyGenFailed,
     #[error("RSA key generation failed.")]
     ErrCryptoPKeyRSAKeyGenFailed,
     #[error("Public key encryption failed.")]

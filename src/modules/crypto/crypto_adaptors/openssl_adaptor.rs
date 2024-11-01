@@ -6,7 +6,8 @@ use crate::modules::crypto::{
     CipherMode, AES,
     RSA, RSAKeySize,
     PublicKey, PublicKeyType,
-    Signature, Encryption
+    Signature, Encryption,
+    ECDSA, ECCurveName
 };
 use openssl::symm::{Cipher, Crypter, Mode, encrypt, encrypt_aead, decrypt, decrypt_aead};
 use openssl::rand::rand_priv_bytes;
@@ -14,6 +15,8 @@ use openssl::rsa::{Rsa, Padding};
 use openssl::pkey::{PKey, Private};
 use openssl::pkey_ctx::PkeyCtx;
 use crate::modules::crypto::crypto_adaptors::common;
+use openssl::nid::Nid;
+use openssl::ec::{EcGroup, EcKey};
 
 use zeroize::{Zeroize, Zeroizing};
 
@@ -242,5 +245,98 @@ impl Encryption for RSA {
         }
 
         return Ok(plaintext);
+    }
+}
+
+impl ECDSA {
+    /// This function is the constructor of the ECDSA struct, it returns a new ECDSA object
+    /// on success.
+    ///
+    /// curve: RSA key size. Valid options are RSA2048 (default), RSA3072, RSA4096, RSA8192.
+    /// prime: for multi-prime RSA usage (RFC 8017), default is 2.
+    pub fn new(
+        curve: Option<ECCurveName>,
+    ) -> Result<Self, RvError> {
+        return Ok(
+            ECDSA {
+                key_type: PublicKeyType::ECDSA,
+                curve: curve.unwrap_or(ECCurveName::prime256v1),
+                ctx: None,
+            }
+        );
+    }
+}
+
+impl PublicKey for ECDSA {
+    fn keygen(&mut self) -> Result<(), RvError> {
+        let nid: Nid;
+        match &self.curve {
+            ECCurveName::prime256v1 => nid = Nid::X9_62_PRIME256V1,
+        }
+
+        let group = EcGroup::from_curve_name(nid)?;
+        let ec = match EcKey::generate(&group) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyECKeyGenFailed),
+        };
+
+        let pkey = match PKey::from_ec_key(ec) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyECKeyGenFailed),
+        };
+
+        let adaptor_ctx = AdaptorPKeyCTX { private_key: pkey };
+        self.ctx = Some(adaptor_ctx);
+
+        return Ok(());
+    }
+
+    fn get_key_type(&self) -> Result<&PublicKeyType, RvError> {
+        return Ok(&self.key_type);
+    }
+}
+
+impl Signature for ECDSA {
+    fn sign(&self, data: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.sign_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignInitFailed),
+        }
+
+        let mut signature: Vec<u8> = Vec::new();
+        match ctx.sign_to_vec(data, &mut signature) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignFailed),
+        }
+
+        return Ok(signature);
+    }
+
+    fn verify(&self, data: &Vec<u8>, sig: &Vec<u8>) -> Result<bool, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.verify_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyInitFailed),
+        }
+
+        let valid = match ctx.verify(data, sig) {
+            Ok(ret) => ret,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyFailed),
+        };
+
+        return Ok(valid);
     }
 }
