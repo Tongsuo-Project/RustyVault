@@ -23,6 +23,7 @@ serde = { version = "^1.0", features = ["derive", "rc", "alloc"] }
 serde_derive = "^1.0"
 serde_json = "^1.0"
 serde_bytes = "0.11"
+serde_yaml = "0.9"
 go-defer = "^0.1"
 rand = "^0.8"
 derivative = "2.2.0"
@@ -32,7 +33,7 @@ strum_macros = "0.25"
 radix_trie = "0.2.1"
 lazy_static = "1.4.0"
 regex = "1.9.5"
-clap = { version = "4.4", features = ["wrap_help", "suggestions"] }
+clap = { version = "4.5", features = ["wrap_help", "derive", "env", "suggestions"] }
 sysexits = { version = "0.7", features = ["std"] }
 build-time = "0.1"
 hcl-rs = "0.16"
@@ -54,8 +55,9 @@ r2d2-diesel = { version = "1.0.0", optional = true }
 bcrypt = "0.15"
 url = "2.5"
 ureq = { version = "2.10", features = ["json"] }
-rustls = "0.23"
+rustls = { version = "0.23.16" }
 rustls-pemfile = "2.1"
+webpki-roots = { version = "0.26", default-features = true }
 glob = "0.3"
 base64 = "0.22"
 ipnetwork = "0.20"
