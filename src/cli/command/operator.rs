@@ -15,7 +15,19 @@ use crate::{EXIT_CODE_INSUFFICIENT_PARAMS};
     version,
     about = "Perform operator-specific tasks",
     long_about = r#"This command groups subcommands for operators interacting with RustyVault.
-Most users will not need to interact with these commands."#
+Most users will not need to interact with these commands.
+
+Initialize a new RustyVault server:
+
+  $ rvault operator init
+
+Unseals the RustyVault server:
+
+  $ rvault operator unseal
+
+Seals the RustyVault server:
+
+  $ rvault operator seal"#
 )]
 pub struct Operator {
     #[command(subcommand)]
