@@ -317,6 +317,8 @@ pub enum RvError {
     ErrResponse(String),
     #[error("Some error happend, status: {0}, response text: {1}")]
     ErrResponseStatus(u16, String),
+    #[error("{0}")]
+    ErrString(String),
     #[error("Unknown error.")]
     ErrUnknown,
 }
@@ -325,6 +327,12 @@ impl RvError {
     pub fn response_status(&self) -> StatusCode {
         match self {
             RvError::ErrRequestNoData
+                | RvError::ErrBarrierAlreadyInit
+                | RvError::ErrBarrierKeyInvalid
+                | RvError::ErrBarrierNotInit
+                | RvError::ErrBarrierSealed
+                | RvError::ErrBarrierUnsealed
+                | RvError::ErrBarrierUnsealFailed
                 | RvError::ErrRequestNoDataField
                 | RvError::ErrRequestInvalid
                 | RvError::ErrRequestClientTokenMissing
@@ -447,6 +455,13 @@ impl From<rustls::pki_types::pem::Error> for RvError {
     fn from(err: rustls::pki_types::pem::Error) -> Self {
         RvError::RustlsPkiTypesPemFileError(err)
     }
+}
+
+#[macro_export]
+macro_rules! rv_error_string {
+    ($message:expr) => {
+        RvError::ErrString($message.to_string())
+    };
 }
 
 #[macro_export]

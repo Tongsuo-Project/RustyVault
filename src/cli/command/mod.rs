@@ -2,24 +2,12 @@
 //! For instance, we have a 'server' command to indicate the application running in the server mode
 //! and starts to accept HTTP request to do real RustyVault functionality.
 
-use std::{
-    fs,
-    path::PathBuf,
-    io::BufReader,
-    sync::Arc,
-    time::Duration,
-};
+use std::path::PathBuf;
 
-use serde_json::{json, Map, Value, to_string_pretty};
+use serde_json::{Map, Value, to_string_pretty};
 use serde_yaml::to_string;
 use clap::{Args, ArgAction, ValueEnum, ValueHint};
-use ureq::AgentBuilder;
 use regex::Regex;
-use rustls::{
-    pki_types::{PrivateKeyDer, pem::PemObject},
-    ALL_VERSIONS, ClientConfig, RootCertStore,
-};
-use webpki_roots::TLS_SERVER_ROOTS;
 use tabled::{
     Table, Tabled,
     settings::{Alignment, Padding, Style, Width, Border, object::Rows},
@@ -27,7 +15,7 @@ use tabled::{
 
 use crate::{
     errors::RvError,
-    utils::cert::DisabledVerifier,
+    api::{Client, client::TLSConfigBuilder},
 };
 
 pub mod server;
@@ -217,121 +205,37 @@ impl HttpOptions {
         Ok(())
     }
 
-    pub fn request(
-        &self,
-        method: &str,
-        path: &str,
-        data: Option<Map<String, Value>>
-    ) -> Result<(u16, Value), RvError> {
-        let url = if path.starts_with("/") {
-            format!("{}{}", self.address, path)
-        } else {
-            format!("{}/{}", self.address, path)
-        };
-        log::debug!("request url: {}, method: {}", url, method);
-        let mut req = if url.starts_with("https") {
-            let provider = rustls::crypto::CryptoProvider::get_default()
-                .cloned()
-                .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
+    pub fn client(&self) -> Result<Client, RvError> {
+        let mut client = Client::new()
+            .with_addr(&self.address)
+            .with_token(&self.token);
 
-            let builder = ClientConfig::builder_with_provider(provider.clone())
-                .with_protocol_versions(ALL_VERSIONS)
-                .expect("all TLS versions");
+        if self.address.starts_with("https://") {
+            let mut tls_config_builder = TLSConfigBuilder::new()
+                .with_insecure(self.tls_skip_verify);
 
-            let builder = if self.tls_skip_verify {
-                log::debug!("Certificate verification disabled");
-                builder
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(DisabledVerifier))
-            } else {
-                if let Some(ca_cert) = &self.ca_cert {
-                    let cert_data = fs::read(ca_cert)?;
-                    let mut cert_reader = BufReader::new(&cert_data[..]);
-                    let root_certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
+            if let Some(ca_cert) = &self.ca_cert {
+                tls_config_builder = tls_config_builder.with_server_ca_path(ca_cert)?;
+            }
 
-                    let mut root_store = RootCertStore::empty();
-                    let (added, ignored) = root_store.add_parsable_certificates(root_certs);
-                    log::debug!("Added {} and ignored {} root certs", added, ignored);
-                    builder.with_root_certificates(root_store)
-                } else {
-                    let root_store = RootCertStore {
-                        roots: TLS_SERVER_ROOTS.to_vec(),
-                    };
-                    builder.with_root_certificates(root_store)
-                }
-            };
+            if let (Some(client_cert), Some(client_key)) = (&self.client_cert, &self.client_key) {
+                tls_config_builder = tls_config_builder.with_client_cert_path(client_cert, client_key)?;
+            }
 
-            // Create rustls ClientConfig
-            let tls_config = if let (Some(client_cert), Some(client_key)) = (&self.client_cert, &self.client_key) {
-                let cert_data = fs::read(client_cert)?;
-                let mut cert_reader = BufReader::new(&cert_data[..]);
-                let client_certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
-                let client_key = PrivateKeyDer::from_pem_file(&client_key)?;
+            let tls_config = tls_config_builder.build()?;
 
-                builder.with_client_auth_cert(client_certs, client_key)?
-            } else {
-                builder.with_no_client_auth()
-            };
+            client = client.with_tls_config(tls_config);
 
-            let agent = AgentBuilder::new()
-                .timeout_connect(Duration::from_secs(10))
-                .timeout(Duration::from_secs(30))
-                .tls_config(Arc::new(tls_config))
-                .build();
-            agent.request(&method.to_uppercase(), &url)
-        } else {
-            ureq::request(&method.to_uppercase(), &url)
-        };
-
-        req = req.set("Accept", "application/json");
-        if !path.ends_with("/login") {
-            req = req.set("X-RustyVault-Token", &self.token);
         }
 
-        let response_result = if let Some(send_data) = data { req.send_json(send_data) } else { req.call() };
-
-        match response_result {
-            Ok(response) => {
-                let status = response.status();
-                if status == 204 {
-                    return Ok((status, json!("")));
-                }
-                let json: Value = response.into_json()?;
-                return Ok((status, json));
-            }
-            Err(ureq::Error::Status(code, response)) => {
-                let json: Value = response.into_json()?;
-                return Ok((code, json));
-            }
-            Err(e) => {
-                log::error!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
-            }
-        }
-    }
-
-    pub fn request_list(&self, path: &str) -> Result<(u16, Value), RvError> {
-        self.request("LIST", path, None)
-    }
-
-    pub fn request_read(&self, path: &str) -> Result<(u16, Value), RvError> {
-        self.request("GET", path, None)
-    }
-
-    pub fn request_write(&self, path: &str, data: Option<Map<String, Value>>,
-    ) -> Result<(u16, Value), RvError> {
-        self.request("POST", path, data)
-    }
-
-    pub fn request_delete(&self, path: &str, data: Option<Map<String, Value>>) -> Result<(u16, Value), RvError> {
-        self.request("DELETE", path, data)
+        Ok(client.build())
     }
 }
 
 fn convert_keys(value: &Value) -> Value {
     match value {
         Value::Object(map) => {
-            let mut new_map = serde_json::Map::new();
+            let mut new_map = Map::new();
             for (key, value) in map {
                 let new_key = Regex::new(r"_(\w)")
                    .unwrap()
