@@ -212,10 +212,9 @@ impl Client {
             }
             Err(ureq::Error::Status(status, response)) => {
                 ret.response_status = status;
-                if status == 404 {
-                    return Ok(ret.clone());
+                if let Ok(response_data) = response.into_json() {
+                    ret.response_data = Some(response_data);
                 }
-                ret.response_data = Some(response.into_json()?);
                 return Ok(ret.clone());
             }
             Err(e) => {

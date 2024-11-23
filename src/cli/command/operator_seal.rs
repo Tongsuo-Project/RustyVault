@@ -2,7 +2,12 @@ use clap::Parser;
 use derive_more::Deref;
 use sysexits::ExitCode;
 
-use crate::{errors::RvError, cli::command, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_OK};
+use crate::{
+    errors::RvError,
+    cli::command::{self, CommandExecutor},
+    EXIT_CODE_INSUFFICIENT_PARAMS,
+    EXIT_CODE_OK,
+};
 
 #[derive(Parser, Deref)]
 #[command(author, version, about = r#"Seals the RustyVault server. Sealing tells the RustyVault server to stop responding
@@ -24,9 +29,9 @@ pub struct Seal {
     http_options: command::HttpOptions,
 }
 
-impl Seal {
+impl CommandExecutor for Seal {
     #[inline]
-    pub fn execute(&self) -> ExitCode {
+    fn execute(&mut self) -> ExitCode {
         match self.main() {
             Ok(_) => EXIT_CODE_OK,
             Err(e) => {
@@ -36,7 +41,8 @@ impl Seal {
         }
     }
 
-    pub fn main(&self) -> Result<(), RvError> {
+    #[inline]
+    fn main(&self) -> Result<(), RvError> {
         let client = self.client()?;
         let sys = client.sys();
 

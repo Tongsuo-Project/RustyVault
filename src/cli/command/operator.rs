@@ -7,7 +7,7 @@ use super::{
     operator_unseal,
 };
 
-use crate::{EXIT_CODE_INSUFFICIENT_PARAMS};
+use crate::{EXIT_CODE_INSUFFICIENT_PARAMS, cli::command::CommandExecutor};
 
 #[derive(Parser)]
 #[command(
@@ -42,7 +42,7 @@ pub enum Commands {
 }
 
 impl Commands {
-    pub fn execute(&self) -> ExitCode {
+    pub fn execute(&mut self) -> ExitCode {
         return match self {
             Commands::Init(init) => init.execute(),
             Commands::Seal(seal) => seal.execute(),
@@ -54,7 +54,7 @@ impl Commands {
 impl Operator {
     #[inline]
     pub fn execute(&mut self) -> ExitCode {
-        if let Some(ref cmd) = &self.command {
+        if let Some(ref mut cmd) = &mut self.command {
             return cmd.execute();
         }
 

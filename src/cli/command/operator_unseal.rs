@@ -5,7 +5,12 @@ use clap::Parser;
 use derive_more::Deref;
 use sysexits::ExitCode;
 
-use crate::{errors::RvError, cli::command, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_OK};
+use crate::{
+    errors::RvError,
+    cli::command::{self, CommandExecutor},
+    EXIT_CODE_INSUFFICIENT_PARAMS,
+    EXIT_CODE_OK,
+};
 
 #[derive(Parser, Deref)]
 #[command(author, version, about = r#"Provide a portion of the root key to unseal a RustyVault server.
@@ -37,9 +42,9 @@ pub struct Unseal {
     output: command::OutputOptions,
 }
 
-impl Unseal {
+impl CommandExecutor for Unseal {
     #[inline]
-    pub fn execute(&self) -> ExitCode {
+    fn execute(&mut self) -> ExitCode {
         match self.main() {
             Ok(_) => EXIT_CODE_OK,
             Err(e) => {
@@ -49,7 +54,7 @@ impl Unseal {
         }
     }
 
-    pub fn main(&self) -> Result<(), RvError> {
+    fn main(&self) -> Result<(), RvError> {
         let client = self.client()?;
         let sys = client.sys();
 
@@ -68,7 +73,7 @@ impl Unseal {
         match sys.unseal(&key) {
             Ok(ret) => {
                 if ret.response_status == 200 {
-                    self.output.print_value(ret.response_data.as_ref().unwrap())?;
+                    self.output.print_value(ret.response_data.as_ref().unwrap(), true)?;
                 } else if ret.response_status == 204 {
                     println!("ok");
                 } else {

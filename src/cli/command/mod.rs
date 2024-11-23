@@ -4,16 +4,17 @@
 
 use std::path::PathBuf;
 
+use sysexits::ExitCode;
 use serde_json::{Map, Value, to_string_pretty};
-use serde_yaml::to_string;
 use clap::{Args, ArgAction, ValueEnum, ValueHint};
 use regex::Regex;
 use tabled::{
     Table, Tabled,
-    settings::{Alignment, Padding, Style, Width, Border, object::Rows},
+    settings::{Alignment, Padding, Style, Width},
 };
 
 use crate::{
+    EXIT_CODE_OK,
     errors::RvError,
     api::{Client, client::TLSConfigBuilder},
 };
@@ -24,6 +25,10 @@ pub mod operator;
 pub mod operator_init;
 pub mod operator_seal;
 pub mod operator_unseal;
+pub mod read;
+pub mod write;
+pub mod list;
+pub mod delete;
 
 #[derive(Args, Default)]
 #[group(required = false, multiple = true)]
@@ -119,6 +124,7 @@ is forbidden and will make the command fail. This can be specified multiple time
     header: Vec<String>,
 
     #[clap(
+        long,
         hide = true,
         required = false,
         env = "VAULT_TOKEN",
@@ -232,7 +238,7 @@ impl HttpOptions {
     }
 }
 
-fn convert_keys(value: &Value) -> Value {
+pub fn convert_keys(value: &Value) -> Value {
     match value {
         Value::Object(map) => {
             let mut new_map = Map::new();
@@ -266,23 +272,33 @@ fn convert_keys(value: &Value) -> Value {
 
 #[allow(non_snake_case)]
 #[derive(Tabled)]
-struct TableRow {
+struct KeyValueRow {
     Key: String,
     Value: String,
 }
 
+#[allow(non_snake_case)]
+#[derive(Tabled)]
+struct KeysRow {
+    Keys: String,
+}
+
 impl OutputOptions {
-    pub fn print_value(&self, value: &Value) -> Result<(), RvError> {
+    pub fn print_value(&self, value: &Value, title_casing: bool) -> Result<(), RvError> {
         match self.format {
             Format::Json => {
                 println!("{}", to_string_pretty(value)?);
             }
             Format::Yaml => {
-                println!("{}", to_string(value)?);
+                println!("{}", serde_yaml::to_string(value)?);
             }
             Format::Table => {
-                let data = convert_keys(value);
-                let mut table = json_to_table::json_to_table(&data);
+                let data = if title_casing {
+                    &convert_keys(value)
+                } else {
+                   value
+                };
+                let mut table = json_to_table::json_to_table(data);
                 table
                     .with(Padding::new(0, 4, 0, 0))
                     .with(Alignment::left());
@@ -294,18 +310,29 @@ impl OutputOptions {
 
                 let columns: Vec<&str> = lines[0].split('+').filter(|s|!s.is_empty()).collect();
                 let col_count = columns.len();
+                let mut padding_right = 4;
                 let mut col_widths = vec![0; col_count];
 
                 for (i, col) in columns.iter().enumerate() {
                     col_widths[i] = col.trim().len();
                 }
 
-                let rows: Vec<TableRow> = Vec::new();
+                if col_widths[0] < 7 {
+                    padding_right = col_widths[0] - 3;
+                }
+
+                if col_widths[1] < 9 {
+                    col_widths[1] = 9;
+                }
+
+                let rows: Vec<KeyValueRow> = vec![KeyValueRow {
+                    Key: "---".into(),
+                    Value: "-----".into(),
+                }];
                 let header = Table::new(rows)
-                    .with(Padding::new(0, 4, 0, 0))
+                    .with(Padding::new(0, padding_right, 0, 0))
                     .with(Alignment::left())
                     .with(Style::blank())
-                    .modify(Rows::single(0), Border::new().set_bottom('-'))
                     .with(Width::list(col_widths))
                     .to_string();
 
@@ -321,4 +348,114 @@ impl OutputOptions {
 
         Ok(())
     }
+
+    pub fn print_keys(&self, value: &Value) -> Result<(), RvError> {
+        if !value.is_array() {
+            return Err(RvError::ErrRequestNoData);
+        }
+
+        match self.format {
+            Format::Json => {
+                println!("{}", to_string_pretty(value)?);
+            }
+            Format::Yaml => {
+                println!("{}", serde_yaml::to_string(value)?);
+            }
+            Format::Table => {
+                let mut table = json_to_table::json_to_table(value);
+                table
+                    .with(Padding::new(0, 4, 0, 0))
+                    .with(Alignment::left());
+
+                let rendered_table = table
+                    .with(Style::ascii()).to_string();
+
+                let lines: Vec<&str> = rendered_table.lines().collect();
+                if lines.is_empty() {
+                    //TODO
+                    return Ok(());
+                }
+
+                let columns: Vec<&str> = lines[0].split('+').filter(|s|!s.is_empty()).collect();
+                let col_count = columns.len();
+                let mut col_widths = vec![0; col_count];
+
+                for (i, col) in columns.iter().enumerate() {
+                    col_widths[i] = col.trim().len();
+                }
+
+                let rows: Vec<KeysRow> = vec![KeysRow {
+                    Keys: "---".into(),
+                }];
+                let header = Table::new(rows)
+                    .with(Padding::new(0, 4, 0, 0))
+                    .with(Alignment::left())
+                    .with(Style::blank())
+                    .with(Width::list(col_widths))
+                    .to_string();
+
+                println!("{}", header);
+
+                let body = table.with(Style::blank()).to_string();
+                println!("{}", body);
+            }
+            Format::Raw => {
+                println!("{}", serde_json::to_string(value)?);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn print_secrets(&self, value: &Value, field: Option<&str>) -> Result<(), RvError> {
+        let data = value["data"].as_object().unwrap().clone();
+        if let Some(key) = field {
+            if let Some(item) =  data.get(key) {
+                if !item.is_string() {
+                    println!(r#"Field "{key}" not present in secret"#);
+                    return Ok(());
+                }
+                let secret = item.as_str().unwrap();
+                match self.format {
+                    Format::Json => {
+                        println!("{}", to_string_pretty(&Value::String(secret.to_string()))?);
+                    }
+                    Format::Yaml => {
+                        print!("{}", serde_yaml::to_string(&Value::String(secret.to_string()))?);
+                    }
+                    Format::Table => {
+                        print!("{}", serde_yaml::to_string(&Value::String(secret.to_string()))?);
+                    }
+                    Format::Raw => {
+                        println!("{}", serde_json::to_string(value)?);
+                    }
+                }
+            } else {
+                println!(r#"Field "{key}" not present in secret"#);
+                return Ok(());
+            }
+        } else {
+            self.print_value(&Value::Object(data), false)?;
+        }
+
+        Ok(())
+    }
+}
+
+pub trait CommandExecutor {
+    #[inline]
+    fn execute(&mut self) -> ExitCode {
+        match self.main() {
+            Ok(_) => EXIT_CODE_OK,
+            Err(RvError::ErrRequestNoData) => {
+                std::process::exit(2);
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    fn main(&self) -> Result<(), RvError>;
 }

@@ -4,7 +4,7 @@
 use clap::{Parser, Subcommand};
 use sysexits::ExitCode;
 
-use crate::{VERSION, EXIT_CODE_INSUFFICIENT_PARAMS};
+use crate::{VERSION, EXIT_CODE_INSUFFICIENT_PARAMS, cli::command::CommandExecutor};
 
 pub mod command;
 pub mod config;
@@ -24,6 +24,10 @@ pub enum Commands {
     Server(command::server::Server),
     Status(command::status::Status),
     Operator(command::operator::Operator),
+    Read(command::read::Read),
+    Write(command::write::Write),
+    Delete(command::delete::Delete),
+    List(command::list::List),
 }
 
 impl Commands {
@@ -32,6 +36,10 @@ impl Commands {
             Commands::Server(server) => server.execute(),
             Commands::Status(status) => status.execute(),
             Commands::Operator(operator) => operator.execute(),
+            Commands::Read(read) => read.execute(),
+            Commands::Write(write) => write.execute(),
+            Commands::Delete(delete) => delete.execute(),
+            Commands::List(list) => list.execute(),
         }
     }
 }
