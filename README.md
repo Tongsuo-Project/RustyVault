@@ -1,5 +1,7 @@
 # RustyVault
 
+![RustVault logo](docs/static/img/RV-logo-gold.png)
+
 [![Crates.io Version](https://img.shields.io/crates/v/rusty_vault)](https://crates.io/crates/rusty_vault)
 
 ## Overview
