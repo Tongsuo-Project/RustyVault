@@ -24,7 +24,7 @@ module.exports = {
   baseUrl: '/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'throw',
-  favicon: 'img/rustyvault.svg',
+  favicon: 'img/RV-logo-gold.png',
   organizationName: 'Tongsuo-Project',
   projectName: 'RustyVault',
   trailingSlash: true,
@@ -44,10 +44,10 @@ module.exports = {
     ],
     navbar: {
       title: 'RustyVault',
-      logo: {
-        alt: 'RustyVault Logo',
-        src: 'img/rustyvault.png',
-      },
+      // logo: {
+      //   alt: 'RustyVault Logo',
+      //   src: 'img/RV-logo-gold.png',
+      // },
       items: [
         {
           type: 'docSidebar',

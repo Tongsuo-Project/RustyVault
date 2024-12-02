@@ -20,7 +20,7 @@ function HomepageHeader() {
       <img 
           className={styles.homepageBanner} 
           width="90%" 
-          src={colorMode == "light" ? require('@site/static/img/RustyVault-Light.gif').default : require('@site/static/img/RustyVault-Dark.gif').default}
+          src={colorMode == "light" ? require('@site/static/img/RustyVault-home.gif').default : require('@site/static/img/RustyVault-home-Dark.gif').default}
       />
         {/* <h2 className="hero__subtitle">{siteConfig.tagline}</h2> */}
         <br/><a href="https://github.com/Tongsuo-Project/RustyVault" target="_blank"><img src="https://img.shields.io/github/stars/Tongsuo-Project/RustyVault.svg?style=social&label=Star"/></a>
@@ -32,7 +32,7 @@ function HomepageHeader() {
             className="button button--primary button--lg"
             to="/docs/quick-start/">
             <Translate description="The Getting Started button">
-            🚀 Getting Started
+            🔑 Getting Started
             </Translate>
           </Link>
         </div>
