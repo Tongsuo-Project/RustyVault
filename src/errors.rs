@@ -174,10 +174,15 @@ pub enum RvError {
         #[from]
         source: io::Error,
     },
-    #[error("Some serde error happened, {:?}", .source)]
-    Serde {
+    #[error("Some serde_json error happened, {:?}", .source)]
+    SerdeJson {
         #[from]
         source: serde_json::Error,
+    },
+    #[error("Some serde_yaml error happened, {:?}", .source)]
+    SerdeYaml {
+        #[from]
+        source: serde_yaml::Error,
     },
     #[error("Some openssl error happened, {:?}", .source)]
     OpenSSL {
@@ -276,6 +281,9 @@ pub enum RvError {
     #[error("Some rustls_pemfile error happened")]
     RustlsPemFileError(rustls_pemfile::Error),
 
+    #[error("Some rustls_pki_types error happened")]
+    RustlsPkiTypesPemFileError(rustls::pki_types::pem::Error),
+
     #[error("Some string utf8 error happened, {:?}", .source)]
     StringUtf8Error {
         #[from]
@@ -309,6 +317,8 @@ pub enum RvError {
     ErrResponse(String),
     #[error("Some error happend, status: {0}, response text: {1}")]
     ErrResponseStatus(u16, String),
+    #[error("{0}")]
+    ErrString(String),
     #[error("Unknown error.")]
     ErrUnknown,
 }
@@ -317,12 +327,19 @@ impl RvError {
     pub fn response_status(&self) -> StatusCode {
         match self {
             RvError::ErrRequestNoData
+                | RvError::ErrBarrierAlreadyInit
+                | RvError::ErrBarrierKeyInvalid
+                | RvError::ErrBarrierNotInit
+                | RvError::ErrBarrierSealed
+                | RvError::ErrBarrierUnsealed
+                | RvError::ErrBarrierUnsealFailed
                 | RvError::ErrRequestNoDataField
                 | RvError::ErrRequestInvalid
                 | RvError::ErrRequestClientTokenMissing
                 | RvError::ErrRequestFieldNotFound
                 | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
             RvError::ErrPermissionDenied => StatusCode::FORBIDDEN,
+            RvError::ErrRouterMountNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -433,6 +450,19 @@ impl From<rustls_pemfile::Error> for RvError {
     fn from(err: rustls_pemfile::Error) -> Self {
         RvError::RustlsPemFileError(err)
     }
+}
+
+impl From<rustls::pki_types::pem::Error> for RvError {
+    fn from(err: rustls::pki_types::pem::Error) -> Self {
+        RvError::RustlsPkiTypesPemFileError(err)
+    }
+}
+
+#[macro_export]
+macro_rules! rv_error_string {
+    ($message:expr) => {
+        RvError::ErrString($message.to_string())
+    };
 }
 
 #[macro_export]

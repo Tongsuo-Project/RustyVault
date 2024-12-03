@@ -272,7 +272,7 @@ impl CertBackendInner {
                 Ok(crl_info) => crl_info,
                 Err(err) => {
                     self.crls.clear();
-                    return Err(RvError::Serde { source: err });
+                    return Err(RvError::SerdeJson { source: err });
                 }
             };
 

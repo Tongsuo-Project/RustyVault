@@ -7,10 +7,20 @@ use crate::{errors::RvError, cli::command::{self, CommandExecutor}};
 #[command(
     author,
     version,
-    about = r#"Prints the current state of RustyVault including whether it is sealed and if HA
-mode is enabled. This command prints regardless of whether the Vault is sealed."#
+    about = r#"Deletes secrets and configuration from RustyVault at the given path. The behavior
+of "delete" is delegated to the backend corresponding to the given path.
+
+Remove data in the status secret backend:
+
+  $ vault delete secret/my-secret"#
 )]
-pub struct Status {
+pub struct Delete {
+    #[arg(
+        next_line_help = false,
+        value_name = "PATH",
+    )]
+    path: String,
+
     #[deref]
     #[command(flatten, next_help_heading = "HTTP Options")]
     http_options: command::HttpOptions,
@@ -19,19 +29,15 @@ pub struct Status {
     output: command::OutputOptions,
 }
 
-impl CommandExecutor for Status {
+impl CommandExecutor for Delete {
     #[inline]
     fn main(&self) -> Result<(), RvError> {
         let client = self.client()?;
-        let sys = client.sys();
+        let logical = client.logical();
 
-        match sys.seal_status() {
+        match logical.delete(&self.path, None) {
             Ok(ret) => {
-                if ret.response_status == 200 {
-                    self.output.print_value(ret.response_data.as_ref().unwrap(), true)?;
-                } else if ret.response_status == 204 {
-                    println!("ok");
-                } else {
+                if ret.response_status != 200 || ret.response_status != 204{
                     ret.print_debug_info();
                 }
             }
