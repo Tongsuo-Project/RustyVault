@@ -4,13 +4,15 @@ on:
   push:
     branches: [ "main" ]
     paths-ignore:
-      - "docs/**/*"
+      - "docs/**"
       - ".github/workflows/website.yml"
+      - ".github/workflows/deploy-website.yml"
   pull_request:
     branches: [ "main" ]
     paths-ignore:
-      - "docs/**/*"
+      - "docs/**"
       - ".github/workflows/website.yml"
+      - ".github/workflows/deploy-website.yml"
 
 env:
   CARGO_TERM_COLOR: always

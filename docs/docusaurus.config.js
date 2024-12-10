@@ -124,7 +124,7 @@ module.exports = {
           ],
         },
       ],
-      copyright: `Copyright © 2021-${new Date().getFullYear()} OpenAtom Tongsuo Built with Docusaurus. `,
+      copyright: `Copyright © 2021-${new Date().getFullYear()} OpenAtom Tongsuo Built with Docusaurus. <br/><a class="footer__link-item" href="https://beian.miit.gov.cn/">网站备案：京ICP备2020036654号-15</a> <img src="img/police.png" width="15" /> 京公网安备11030102011687号`,
     },
     prism: {
       additionalLanguages: [

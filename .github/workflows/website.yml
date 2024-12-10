@@ -4,7 +4,8 @@ on:
     pull_request:
       paths:
         - ".github/workflows/website.yml"
-        - "docs/**/*"
+        - ".github/workflows/deploy-website.yml"
+        - "docs/**"
     push:
       branches: [main]
 
