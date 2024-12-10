@@ -54,5 +54,5 @@ jobs:
             oss-accesskey-id: ${{ secrets.ALIYUN_OSS_ACCESSKEY_ID }}
             oss-accesskey-secret: ${{ secrets.ALIYUN_OSS_ACCESSKEY_SECRET }}
             oss-path: oss://rustyvault-doc/
-            local-path: ./build
+            local-path: docs/build
             delete-first: true
