@@ -9,6 +9,11 @@ on:
       - ".github/workflows/deploy-website.yml"
       - 'docs/**'
 
+defaults:
+  run:
+    shell: bash
+    working-directory: ./docs
+
 jobs:
   build:
     name: Build Docusaurus
