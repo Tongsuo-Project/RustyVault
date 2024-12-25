@@ -8,7 +8,7 @@
 
 use crate::{
     errors::RvError,
-    logical::{request::Request, response::Response},
+    logical::{request::Request, response::Response, Auth},
 };
 
 pub trait Handler: Send + Sync {
@@ -27,6 +27,18 @@ pub trait Handler: Send + Sync {
     }
 
     fn log(&self, _req: &Request, _resp: &Option<Response>) -> Result<(), RvError> {
+        Err(RvError::ErrHandlerDefault)
+    }
+}
+
+pub trait AuthHandler: Send + Sync {
+    fn name(&self) -> String;
+
+    fn pre_auth(&self, _req: &mut Request) -> Result<Option<Auth>, RvError> {
+        Err(RvError::ErrHandlerDefault)
+    }
+
+    fn post_auth(&self, _req: &mut Request) -> Result<(), RvError> {
         Err(RvError::ErrHandlerDefault)
     }
 }
