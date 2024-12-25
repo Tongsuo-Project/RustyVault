@@ -339,6 +339,7 @@ impl RvError {
                 | RvError::ErrRequestFieldNotFound
                 | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
             RvError::ErrPermissionDenied => StatusCode::FORBIDDEN,
+            RvError::ErrRouterMountNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

@@ -5,7 +5,7 @@ use sysexits::ExitCode;
 use crate::{
     rv_error_string,
     errors::RvError,
-    cli::command,
+    cli::command::{self, CommandExecutor},
     http::sys::InitRequest,
     EXIT_CODE_OK,
 };
@@ -58,9 +58,9 @@ less than or equal to -key-shares."#
     output: command::OutputOptions,
 }
 
-impl Init {
+impl CommandExecutor for Init {
     #[inline]
-    pub fn execute(&self) -> ExitCode {
+    fn execute(&mut self) -> ExitCode {
         match self.main() {
             Ok(_) => EXIT_CODE_OK,
             Err(e) => {
@@ -71,7 +71,7 @@ impl Init {
         }
     }
 
-    pub fn main(&self) -> Result<(), RvError> {
+    fn main(&self) -> Result<(), RvError> {
         if self.key_threshold > self.key_shares {
             return Err(rv_error_string!("invalid seal configuration: threshold cannot be larger than shares"));
         }
@@ -87,7 +87,7 @@ impl Init {
         match sys.init(&init_req) {
             Ok(ret) => {
                 if ret.response_status == 200 {
-                    self.output.print_value(ret.response_data.as_ref().unwrap())?;
+                    self.output.print_value(ret.response_data.as_ref().unwrap(), true)?;
                 } else if ret.response_status == 204 {
                     println!("ok");
                 } else {

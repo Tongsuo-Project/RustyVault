@@ -4,6 +4,7 @@ use serde_json::Value;
 
 pub mod client;
 pub mod sys;
+pub mod logical;
 
 pub use client::Client;
 
