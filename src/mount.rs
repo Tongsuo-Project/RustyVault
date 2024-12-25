@@ -5,55 +5,69 @@
 //! The binding logic here is managed by `MountEntry` struct.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
 
 use lazy_static::lazy_static;
+use openssl::{
+    hash::MessageDigest,
+    pkey::PKey,
+    sign::{Signer, Verifier},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    cli::config::MountEntryHMACLevel,
     core::Core,
     errors::RvError,
     router::Router,
     storage::{barrier_view::BarrierView, Storage, StorageEntry},
-    utils::generate_uuid,
+    utils::{generate_uuid, is_protect_path},
 };
 
 const CORE_MOUNT_CONFIG_PATH: &str = "core/mounts";
 const LOGICAL_BARRIER_PREFIX: &str = "logical/";
 const SYSTEM_BARRIER_PREFIX: &str = "sys/";
 
+pub const MOUNT_TABLE_TYPE: &str = "mounts";
+
 lazy_static! {
     static ref PROTECTED_MOUNTS: Vec<&'static str> = vec!["audit/", "auth/", "sys/",];
     static ref DEFAULT_CORE_MOUNTS: Vec<MountEntry> = vec![
         MountEntry {
+            table: MOUNT_TABLE_TYPE.to_string(),
             tainted: false,
             uuid: generate_uuid(),
             path: "secret/".to_string(),
             logical_type: "kv".to_string(),
             description: "key/value secret storage".to_string(),
-            options: None,
+            ..Default::default()
         },
         MountEntry {
+            table: MOUNT_TABLE_TYPE.to_string(),
             tainted: false,
             uuid: generate_uuid(),
             path: "sys/".to_string(),
             logical_type: "system".to_string(),
             description: "system endpoints used for control, policy and debugging".to_string(),
-            options: None,
+            ..Default::default()
         }
     ];
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct MountEntry {
+    #[serde(default)]
+    pub table: String,
     pub tainted: bool,
     pub uuid: String,
     pub path: String,
     pub logical_type: String,
     pub description: String,
     pub options: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub hmac: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,15 +76,50 @@ pub struct MountTable {
 }
 
 impl MountEntry {
-    pub fn new(path: &str, logical_type: &str, desc: &str) -> Self {
+    pub fn new(table: &str, path: &str, logical_type: &str, desc: &str) -> Self {
         Self {
+            table: table.into(),
             tainted: false,
             uuid: String::new(),
             path: path.to_string(),
             logical_type: logical_type.to_string(),
             description: desc.to_string(),
             options: None,
+            hmac: String::new(),
         }
+    }
+
+    pub fn calc_hmac(&mut self, key: &[u8]) -> Result<(), RvError> {
+        let msg = self.get_hmac_msg();
+        let pkey = PKey::hmac(key)?;
+        let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
+        signer.update(msg.as_bytes())?;
+        let hmac = signer.sign_to_vec()?;
+        self.hmac = hex::encode(hmac.as_slice());
+
+        Ok(())
+    }
+
+    pub fn verify_hmac(&self, key: &[u8]) -> Result<bool, RvError> {
+        let msg = self.get_hmac_msg();
+        let pkey = PKey::hmac(key)?;
+        let mut verifier = Verifier::new(MessageDigest::sha256(), &pkey).unwrap();
+        verifier.update(msg.as_bytes())?;
+        Ok(verifier.verify(self.hmac.as_bytes())?)
+    }
+
+    pub fn get_hmac_msg(&self) -> String {
+        let mut msg = format!("{}-{}-{}-{}", self.table, self.path, self.logical_type, self.description);
+
+        if let Some(options) = &self.options {
+            let options_btree: BTreeMap<String, String> =
+                options.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            for (key, value) in options_btree.iter() {
+                msg = format!("{}-{}:{}", msg, key, value);
+            }
+        }
+
+        msg
     }
 }
 
@@ -113,26 +162,42 @@ impl MountTable {
         return false;
     }
 
-    pub fn set_default(&self, mounts: Vec<MountEntry>) -> Result<(), RvError> {
+    pub fn set_default(&self, mounts: Vec<MountEntry>, hmac_key: Option<&[u8]>) -> Result<(), RvError> {
         let mut table = self.entries.write()?;
-        for mount in mounts {
+        for mut mount in mounts {
+            if let Some(key) = hmac_key {
+                mount.calc_hmac(key)?;
+            }
             table.insert(mount.path.clone(), Arc::new(RwLock::new(mount)));
         }
         Ok(())
     }
 
-    pub fn load_or_default(&self, storage: &dyn Storage) -> Result<(), RvError> {
+    pub fn load_or_default(
+        &self,
+        storage: &dyn Storage,
+        hmac_key: Option<&[u8]>,
+        hmac_level: MountEntryHMACLevel,
+    ) -> Result<(), RvError> {
         let entry = storage.get(CORE_MOUNT_CONFIG_PATH)?;
         if entry.is_none() {
-            self.set_default(DEFAULT_CORE_MOUNTS.to_vec())?;
+            self.set_default(DEFAULT_CORE_MOUNTS.to_vec(), hmac_key)?;
             self.persist(CORE_MOUNT_CONFIG_PATH, storage)?;
             return Ok(());
         }
 
-        self.load(storage, CORE_MOUNT_CONFIG_PATH)
+        self.load(storage, CORE_MOUNT_CONFIG_PATH, hmac_key, hmac_level.clone())?;
+
+        self.mount_update(storage, hmac_key, hmac_level)
     }
 
-    pub fn load(&self, storage: &dyn Storage, path: &str) -> Result<(), RvError> {
+    pub fn load(
+        &self,
+        storage: &dyn Storage,
+        path: &str,
+        hmac_key: Option<&[u8]>,
+        hmac_level: MountEntryHMACLevel,
+    ) -> Result<(), RvError> {
         let entry = storage.get(path)?;
         if entry.is_none() {
             return Err(RvError::ErrConfigLoadFailed);
@@ -142,6 +207,26 @@ impl MountTable {
         let mut new_entries = new_table.entries.write()?;
         let mut entries = self.entries.write()?;
         entries.clear();
+
+        if hmac_level != MountEntryHMACLevel::None && hmac_key.is_some() {
+            let key = hmac_key.unwrap();
+            new_entries.retain(|_, me| {
+                let entry = me.read().unwrap();
+                match entry.verify_hmac(key) {
+                    Ok(ret) => {
+                        if !ret {
+                            log::error!("load mount entry failed, path: {}, err: HMAC validation failed", entry.path);
+                        }
+                        ret
+                    }
+                    Err(e) => {
+                        log::error!("load mount entry failed, path: {}, err: {:?}", entry.path, e);
+                        false
+                    }
+                }
+            });
+        }
+
         entries.extend(new_entries.drain());
         Ok(())
     }
@@ -150,6 +235,35 @@ impl MountTable {
         let value = serde_json::to_string(self)?;
         let entry = StorageEntry { key: to.to_string(), value: value.into_bytes() };
         storage.put(&entry)?;
+        Ok(())
+    }
+
+    fn mount_update(
+        &self,
+        storage: &dyn Storage,
+        hmac_key: Option<&[u8]>,
+        hmac_level: MountEntryHMACLevel,
+    ) -> Result<(), RvError> {
+        let mut need_persist = false;
+        let mounts = self.entries.read()?;
+
+        for mount_entry in mounts.values() {
+            let mut entry = mount_entry.write()?;
+            if entry.table == "" {
+                entry.table = MOUNT_TABLE_TYPE.to_string();
+                need_persist = true;
+            }
+
+            if entry.hmac == "" && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
+                entry.calc_hmac(hmac_key.unwrap())?;
+                need_persist = true;
+            }
+        }
+
+        if need_persist {
+            self.persist(CORE_MOUNT_CONFIG_PATH, storage)?;
+        }
+
         Ok(())
     }
 }
@@ -164,8 +278,12 @@ impl Core {
                 entry.path += "/";
             }
 
-            if is_protect_mount(&entry.path) {
+            if is_protect_path(&PROTECTED_MOUNTS, &[&entry.path]) {
                 return Err(RvError::ErrMountPathProtected);
+            }
+
+            if entry.table == "" {
+                entry.table = MOUNT_TABLE_TYPE.to_string();
             }
 
             let match_mount_path = self.router.matching_mount(&entry.path)?;
@@ -182,6 +300,8 @@ impl Core {
             let view = BarrierView::new(self.barrier.clone(), &prefix);
 
             let path = entry.path.clone();
+
+            entry.calc_hmac(&self.hmac_key)?;
 
             let mount_entry = Arc::new(RwLock::new(entry));
 
@@ -201,7 +321,7 @@ impl Core {
             path += "/";
         }
 
-        if is_protect_mount(&path) {
+        if is_protect_path(&PROTECTED_MOUNTS, &[&path]) {
             return Err(RvError::ErrMountPathProtected);
         }
 
@@ -239,42 +359,47 @@ impl Core {
             dst += "/";
         }
 
-        if is_protect_mount(&src) {
+        if is_protect_path(&PROTECTED_MOUNTS, &[&src, &dst]) {
             return Err(RvError::ErrMountPathProtected);
         }
 
-        {
-            let mut mounts = self.mounts.entries.write()?;
-
-            let match_mount = self.router.matching_mount(&src)?;
-            if match_mount.len() == 0 || match_mount != src {
-                return Err(RvError::ErrMountNotMatch);
-            }
-
-            let match_mount_dst = self.router.matching_mount(&dst)?;
-            if match_mount_dst.len() != 0 {
-                return Err(RvError::ErrMountPathExist);
-            }
-
-            if let Some(src_mount_entry) = mounts.get(&src) {
-                let mut src_entry = src_mount_entry.write()?;
-                src_entry.tainted = true;
-            }
-
-            self.router.taint(&src)?;
-
-            if let Some(mount_entry) = mounts.remove(&src) {
-                let mut entry = mount_entry.write()?;
-                entry.path = dst.clone();
-                entry.tainted = false;
-            }
-
-            self.router.remount(&dst, &src)?;
-
-            self.router.untaint(&dst)?;
+        let dst_match = self.router.matching_mount(&dst)?;
+        if dst_match.len() != 0 {
+            return Err(RvError::ErrMountPathExist);
         }
 
-        self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        let src_match = self.router.matching_mount_entry(&src)?;
+        if src_match.is_none() {
+            return Err(RvError::ErrMountNotMatch);
+        }
+
+        let mut src_entry = src_match.as_ref().unwrap().write()?;
+        src_entry.tainted = true;
+
+        self.router.taint(&src)?;
+
+        if self.router.matching_mount(&dst)? != "" {
+            return Err(RvError::ErrMountPathExist);
+        }
+
+        let src_path = src_entry.path.clone();
+        src_entry.path = dst.clone();
+        src_entry.tainted = false;
+        src_entry.calc_hmac(&self.hmac_key)?;
+
+        std::mem::drop(src_entry);
+
+        if let Err(e) = self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage()) {
+            let mut src_entry = src_match.as_ref().unwrap().write()?;
+            src_entry.path = src_path;
+            src_entry.tainted = true;
+            src_entry.calc_hmac(&self.hmac_key)?;
+            return Err(e);
+        }
+
+        self.router.remount(&dst, &src)?;
+
+        self.router.untaint(&dst)?;
 
         Ok(())
     }
@@ -331,13 +456,4 @@ impl Core {
         }
         Ok(())
     }
-}
-
-fn is_protect_mount(path: &str) -> bool {
-    for p in PROTECTED_MOUNTS.iter() {
-        if path.starts_with(p) {
-            return true;
-        }
-    }
-    return false;
 }
