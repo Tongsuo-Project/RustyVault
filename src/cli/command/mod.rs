@@ -4,31 +4,35 @@
 
 use std::path::PathBuf;
 
+use clap::{ArgAction, Args, ValueEnum, ValueHint};
 use sysexits::ExitCode;
-use serde_json::{Map, Value, to_string_pretty};
-use clap::{Args, ArgAction, ValueEnum, ValueHint};
-use regex::Regex;
-use tabled::{
-    Table, Tabled,
-    settings::{Alignment, Padding, Style, Width},
-};
 
 use crate::{
-    EXIT_CODE_OK,
+    api::{client::TLSConfigBuilder, Client},
     errors::RvError,
-    api::{Client, client::TLSConfigBuilder},
+    EXIT_CODE_OK,
 };
 
-pub mod server;
-pub mod status;
+pub mod delete;
+pub mod format;
+pub mod list;
+pub mod login;
 pub mod operator;
 pub mod operator_init;
 pub mod operator_seal;
 pub mod operator_unseal;
 pub mod read;
+pub mod server;
+pub mod status;
 pub mod write;
-pub mod list;
-pub mod delete;
+pub mod auth;
+pub mod auth_list;
+pub mod auth_enable;
+pub mod auth_disable;
+pub mod auth_move;
+pub mod auth_help;
+
+pub use format::{LogicalOutputOptions, OutputOptions};
 
 #[derive(Args, Default)]
 #[group(required = false, multiple = true)]
@@ -123,13 +127,7 @@ is forbidden and will make the command fail. This can be specified multiple time
     )]
     header: Vec<String>,
 
-    #[clap(
-        long,
-        hide = true,
-        required = false,
-        env = "VAULT_TOKEN",
-        default_value = "",
-    )]
+    #[clap(long, hide = true, required = false, env = "VAULT_TOKEN", default_value = "")]
     token: String,
 }
 
@@ -180,45 +178,16 @@ pub enum LogLevel {
     Error,
 }
 
-#[derive(Args)]
-#[group(required = false, multiple = true)]
-pub struct OutputOptions {
-    #[arg(
-        long,
-        next_line_help = true,
-        value_name = "string",
-        num_args = 0..=1,
-        env = "VAULT_FORMAT",
-        default_value_t = Format::Table,
-        default_missing_value = "table",
-        long_help = r#"Print the output in the given format.  This can also be specified via the
-VAULT_FORMAT environment variable."#,
-        value_enum
-    )]
-    format: Format,
-}
-
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Format {
-    Table,
-    Json,
-    Yaml,
-    Raw,
-}
-
 impl HttpOptions {
     pub fn init(&mut self) -> Result<(), RvError> {
         Ok(())
     }
 
     pub fn client(&self) -> Result<Client, RvError> {
-        let mut client = Client::new()
-            .with_addr(&self.address)
-            .with_token(&self.token);
+        let mut client = Client::new().with_addr(&self.address).with_token(&self.token);
 
         if self.address.starts_with("https://") {
-            let mut tls_config_builder = TLSConfigBuilder::new()
-                .with_insecure(self.tls_skip_verify);
+            let mut tls_config_builder = TLSConfigBuilder::new().with_insecure(self.tls_skip_verify);
 
             if let Some(ca_cert) = &self.ca_cert {
                 tls_config_builder = tls_config_builder.with_server_ca_path(ca_cert)?;
@@ -231,214 +200,9 @@ impl HttpOptions {
             let tls_config = tls_config_builder.build()?;
 
             client = client.with_tls_config(tls_config);
-
         }
 
         Ok(client.build())
-    }
-}
-
-pub fn convert_keys(value: &Value) -> Value {
-    match value {
-        Value::Object(map) => {
-            let mut new_map = Map::new();
-            for (key, value) in map {
-                let new_key = Regex::new(r"_(\w)")
-                   .unwrap()
-                   .replace_all(&key.to_string(), |caps: &regex::Captures| {
-                        let captured_char = caps.get(1).unwrap().as_str();
-                        format!(" {}", captured_char.to_ascii_uppercase())
-                    })
-                   .trim_start()
-                   .to_string()
-                   .chars()
-                   .enumerate()
-                   .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
-                   .collect::<String>();
-                new_map.insert(new_key, convert_keys(value));
-            }
-            Value::Object(new_map)
-        }
-        Value::Array(arr) => {
-            let mut new_arr = Vec::new();
-            for item in arr {
-                new_arr.push(convert_keys(item));
-            }
-            Value::Array(new_arr)
-        }
-        _ => value.clone(),
-    }
-}
-
-#[allow(non_snake_case)]
-#[derive(Tabled)]
-struct KeyValueRow {
-    Key: String,
-    Value: String,
-}
-
-#[allow(non_snake_case)]
-#[derive(Tabled)]
-struct KeysRow {
-    Keys: String,
-}
-
-impl OutputOptions {
-    pub fn print_value(&self, value: &Value, title_casing: bool) -> Result<(), RvError> {
-        match self.format {
-            Format::Json => {
-                println!("{}", to_string_pretty(value)?);
-            }
-            Format::Yaml => {
-                println!("{}", serde_yaml::to_string(value)?);
-            }
-            Format::Table => {
-                let data = if title_casing {
-                    &convert_keys(value)
-                } else {
-                   value
-                };
-                let mut table = json_to_table::json_to_table(data);
-                table
-                    .with(Padding::new(0, 4, 0, 0))
-                    .with(Alignment::left());
-
-                let rendered_table = table
-                    .with(Style::ascii()).to_string();
-
-                let lines: Vec<&str> = rendered_table.lines().collect();
-
-                let columns: Vec<&str> = lines[0].split('+').filter(|s|!s.is_empty()).collect();
-                let col_count = columns.len();
-                let mut padding_right = 4;
-                let mut col_widths = vec![0; col_count];
-
-                for (i, col) in columns.iter().enumerate() {
-                    col_widths[i] = col.trim().len();
-                }
-
-                if col_widths[0] < 7 {
-                    padding_right = col_widths[0] - 3;
-                }
-
-                if col_widths[1] < 9 {
-                    col_widths[1] = 9;
-                }
-
-                let rows: Vec<KeyValueRow> = vec![KeyValueRow {
-                    Key: "---".into(),
-                    Value: "-----".into(),
-                }];
-                let header = Table::new(rows)
-                    .with(Padding::new(0, padding_right, 0, 0))
-                    .with(Alignment::left())
-                    .with(Style::blank())
-                    .with(Width::list(col_widths))
-                    .to_string();
-
-                println!("{}", header);
-
-                let body = table.with(Style::blank()).to_string();
-                println!("{}", body);
-            }
-            Format::Raw => {
-                println!("{}", serde_json::to_string(value)?);
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn print_keys(&self, value: &Value) -> Result<(), RvError> {
-        if !value.is_array() {
-            return Err(RvError::ErrRequestNoData);
-        }
-
-        match self.format {
-            Format::Json => {
-                println!("{}", to_string_pretty(value)?);
-            }
-            Format::Yaml => {
-                println!("{}", serde_yaml::to_string(value)?);
-            }
-            Format::Table => {
-                let mut table = json_to_table::json_to_table(value);
-                table
-                    .with(Padding::new(0, 4, 0, 0))
-                    .with(Alignment::left());
-
-                let rendered_table = table
-                    .with(Style::ascii()).to_string();
-
-                let lines: Vec<&str> = rendered_table.lines().collect();
-                if lines.is_empty() {
-                    //TODO
-                    return Ok(());
-                }
-
-                let columns: Vec<&str> = lines[0].split('+').filter(|s|!s.is_empty()).collect();
-                let col_count = columns.len();
-                let mut col_widths = vec![0; col_count];
-
-                for (i, col) in columns.iter().enumerate() {
-                    col_widths[i] = col.trim().len();
-                }
-
-                let rows: Vec<KeysRow> = vec![KeysRow {
-                    Keys: "---".into(),
-                }];
-                let header = Table::new(rows)
-                    .with(Padding::new(0, 4, 0, 0))
-                    .with(Alignment::left())
-                    .with(Style::blank())
-                    .with(Width::list(col_widths))
-                    .to_string();
-
-                println!("{}", header);
-
-                let body = table.with(Style::blank()).to_string();
-                println!("{}", body);
-            }
-            Format::Raw => {
-                println!("{}", serde_json::to_string(value)?);
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn print_secrets(&self, value: &Value, field: Option<&str>) -> Result<(), RvError> {
-        let data = value["data"].as_object().unwrap().clone();
-        if let Some(key) = field {
-            if let Some(item) =  data.get(key) {
-                if !item.is_string() {
-                    println!(r#"Field "{key}" not present in secret"#);
-                    return Ok(());
-                }
-                let secret = item.as_str().unwrap();
-                match self.format {
-                    Format::Json => {
-                        println!("{}", to_string_pretty(&Value::String(secret.to_string()))?);
-                    }
-                    Format::Yaml => {
-                        print!("{}", serde_yaml::to_string(&Value::String(secret.to_string()))?);
-                    }
-                    Format::Table => {
-                        print!("{}", serde_yaml::to_string(&Value::String(secret.to_string()))?);
-                    }
-                    Format::Raw => {
-                        println!("{}", serde_json::to_string(value)?);
-                    }
-                }
-            } else {
-                println!(r#"Field "{key}" not present in secret"#);
-                return Ok(());
-            }
-        } else {
-            self.print_value(&Value::Object(data), false)?;
-        }
-
-        Ok(())
     }
 }
 
@@ -458,4 +222,97 @@ pub trait CommandExecutor {
     }
 
     fn main(&self) -> Result<(), RvError>;
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{errors::RvError, rv_error_string, test_utils::TestHttpServer};
+
+    #[test]
+    fn test_cli_logical() {
+        let mut test_http_server = TestHttpServer::new("test_cli_read", true);
+        test_http_server.token = test_http_server.root_token.clone();
+
+        // There is no data by default, and reading should fail.
+        let ret = test_http_server.cli(&["read"], &["kv/foo"]);
+        assert!(ret.is_err());
+        assert_eq!(ret.unwrap_err(), rv_error_string!("No value found at kv/foo\n"));
+
+        // Without the mount kv engine, writing data should fail.
+        let ret = test_http_server.cli(&["write"], &["kv/foo", "aa=bb", "cc=dd"]);
+        assert!(ret.is_err());
+
+        // Mount kv engine to path: kv/
+        let ret = test_http_server.mount("kv", "kv");
+        assert!(ret.is_ok());
+
+        // Writing data should ok
+        let ret = test_http_server.cli(&["write"], &["kv/foo", "aa=bb", "cc=dd"]);
+        assert_eq!(ret, Ok("Success! Data written to: kv/foo\n".into()));
+
+        // Reading data should ok
+        let ret = test_http_server.cli(&["read"], &["kv/foo"]);
+        assert_eq!(ret, Ok("Key    Value    \n---    -----    \naa     bb    \ncc     dd    \n".into()));
+
+        let ret = test_http_server.cli(&["read"], &["--format=table", "kv/foo"]);
+        assert_eq!(ret, Ok("Key    Value    \n---    -----    \naa     bb    \ncc     dd    \n".into()));
+
+        let ret = test_http_server.cli(&["read"], &["--format=json", "kv/foo"]);
+        assert_eq!(ret, Ok("{\n  \"aa\": \"bb\",\n  \"cc\": \"dd\"\n}\n".into()));
+
+        let ret = test_http_server.cli(&["read"], &["--format=yaml", "kv/foo"]);
+        assert_eq!(ret, Ok("aa: bb\ncc: dd\n\n".into()));
+
+        let ret = test_http_server.cli(&["read"], &["--format=yml", "kv/foo"]);
+        assert_eq!(ret, Ok("aa: bb\ncc: dd\n\n".into()));
+
+        let ret = test_http_server.cli(&["read"], &["--format=raw", "kv/foo"]);
+        assert_eq!(ret, Ok("{\"aa\":\"bb\",\"cc\":\"dd\"}\n".into()));
+
+        let ret = test_http_server.cli(&["read"], &["--field=aa", "kv/foo"]);
+        assert_eq!(ret, Ok("bb\n".into()));
+
+        let ret = test_http_server.cli(&["read"], &["--field=gg", "kv/foo"]);
+        assert_eq!(ret, Err(rv_error_string!("Error: Field \"gg\" not present in secret\n")));
+
+        // list /
+        let ret = test_http_server.cli(&["list"], &[]);
+        assert!(ret.is_err());
+
+        // list kv/
+        let ret = test_http_server.cli(&["list"], &["kv/"]);
+        assert_eq!(ret, Ok("Keys    \n----    \nfoo    \n".into()));
+
+        // list kvv/
+        let ret = test_http_server.cli(&["list"], &["kvv/"]);
+        assert_eq!(ret, Err(rv_error_string!("No value found at kvv/\n")));
+
+        // write kv/goo
+        let ret = test_http_server.cli(&["write"], &["kv/goo", "aaa=bbb", "ccc=ddd"]);
+        assert!(ret.is_ok());
+
+        // list kv/ again
+        let ret = test_http_server.cli(&["list"], &["kv/"]);
+        assert_eq!(ret, Ok("Keys    \n----    \nfoo    \ngoo    \n".into()));
+
+        // delete kv/goo
+        let ret = test_http_server.cli(&["delete"], &["kv/goo"]);
+        assert_eq!(ret, Ok("Success! Data deleted (if it existed) at: kv/goo\n".into()));
+
+        // list kv/goo, again
+        let ret = test_http_server.cli(&["list"], &["kv/goo"]);
+        assert_eq!(ret, Err(rv_error_string!("No value found at kv/goo\n")));
+
+        // delete kv/koo
+        let ret = test_http_server.cli(&["delete"], &["kv/koo"]);
+        assert_eq!(ret, Ok("Success! Data deleted (if it existed) at: kv/koo\n".into()));
+
+        // delete kv/
+        let ret = test_http_server.cli(&["delete"], &["kv/"]);
+        assert_eq!(ret, Ok("Success! Data deleted (if it existed) at: kv/\n".into()));
+
+        // list kv/ again
+        let ret = test_http_server.cli(&["list"], &["kv/"]);
+        assert_eq!(ret, Ok("Keys    \n----    \nfoo    \n".into()));
+    }
 }

@@ -28,7 +28,15 @@ impl CommandExecutor for Status {
         match sys.seal_status() {
             Ok(ret) => {
                 if ret.response_status == 200 {
-                    self.output.print_value(ret.response_data.as_ref().unwrap(), true)?;
+                    let status_data = ret.response_data.as_ref().unwrap();
+                    let status = status_data.as_object().unwrap();
+                    let status_value = serde_json::json!({
+                        "sealed": status["sealed"],
+                        "total_shares": status["n"],
+                        "threshold": status["t"],
+                        "progress": status["progress"],
+                    });
+                    self.output.print_value(&status_value, true)?;
                 } else if ret.response_status == 204 {
                     println!("ok");
                 } else {

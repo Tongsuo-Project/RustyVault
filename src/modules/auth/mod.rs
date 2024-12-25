@@ -28,7 +28,8 @@ pub use token_store::TokenStore;
 
 const AUTH_CONFIG_PATH: &str = "core/auth";
 const AUTH_BARRIER_PREFIX: &str = "auth/";
-const AUTH_ROUTER_PREFIX: &str = "auth/";
+
+pub const AUTH_ROUTER_PREFIX: &str = "auth/";
 
 lazy_static! {
     static ref DEFAULT_AUTH_MOUNTS: Vec<MountEntry> = vec![MountEntry {

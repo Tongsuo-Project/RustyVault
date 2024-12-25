@@ -1,7 +1,7 @@
 use clap::Parser;
 use derive_more::Deref;
 
-use crate::{errors::RvError, cli::command::{self, CommandExecutor}};
+use crate::{cli::command::{self, CommandExecutor}, errors::RvError, rv_error_string};
 
 #[derive(Parser, Deref)]
 #[command(
@@ -37,8 +37,11 @@ impl CommandExecutor for Delete {
 
         match logical.delete(&self.path, None) {
             Ok(ret) => {
-                if ret.response_status != 200 || ret.response_status != 204{
+                if ret.response_status == 200 || ret.response_status == 204 {
+                    println!("Success! Data deleted (if it existed) at: {}", self.path);
+                } else {
                     ret.print_debug_info();
+                    return Err(rv_error_string!("Unkonwn"));
                 }
             }
             Err(e) => eprintln!("{}", e),

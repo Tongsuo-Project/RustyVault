@@ -57,25 +57,25 @@ pub enum RvError {
     ErrPhysicalBackendPrefixInvalid,
     #[error("Physical backend key is invalid.")]
     ErrPhysicalBackendKeyInvalid,
-    #[error("Barrier key sanity check failed.")]
+    #[error("RustyVault key sanity check failed.")]
     ErrBarrierKeySanityCheckFailed,
-    #[error("Barrier has been initialized.")]
+    #[error("RustyVault is already initialized.")]
     ErrBarrierAlreadyInit,
-    #[error("Barrier key is invalid.")]
+    #[error("RustyVault unseal key is invalid.")]
     ErrBarrierKeyInvalid,
-    #[error("Barrier is not initialized.")]
+    #[error("RustyVault is not initialized.")]
     ErrBarrierNotInit,
-    #[error("Barrier has been sealed.")]
+    #[error("RustyVault is sealed.")]
     ErrBarrierSealed,
-    #[error("Barrier has been unsealed.")]
+    #[error("RustyVault is unsealed.")]
     ErrBarrierUnsealed,
-    #[error("Barrier unseal failed.")]
+    #[error("RustyVault unseal failed.")]
     ErrBarrierUnsealFailed,
-    #[error("Barrier epoch do not match.")]
+    #[error("RustyVualt barrier epoch do not match.")]
     ErrBarrierEpochMismatch,
-    #[error("Barrier version do not match.")]
+    #[error("RustyVault barrier version do not match.")]
     ErrBarrierVersionMismatch,
-    #[error("Barrier key generation failed.")]
+    #[error("RustyVault barrier key generation failed.")]
     ErrBarrierKeyGenerationFailed,
     #[error("Router mount conflict.")]
     ErrRouterMountConflict,
@@ -111,6 +111,8 @@ pub enum RvError {
     ErrRequestFieldNotFound,
     #[error("Request field is invalid.")]
     ErrRequestFieldInvalid,
+    #[error("Response data is invalid.")]
+    ErrResponseDataInvalid,
     #[error("Handler is default.")]
     ErrHandlerDefault,
     #[error("Module kv data field is missing.")]
@@ -123,6 +125,8 @@ pub enum RvError {
     ErrModuleConflict,
     #[error("Module is not init.")]
     ErrModuleNotInit,
+    #[error("Module is not found.")]
+    ErrModuleNotFound,
     #[error("Auth module is disabled.")]
     ErrAuthModuleDisabled,
     #[error("Auth token is not found.")]
@@ -330,7 +334,6 @@ impl RvError {
                 | RvError::ErrBarrierAlreadyInit
                 | RvError::ErrBarrierKeyInvalid
                 | RvError::ErrBarrierNotInit
-                | RvError::ErrBarrierSealed
                 | RvError::ErrBarrierUnsealed
                 | RvError::ErrBarrierUnsealFailed
                 | RvError::ErrRequestNoDataField
@@ -338,6 +341,7 @@ impl RvError {
                 | RvError::ErrRequestClientTokenMissing
                 | RvError::ErrRequestFieldNotFound
                 | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
+            RvError::ErrBarrierSealed => StatusCode::SERVICE_UNAVAILABLE,
             RvError::ErrPermissionDenied => StatusCode::FORBIDDEN,
             RvError::ErrRouterMountNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
@@ -393,6 +397,7 @@ impl PartialEq for RvError {
             | (RvError::ErrRequestClientTokenMissing, RvError::ErrRequestClientTokenMissing)
             | (RvError::ErrRequestFieldNotFound, RvError::ErrRequestFieldNotFound)
             | (RvError::ErrRequestFieldInvalid, RvError::ErrRequestFieldInvalid)
+            | (RvError::ErrResponseDataInvalid, RvError::ErrResponseDataInvalid)
             | (RvError::ErrHandlerDefault, RvError::ErrHandlerDefault)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
             | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
@@ -405,6 +410,7 @@ impl PartialEq for RvError {
             | (RvError::ErrConfigListenerNotFound, RvError::ErrConfigListenerNotFound)
             | (RvError::ErrModuleConflict, RvError::ErrModuleConflict)
             | (RvError::ErrModuleNotInit, RvError::ErrModuleNotInit)
+            | (RvError::ErrModuleNotFound, RvError::ErrModuleNotFound)
             | (RvError::ErrAuthModuleDisabled, RvError::ErrAuthModuleDisabled)
             | (RvError::ErrAuthTokenNotFound, RvError::ErrAuthTokenNotFound)
             | (RvError::ErrAuthTokenIdInvalid, RvError::ErrAuthTokenIdInvalid)
@@ -429,6 +435,9 @@ impl PartialEq for RvError {
             | (RvError::ErrCredentailInvalid, RvError::ErrCredentailInvalid)
             | (RvError::ErrCredentailNotConfig, RvError::ErrCredentailNotConfig)
             | (RvError::ErrUnknown, RvError::ErrUnknown) => true,
+            (RvError::ErrResponse(a), RvError::ErrResponse(b)) => a == b,
+            (RvError::ErrResponseStatus(sa, ta), RvError::ErrResponseStatus(sb, tb)) => sa == sb && ta == tb,
+            (RvError::ErrString(a), RvError::ErrString(b)) => a == b,
             _ => false,
         }
     }

@@ -99,3 +99,29 @@ impl CommandExecutor for Init {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use serde_json::Value;
+
+    use crate::test_utils::TestHttpServer;
+
+    #[test]
+    fn test_cli_operator_init() {
+        let test_http_server = TestHttpServer::new_without_init("test_cli_operator_init", true);
+
+        // rvault operator init
+        let ret = test_http_server.cli(&["operator", "init"], &["--format=raw", "--key-shares=5", "--key-threshold=3"]);
+        assert!(ret.is_ok());
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let init_result = ret.as_object().unwrap();
+
+        // rvault status
+        let ret = test_http_server.cli(&["status"], &["--format=json"]);
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let status_result = ret.as_object().unwrap();
+        assert_eq!(init_result["keys"].as_array().unwrap().len(), status_result["threshold"]);
+    }
+}

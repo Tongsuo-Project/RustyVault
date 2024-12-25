@@ -241,7 +241,24 @@ impl CertBackendInner {
         }
 
         let entry = storage_entry.unwrap();
-        let cert_entry: CertEntry = serde_json::from_slice(entry.value.as_slice())?;
+        let mut cert_entry: CertEntry = serde_json::from_slice(entry.value.as_slice())?;
+
+        if cert_entry.token_ttl.as_secs() == 0 && cert_entry.ttl.as_secs() > 0 {
+            cert_entry.token_ttl = cert_entry.ttl.clone();
+        }
+        if cert_entry.token_max_ttl.as_secs() == 0 && cert_entry.max_ttl.as_secs() > 0 {
+            cert_entry.token_max_ttl = cert_entry.max_ttl.clone();
+        }
+        if cert_entry.token_period.as_secs() == 0 && cert_entry.period.as_secs() > 0 {
+            cert_entry.token_period = cert_entry.period.clone();
+        }
+        if cert_entry.token_policies.len() == 0 && cert_entry.policies.len() > 0 {
+            cert_entry.token_policies = cert_entry.policies.clone();
+        }
+        if cert_entry.token_bound_cidrs.len() == 0 && cert_entry.bound_cidrs.len() > 0 {
+            cert_entry.token_bound_cidrs = cert_entry.bound_cidrs.clone();
+        }
+
         Ok(Some(cert_entry))
     }
 
@@ -262,6 +279,14 @@ impl CertBackendInner {
         let cert_entry = entry.unwrap();
         let mut cert_entry_data = serde_json::to_value(&cert_entry)?;
         let data = cert_entry_data.as_object_mut().unwrap();
+
+        if cert_entry.ttl.as_secs() == 0 {
+            data.remove("ttl");
+        }
+
+        if cert_entry.max_ttl.as_secs() == 0 {
+            data.remove("max_ttl");
+        }
 
         if cert_entry.policies.len() > 0 {
             data["policies"] = data["token_policies"].clone();

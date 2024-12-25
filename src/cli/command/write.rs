@@ -1,8 +1,7 @@
 use clap::Parser;
 use derive_more::Deref;
-use serde_json::{Value, Map};
 
-use crate::{errors::RvError, cli::command::{self, CommandExecutor}};
+use crate::{errors::RvError, utils::kv_builder::KvPairParse, cli::command::{self, CommandExecutor}};
 
 #[derive(Parser, Deref)]
 #[command(
@@ -56,17 +55,7 @@ impl CommandExecutor for Write {
         let client = self.client()?;
         let logical = client.logical();
 
-        let mut post_data: Map<String, Value> = Map::new();
-        for pair in &self.data {
-            let args: Vec<&str> = pair.split('=').collect();
-            if args.len() == 2 {
-                post_data.insert(args[0].to_string(), Value::String(args[1].to_string()));
-            } else {
-                eprintln!("Invalid pair: {}", pair);
-            }
-        }
-
-        match logical.write(&self.path, Some(post_data)) {
+        match logical.write(&self.path, Some(self.data.to_map())) {
             Ok(ret) => {
                 if ret.response_status == 200 || ret.response_status == 204 {
                     println!("Success! Data written to: {}", self.path);

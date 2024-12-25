@@ -55,3 +55,33 @@ impl CommandExecutor for Seal {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use serde_json::Value;
+
+    use crate::test_utils::TestHttpServer;
+
+    #[test]
+    fn test_cli_operator_seal() {
+        let test_http_server = TestHttpServer::new("test_cli_operator_seal", true);
+
+        // rvault status
+        let ret = test_http_server.cli(&["status"], &["--format=raw"]);
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let status_result = ret.as_object().unwrap();
+        assert_eq!(status_result["sealed"], false);
+
+        // rvault operator seal
+        let ret = test_http_server.cli(&["operator", "seal"], &[]);
+        assert_eq!(ret, Ok("Success! RustyVault is sealed.\n".into()));
+
+        // rvault status
+        let ret = test_http_server.cli(&["status"], &["--format=raw"]);
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let status_result = ret.as_object().unwrap();
+        assert_eq!(status_result["sealed"], true);
+    }
+}

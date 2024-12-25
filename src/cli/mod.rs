@@ -8,10 +8,12 @@ use crate::{VERSION, EXIT_CODE_INSUFFICIENT_PARAMS, cli::command::CommandExecuto
 
 pub mod command;
 pub mod config;
+pub mod util;
 
 #[derive(Parser)]
 #[command(
     version = VERSION,
+    disable_help_subcommand = true,
     about = "A secure and high performance secret management software that is compatible with Hashicorp Vault."
 )]
 pub struct Cli {
@@ -28,6 +30,8 @@ pub enum Commands {
     Write(command::write::Write),
     Delete(command::delete::Delete),
     List(command::list::List),
+    Login(command::login::Login),
+    Auth(command::auth::Auth),
 }
 
 impl Commands {
@@ -40,6 +44,8 @@ impl Commands {
             Commands::Write(write) => write.execute(),
             Commands::Delete(delete) => delete.execute(),
             Commands::List(list) => list.execute(),
+            Commands::Login(login) => login.execute(),
+            Commands::Auth(auth) => auth.execute(),
         }
     }
 }

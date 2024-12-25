@@ -202,6 +202,7 @@ async fn sys_remount_request_handler(
     body.clear();
 
     let mut r = request_auth(&req);
+    r.path = "sys/remount".to_string();
     r.operation = Operation::Write;
     r.body = Some(payload);
 

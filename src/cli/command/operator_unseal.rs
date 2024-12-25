@@ -58,7 +58,6 @@ impl CommandExecutor for Unseal {
         let client = self.client()?;
         let sys = client.sys();
 
-
         let key = if let Some(unseal_key) = &self.unseal_key {
             unseal_key.clone()
         } else {
@@ -83,5 +82,42 @@ impl CommandExecutor for Unseal {
             Err(e) => eprintln!("Error sealing: {}", e),
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use serde_json::Value;
+
+    use crate::test_utils::TestHttpServer;
+
+    #[test]
+    fn test_cli_operator_unseal() {
+        let test_http_server = TestHttpServer::new_without_init("test_cli_operator_unseal", true);
+
+        // rvault operator init
+        let ret = test_http_server.cli(&["operator", "init"], &["--format=raw", "--key-shares=5", "--key-threshold=3"]);
+        assert!(ret.is_ok());
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let init_result = ret.as_object().unwrap();
+
+        // rvault operator unseal
+        let keys = &init_result["keys"];
+        let ret = test_http_server.cli(&["operator", "unseal"], &["--format=raw", keys[0].as_str().unwrap()]);
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let unseal_result = ret.as_object().unwrap();
+        assert_eq!(unseal_result["n"], 3);
+        assert_eq!(unseal_result["t"], 5);
+        assert_eq!(unseal_result["sealed"], true);
+        let ret = test_http_server.cli(&["operator", "unseal"], &["--format=raw", keys[1].as_str().unwrap()]);
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let unseal_result = ret.as_object().unwrap();
+        assert_eq!(unseal_result["sealed"], true);
+        let ret = test_http_server.cli(&["operator", "unseal"], &["--format=raw", keys[2].as_str().unwrap()]);
+        let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+        let unseal_result = ret.as_object().unwrap();
+        assert_eq!(unseal_result["sealed"], false);
     }
 }
