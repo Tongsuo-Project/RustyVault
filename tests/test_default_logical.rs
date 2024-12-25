@@ -181,7 +181,7 @@ fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     assert!(resp.is_some());
     let data = resp.unwrap().data;
     assert!(data.is_some());
-    assert_eq!(data.as_ref().unwrap().len(), 2);
+    assert_eq!(data.as_ref().unwrap().len(), 3);
 
     // test api: "mounts/kv" with valid type
     let mount_data = json!({
@@ -305,6 +305,7 @@ fn test_sys_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
 #[test]
 fn test_default_logical() {
     let dir = env::temp_dir().join("rusty_vault_core_init");
+    let _ = fs::remove_dir_all(&dir);
     assert!(fs::create_dir(&dir).is_ok());
     defer! (
         assert!(fs::remove_dir_all(&dir).is_ok());

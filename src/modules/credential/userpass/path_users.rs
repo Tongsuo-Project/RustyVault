@@ -1,20 +1,25 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use derive_more::{Deref, DerefMut};
 
 use super::{UserPassBackend, UserPassBackendInner};
 use crate::{
     context::Context,
     errors::RvError,
-    logical::{Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
+    logical::{field::FieldTrait, Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
-    utils::{deserialize_duration, serialize_duration},
+    utils::{
+        deserialize_duration, serialize_duration,
+        sock_addr::SockAddrMarshaler,
+        token_util::{token_fields, TokenParams},
+    },
 };
 
 //const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365*24*60*60 as u64);
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
 pub struct UserEntry {
     pub password_hash: String,
     pub policies: Vec<String>,
@@ -22,6 +27,11 @@ pub struct UserEntry {
     pub ttl: Duration,
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub max_ttl: Duration,
+    #[serde(flatten)]
+    #[deref]
+    #[deref_mut]
+    pub token_params: TokenParams,
+    pub bound_cidrs: Vec<SockAddrMarshaler>,
 }
 
 impl UserPassBackend {
@@ -30,7 +40,7 @@ impl UserPassBackend {
         let userpass_backend_ref2 = Arc::clone(&self.inner);
         let userpass_backend_ref3 = Arc::clone(&self.inner);
 
-        let path = new_path!({
+        let mut path = new_path!({
             pattern: r"users/(?P<username>\w[\w-]+\w)",
             fields: {
                 "username": {
@@ -73,6 +83,8 @@ the username you want revoked. If you don't need to revoke login immediately,
 then the next renew will cause the lease to expire.
                 "#
         });
+
+        path.fields.extend(token_fields());
 
         path
     }
@@ -127,7 +139,21 @@ impl UserPassBackendInner {
         }
 
         let entry = storage_entry.unwrap();
-        let user_entry: UserEntry = serde_json::from_slice(entry.value.as_slice())?;
+        let mut user_entry: UserEntry = serde_json::from_slice(entry.value.as_slice())?;
+
+        if user_entry.token_ttl.as_secs() == 0 && user_entry.ttl.as_secs() > 0 {
+            user_entry.token_ttl = user_entry.ttl.clone();
+        }
+        if user_entry.token_max_ttl.as_secs() == 0 && user_entry.max_ttl.as_secs() > 0 {
+            user_entry.token_max_ttl = user_entry.max_ttl.clone();
+        }
+        if user_entry.token_policies.len() == 0 && user_entry.policies.len() > 0 {
+            user_entry.token_policies = user_entry.policies.clone();
+        }
+        if user_entry.token_bound_cidrs.len() == 0 && user_entry.bound_cidrs.len() > 0 {
+            user_entry.token_bound_cidrs = user_entry.bound_cidrs.clone();
+        }
+
         Ok(Some(user_entry))
     }
 
@@ -148,8 +174,27 @@ impl UserPassBackendInner {
 
         let user_entry = entry.unwrap();
         let mut user_entry_data = serde_json::to_value(&user_entry)?;
-        let data = user_entry_data.as_object_mut().unwrap();
+        let mut data = user_entry_data.as_object_mut().unwrap();
         data.remove("password_hash");
+
+        user_entry.populate_token_data(&mut data);
+
+        if user_entry.ttl.as_secs() == 0 {
+            data.remove("ttl");
+        }
+
+        if user_entry.max_ttl.as_secs() == 0 {
+            data.remove("max_ttl");
+        }
+
+        if user_entry.policies.len() > 0 {
+            data["policies"] = data["token_policies"].clone();
+        }
+
+        if user_entry.bound_cidrs.len() > 0 {
+            data["bound_cidrs"] = data["token_bound_cidrs"].clone();
+        }
+
         Ok(Some(Response::data_response(Some(data.clone()))))
     }
 
@@ -171,15 +216,57 @@ impl UserPassBackendInner {
         }
 
         let ttl_value = req.get_data_or_default("ttl")?;
-        let ttl = ttl_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
+        let ttl = ttl_value.as_int().ok_or(RvError::ErrRequestFieldInvalid)?;
         if ttl > 0 {
-            user_entry.ttl = Duration::from_secs(ttl);
+            user_entry.ttl = Duration::from_secs(ttl as u64);
         }
 
         let max_ttl_value = req.get_data_or_default("max_ttl")?;
         let max_ttl = max_ttl_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
         if max_ttl > 0 {
             user_entry.max_ttl = Duration::from_secs(max_ttl);
+        }
+
+        let old_token_policies = user_entry.token_policies.clone();
+        let old_token_ttl = user_entry.token_ttl.clone();
+        let old_token_max_ttl = user_entry.token_max_ttl.clone();
+        let old_token_bound_cidrs = user_entry.token_bound_cidrs.clone();
+
+        user_entry.parse_token_fields(req)?;
+
+        if old_token_policies != user_entry.token_policies {
+            user_entry.policies = user_entry.token_policies.clone();
+        } else if let Ok(policies_value) = req.get_data("policies") {
+            let policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
+            user_entry.policies = policies.clone();
+            user_entry.token_policies = policies;
+        }
+
+        if old_token_ttl != user_entry.token_ttl {
+            user_entry.ttl = user_entry.token_ttl.clone();
+        } else if let Ok(ttl_value) = req.get_data("ttl") {
+            let ttl = ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
+            user_entry.ttl = ttl.clone();
+            user_entry.token_ttl = ttl;
+        }
+
+        if old_token_max_ttl != user_entry.token_max_ttl {
+            user_entry.max_ttl = user_entry.token_max_ttl.clone();
+        } else if let Ok(max_ttl_value) = req.get_data("max_ttl") {
+            let max_ttl = max_ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
+            user_entry.max_ttl = max_ttl.clone();
+            user_entry.token_max_ttl = max_ttl;
+        }
+
+        if old_token_bound_cidrs != user_entry.token_bound_cidrs {
+            user_entry.bound_cidrs = user_entry.token_bound_cidrs.clone();
+        } else if let Ok(bound_cidrs_value) = req.get_data("bound_cidrs") {
+            let bound_cidrs = bound_cidrs_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
+            user_entry.bound_cidrs = bound_cidrs
+                .iter()
+                .map(|s| SockAddrMarshaler::from_str(s))
+                .collect::<Result<Vec<SockAddrMarshaler>, _>>()?;
+            user_entry.token_bound_cidrs = user_entry.bound_cidrs.clone();
         }
 
         self.set_user(req, &username, &user_entry)?;

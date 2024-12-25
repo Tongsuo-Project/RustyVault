@@ -24,6 +24,7 @@ pub mod sock_addr;
 pub mod string;
 pub mod token_util;
 pub mod unix_sock_addr;
+pub mod kv_builder;
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];
@@ -115,4 +116,16 @@ pub fn hex_encode_with_colon(bytes: &[u8]) -> String {
         hex_str.as_bytes().chunks(2).map(|chunk| String::from_utf8(chunk.to_vec()).unwrap()).collect();
 
     split_hex.join(":")
+}
+
+pub fn is_protect_path(protected: &[&str], paths: &[&str]) -> bool {
+    for p in protected.iter() {
+        for path in paths.iter() {
+            if path.starts_with(p) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }

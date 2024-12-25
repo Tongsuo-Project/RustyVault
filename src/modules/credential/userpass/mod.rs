@@ -1,16 +1,17 @@
-use std::sync::{Arc, RwLock};
+use std::
+    sync::{Arc, RwLock}
+;
 
 use as_any::Downcast;
 use derive_more::Deref;
-
 use crate::{
-    core::Core,
-    errors::RvError,
+    core::Core, errors::RvError,
     logical::{Backend, LogicalBackend, Request, Response},
     modules::{auth::AuthModule, Module},
     new_logical_backend, new_logical_backend_internal,
 };
 
+pub mod cli;
 pub mod path_login;
 pub mod path_users;
 

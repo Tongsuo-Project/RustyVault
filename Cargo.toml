@@ -70,7 +70,7 @@ better_default = "1.0.5"
 prometheus-client = "0.22.3"
 sysinfo = "0.31.4"
 json_to_table = "0.8"
-tabled = "0.16"
+prettytable = "0.10"
 rpassword = "7.3"
 
 # optional dependencies
@@ -81,6 +81,9 @@ openssl-sys = { version = "0.9.102", optional = true }
 #[patch.crates-io]
 #openssl = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }
 #openssl-sys = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }
+
+[build-dependencies]
+toml = "0.8.19"
 
 [features]
 default = ["crypto_adaptor_openssl"]
