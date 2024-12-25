@@ -43,7 +43,7 @@ impl LoginHandler for UsesPassCliHandler {
         let path = format!("auth/{}/login/{}", mount, username);
 
         let logical = client.logical();
-        
+
         logical.write(&path, payload.as_object().cloned())
     }
 

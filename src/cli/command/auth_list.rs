@@ -8,7 +8,7 @@ use crate::{
 
 #[derive(Parser, Deref)]
 #[command(author, version, about = r#"Lists the enabled auth methods on the RustyVault server. This command also outputs
-information about the method including configuration and human-friendly descriptions. 
+information about the method including configuration and human-friendly descriptions.
 A TTL of "system" indicates that the system default is in use.
 
 List all enabled auth methods:
@@ -46,14 +46,14 @@ impl CommandExecutor for List {
                     for (path, mount) in paths.iter() {
                         let mount_output: MountOutput = serde_json::from_value(mount.clone())?;
                         out_arr.push(json!([
-                            path, 
-                            &mount_output.logical_type, 
-                            &mount_output.accessor, 
-                            &mount_output.description, 
+                            path,
+                            &mount_output.logical_type,
+                            &mount_output.accessor,
+                            &mount_output.description,
                             &mount_output.plugin_version]
                         ));
                     }
-                    
+
                     let data = if self.output.is_format_table() {
                         &table_data_add_header(&out, &["Path", "Type", "Accessor", "Description", "Version"])?
                     } else {
