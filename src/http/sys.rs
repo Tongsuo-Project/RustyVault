@@ -19,9 +19,9 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct InitRequest {
-    secret_shares: u8,
-    secret_threshold: u8,
+pub struct InitRequest {
+    pub secret_shares: u8,
+    pub secret_threshold: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

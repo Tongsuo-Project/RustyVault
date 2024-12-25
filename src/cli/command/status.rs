@@ -17,7 +17,7 @@ pub struct Status {
     http_options: command::HttpOptions,
 
     #[command(flatten, next_help_heading = "Output Options")]
-    output_options: command::OutputOptions,
+    output: command::OutputOptions,
 }
 
 impl Status {
@@ -27,8 +27,21 @@ impl Status {
     }
 
     pub fn main(&self) -> Result<(), RvError> {
-        let (_code, value) = self.request_read("/v1/sys/seal-status")?;
-        self.output_options.print_value(&value)?;
+        let client = self.client()?;
+        let sys = client.sys();
+
+        match sys.seal_status() {
+            Ok(ret) => {
+                if ret.response_status == 200 {
+                    self.output.print_value(ret.response_data.as_ref().unwrap())?;
+                } else if ret.response_status == 204 {
+                    println!("ok");
+                } else {
+                    ret.print_debug_info();
+                }
+            }
+            Err(e) => eprintln!("{}", e),
+        }
         Ok(())
     }
 }

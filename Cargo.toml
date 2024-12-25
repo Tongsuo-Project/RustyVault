@@ -71,6 +71,7 @@ prometheus-client = "0.22.3"
 sysinfo = "0.31.4"
 json_to_table = "0.8"
 tabled = "0.16"
+rpassword = "7.3"
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }

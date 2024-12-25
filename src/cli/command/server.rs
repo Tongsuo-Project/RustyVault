@@ -36,7 +36,11 @@ pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";
 RustyVault will start in a "sealed" state. The RustyVault cluster must be initialized
 before use, usually by the "rvault operator init" command. Each RustyVault server must
 also be unsealed using the "rvault operator unseal" command or the API before the
-server can respond to requests."#
+server can respond to requests.
+
+Start a server with a configuration file:
+
+  $ rvault server -config=/etc/rvault/config.hcl"#
 )]
 pub struct Server {
     #[deref]
