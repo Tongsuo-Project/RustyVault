@@ -14,11 +14,16 @@ use serde_json::{json, Map, Value, to_string_pretty};
 use serde_yaml::to_string;
 use clap::{Args, ArgAction, ValueEnum, ValueHint};
 use ureq::AgentBuilder;
+use regex::Regex;
 use rustls::{
     pki_types::{PrivateKeyDer, pem::PemObject},
     ALL_VERSIONS, ClientConfig, RootCertStore,
 };
 use webpki_roots::TLS_SERVER_ROOTS;
+use tabled::{
+    Table, Tabled,
+    settings::{Alignment, Padding, Style, Width, Border, object::Rows},
+};
 
 use crate::{
     errors::RvError,
@@ -223,17 +228,12 @@ impl HttpOptions {
         } else {
             format!("{}/{}", self.address, path)
         };
-        println!("request url: {}, method: {}", url, method);
+        log::debug!("request url: {}, method: {}", url, method);
         let mut req = if url.starts_with("https") {
-/*
-            let _ = rustls::crypto::ring::default_provider().install_default();
-            let builder = ClientConfig::builder();
-*/
             let provider = rustls::crypto::CryptoProvider::get_default()
                 .cloned()
                 .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
 
-                //.with_protocol_versions(&[&rustls::version::TLS12])
             let builder = ClientConfig::builder_with_provider(provider.clone())
                 .with_protocol_versions(ALL_VERSIONS)
                 .expect("all TLS versions");
@@ -328,23 +328,90 @@ impl HttpOptions {
     }
 }
 
+fn convert_keys(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut new_map = serde_json::Map::new();
+            for (key, value) in map {
+                let new_key = Regex::new(r"_(\w)")
+                   .unwrap()
+                   .replace_all(&key.to_string(), |caps: &regex::Captures| {
+                        let captured_char = caps.get(1).unwrap().as_str();
+                        format!(" {}", captured_char.to_ascii_uppercase())
+                    })
+                   .trim_start()
+                   .to_string()
+                   .chars()
+                   .enumerate()
+                   .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
+                   .collect::<String>();
+                new_map.insert(new_key, convert_keys(value));
+            }
+            Value::Object(new_map)
+        }
+        Value::Array(arr) => {
+            let mut new_arr = Vec::new();
+            for item in arr {
+                new_arr.push(convert_keys(item));
+            }
+            Value::Array(new_arr)
+        }
+        _ => value.clone(),
+    }
+}
+
+#[allow(non_snake_case)]
+#[derive(Tabled)]
+struct TableRow {
+    Key: String,
+    Value: String,
+}
+
 impl OutputOptions {
     pub fn print_value(&self, value: &Value) -> Result<(), RvError> {
-        println!("format: {:?}", self.format);
         match self.format {
             Format::Json => {
-                println!("json:");
                 println!("{}", to_string_pretty(value)?);
             }
             Format::Yaml => {
-                println!("yaml:");
                 println!("{}", to_string(value)?);
             }
             Format::Table => {
-                println!("table:");
+                let data = convert_keys(value);
+                let mut table = json_to_table::json_to_table(&data);
+                table
+                    .with(Padding::new(0, 4, 0, 0))
+                    .with(Alignment::left());
+
+                let rendered_table = table
+                    .with(Style::ascii()).to_string();
+
+                let lines: Vec<&str> = rendered_table.lines().collect();
+
+                let columns: Vec<&str> = lines[0].split('+').filter(|s|!s.is_empty()).collect();
+                let col_count = columns.len();
+                let mut col_widths = vec![0; col_count];
+
+                for (i, col) in columns.iter().enumerate() {
+                    col_widths[i] = col.trim().len();
+                }
+
+                let rows: Vec<TableRow> = Vec::new();
+                let header = Table::new(rows)
+                    .with(Padding::new(0, 4, 0, 0))
+                    .with(Alignment::left())
+                    .with(Style::blank())
+                    .modify(Rows::single(0), Border::new().set_bottom('-'))
+                    .with(Width::list(col_widths))
+                    .to_string();
+
+                println!("{}", header);
+
+                let body = table.with(Style::blank()).to_string();
+                println!("{}", body);
             }
             Format::Raw => {
-                println!("raw:");
+                println!("{}", serde_json::to_string(value)?);
             }
         }
 

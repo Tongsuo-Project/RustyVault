@@ -32,7 +32,7 @@ strum = { version = "0.25", features = ["derive"] }
 strum_macros = "0.25"
 radix_trie = "0.2.1"
 lazy_static = "1.4.0"
-regex = "1.9.5"
+regex = "1.11"
 clap = { version = "4.5", features = ["wrap_help", "derive", "env", "suggestions"] }
 sysexits = { version = "0.7", features = ["std"] }
 build-time = "0.1"
@@ -69,6 +69,8 @@ ctor = "0.2.8"
 better_default = "1.0.5"
 prometheus-client = "0.22.3"
 sysinfo = "0.31.4"
+json_to_table = "0.8"
+tabled = "0.16"
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }

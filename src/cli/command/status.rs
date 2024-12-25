@@ -27,9 +27,7 @@ impl Status {
     }
 
     pub fn main(&self) -> Result<(), RvError> {
-        let (code, value) = self.request_read("/v1/sys/seal-status")?;
-        println!("code: {}, value: {:?}", code, value.as_str());
-        println!("client_cert: {:?}, client_key: {:?}", self.client_cert, self.client_key);
+        let (_code, value) = self.request_read("/v1/sys/seal-status")?;
         self.output_options.print_value(&value)?;
         Ok(())
     }
