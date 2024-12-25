@@ -174,10 +174,15 @@ pub enum RvError {
         #[from]
         source: io::Error,
     },
-    #[error("Some serde error happened, {:?}", .source)]
-    Serde {
+    #[error("Some serde_json error happened, {:?}", .source)]
+    SerdeJson {
         #[from]
         source: serde_json::Error,
+    },
+    #[error("Some serde_yaml error happened, {:?}", .source)]
+    SerdeYaml {
+        #[from]
+        source: serde_yaml::Error,
     },
     #[error("Some openssl error happened, {:?}", .source)]
     OpenSSL {
@@ -275,6 +280,9 @@ pub enum RvError {
 
     #[error("Some rustls_pemfile error happened")]
     RustlsPemFileError(rustls_pemfile::Error),
+
+    #[error("Some rustls_pki_types error happened")]
+    RustlsPkiTypesPemFileError(rustls::pki_types::pem::Error),
 
     #[error("Some string utf8 error happened, {:?}", .source)]
     StringUtf8Error {
@@ -432,6 +440,12 @@ impl<T> From<PoisonError<RwLockReadGuard<'_, T>>> for RvError {
 impl From<rustls_pemfile::Error> for RvError {
     fn from(err: rustls_pemfile::Error) -> Self {
         RvError::RustlsPemFileError(err)
+    }
+}
+
+impl From<rustls::pki_types::pem::Error> for RvError {
+    fn from(err: rustls::pki_types::pem::Error) -> Self {
+        RvError::RustlsPkiTypesPemFileError(err)
     }
 }
 

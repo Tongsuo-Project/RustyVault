@@ -8,24 +8,16 @@
 //! [documentation site]: https://www.tongsuo.net
 
 use std::process::ExitCode;
+use clap::{Parser, CommandFactory};
 
-use clap::Command;
-use rusty_vault::cli;
+use rusty_vault::cli::Cli;
 
 fn main() -> ExitCode {
-    let mut app = Command::new("rusty_vault")
-        .version(rusty_vault::VERSION)
-        .help_expected(true)
-        .disable_colored_help(false)
-        .max_term_width(100)
-        .about("A secure and high performance secret management software that is compatible with Hashicorp Vault.");
-    app = cli::define_command_line_options(app);
-    let mut app_cloned = app.clone();
+    let mut cli = Cli::parse();
 
-    let matches = app.get_matches();
-    let ret = cli::run(&matches);
+    let ret = cli.run();
     if !ret.is_success() {
-        let _ = app_cloned.print_long_help();
+        Cli::command().print_long_help().unwrap();
     }
 
     ret.into()
