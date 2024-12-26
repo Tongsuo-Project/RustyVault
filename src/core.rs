@@ -19,14 +19,14 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::{
-    cli::config::Config,
+    cli::config::{Config, MountEntryHMACLevel},
     errors::RvError,
     handler::{AuthHandler, Handler},
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
     modules::{
         auth::AuthModule,
-        credential::{cert::CertModule, approle::AppRoleModule, userpass::UserPassModule},
+        credential::{approle::AppRoleModule, cert::CertModule, userpass::UserPassModule},
         pki::PkiModule,
     },
     mount::MountTable,
@@ -77,6 +77,8 @@ pub struct Core {
     pub module_manager: ModuleManager,
     pub sealed: bool,
     pub unseal_key_shares: Vec<Vec<u8>>,
+    pub hmac_key: Vec<u8>,
+    pub mount_entry_hmac_level: MountEntryHMACLevel,
 }
 
 impl Default for Core {
@@ -98,12 +100,18 @@ impl Default for Core {
             module_manager: ModuleManager::new(),
             sealed: true,
             unseal_key_shares: Vec::new(),
+            hmac_key: Vec::new(),
+            mount_entry_hmac_level: MountEntryHMACLevel::None,
         }
     }
 }
 
 impl Core {
     pub fn config(&mut self, core: Arc<RwLock<Core>>, config: Option<&Config>) -> Result<(), RvError> {
+        if let Some(conf) = config {
+            self.mount_entry_hmac_level = conf.mount_entry_hmac_level;
+        }
+
         self.module_manager.set_default_modules(Arc::clone(&core))?;
         self.self_ref = Some(Arc::clone(&core));
 
@@ -384,7 +392,8 @@ impl Core {
         self.module_manager.setup(self)?;
 
         // Perform initial setup
-        self.mounts.load_or_default(self.barrier.as_storage())?;
+        self.hmac_key = self.barrier.derive_hmac_key()?;
+        self.mounts.load_or_default(self.barrier.as_storage(), Some(&self.hmac_key), self.mount_entry_hmac_level.clone())?;
 
         self.setup_mounts()?;
 

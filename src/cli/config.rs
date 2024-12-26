@@ -38,6 +38,20 @@ pub struct Config {
     pub daemon_group: String,
     #[serde(default = "default_collection_interval")]
     pub collection_interval: u64,
+    #[serde(default = "default_hmac_level")]
+    pub mount_entry_hmac_level: MountEntryHMACLevel,
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum MountEntryHMACLevel {
+    None,
+    Compat,
+    High,
+}
+
+fn default_hmac_level() -> MountEntryHMACLevel {
+    MountEntryHMACLevel::None
 }
 
 fn default_collection_interval() -> u64 {
@@ -225,6 +239,10 @@ impl Config {
         if other.pid_file != "" {
             self.pid_file = other.pid_file;
         }
+
+        if other.mount_entry_hmac_level != MountEntryHMACLevel::None {
+            self.mount_entry_hmac_level = other.mount_entry_hmac_level;
+        }
     }
 }
 
@@ -405,6 +423,7 @@ mod test {
         assert_eq!(json_config.daemon, false);
         assert_eq!(json_config.daemon_user.as_str(), "");
         assert_eq!(json_config.daemon_group.as_str(), "");
+        assert_eq!(json_config.mount_entry_hmac_level, MountEntryHMACLevel::None);
 
         let (_, listener) = json_config.listener.iter().next().unwrap();
         assert!(listener.tls_disable);
@@ -440,6 +459,7 @@ mod test {
             log_level = "debug"
             log_format = "{date} {req.path}"
             pid_file = "/tmp/rusty_vault.pid"
+            mount_entry_hmac_level = "compat"
         "#;
 
         assert!(write_file(path, hcl_config_str).is_ok());
@@ -467,6 +487,7 @@ mod test {
         assert!(config.is_ok());
         let hcl_config = config.unwrap();
         println!("hcl config: {:?}", hcl_config);
+        assert_eq!(hcl_config.mount_entry_hmac_level, MountEntryHMACLevel::Compat);
 
         let (_, listener) = hcl_config.listener.iter().next().unwrap();
         assert!(listener.tls_disable);
@@ -499,6 +520,7 @@ mod test {
             log_level = "debug"
             log_format = "{date} {req.path}"
             pid_file = "/tmp/rusty_vault.pid"
+            mount_entry_hmac_level = "high"
         "#;
 
         assert!(write_file(path, hcl_config_str).is_ok());
@@ -518,6 +540,7 @@ mod test {
         assert_eq!(hcl_config.daemon, false);
         assert_eq!(hcl_config.daemon_user.as_str(), "");
         assert_eq!(hcl_config.daemon_group.as_str(), "");
+        assert_eq!(hcl_config.mount_entry_hmac_level, MountEntryHMACLevel::High);
 
         let (_, listener) = hcl_config.listener.iter().next().unwrap();
         assert_eq!(listener.ltype.as_str(), "tcp");

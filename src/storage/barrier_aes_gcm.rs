@@ -9,6 +9,7 @@ use std::{
 use openssl::{
     cipher::{Cipher, CipherRef},
     cipher_ctx::CipherCtx,
+    hash::{hash, MessageDigest},
 };
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -193,6 +194,22 @@ impl SecurityBarrier for AESGCMBarrier {
         let mut barrier_info = self.barrier_info.write()?;
         barrier_info.sealed = true;
         Ok(())
+    }
+
+    fn derive_hmac_key(&self) -> Result<Vec<u8>, RvError> {
+        let barrier_info = self.barrier_info.read()?;
+        if barrier_info.key.is_none() {
+            return Err(RvError::ErrBarrierNotInit);
+        }
+
+        if self.sealed()? {
+            return Err(RvError::ErrBarrierSealed);
+        }
+
+        let key = Zeroizing::new(barrier_info.key.clone().unwrap());
+
+        let ret = hash(MessageDigest::sha256(), key.deref().as_slice())?;
+        Ok(ret.to_vec())
     }
 
     fn as_storage(&self) -> &dyn Storage {
