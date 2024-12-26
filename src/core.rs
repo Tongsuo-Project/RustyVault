@@ -21,7 +21,7 @@ use zeroize::Zeroizing;
 use crate::{
     cli::config::{Config, MountEntryHMACLevel},
     errors::RvError,
-    handler::Handler,
+    handler::{AuthHandler, Handler},
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
     modules::{
@@ -72,6 +72,7 @@ pub struct Core {
     pub mounts: Arc<MountTable>,
     pub router: Arc<Router>,
     pub handlers: RwLock<Vec<Arc<dyn Handler>>>,
+    pub auth_handlers: Arc<RwLock<Vec<Arc<dyn AuthHandler>>>>,
     pub logical_backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
     pub module_manager: ModuleManager,
     pub sealed: bool,
@@ -94,6 +95,7 @@ impl Default for Core {
             mounts: Arc::new(MountTable::new()),
             router: Arc::clone(&router),
             handlers: RwLock::new(vec![router]),
+            auth_handlers: Arc::new(RwLock::new(Vec::new())),
             logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
             sealed: true,
@@ -105,7 +107,7 @@ impl Default for Core {
 }
 
 impl Core {
-    pub fn config(&mut self, core: Arc<RwLock<Core>>, config: Option<Config>) -> Result<(), RvError> {
+    pub fn config(&mut self, core: Arc<RwLock<Core>>, config: Option<&Config>) -> Result<(), RvError> {
         if let Some(conf) = config {
             self.mount_entry_hmac_level = conf.mount_entry_hmac_level;
         }
@@ -132,6 +134,20 @@ impl Core {
         // add credential module: cert
         let cert_module = CertModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
+
+        let handlers = self.handlers.read()?;
+        for handler in handlers.iter() {
+            match handler.post_config(Arc::clone(&core), config) {
+                Ok(_) => {
+                    continue;
+                }
+                Err(error) => {
+                    if error != RvError::ErrHandlerDefault {
+                        return Err(error);
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
@@ -260,6 +276,22 @@ impl Core {
     pub fn delete_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
         let mut handlers = self.handlers.write()?;
         handlers.retain(|h| h.name() != handler.name());
+        Ok(())
+    }
+
+    pub fn add_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
+        let mut auth_handlers = self.auth_handlers.write()?;
+        if let Some(_) = auth_handlers.iter().find(|h| h.name() == auth_handler.name()) {
+            return Err(RvError::ErrCoreHandlerExist);
+        }
+
+        auth_handlers.push(auth_handler);
+        Ok(())
+    }
+
+    pub fn delete_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
+        let mut auth_handlers = self.auth_handlers.write()?;
+        auth_handlers.retain(|h| h.name() != auth_handler.name());
         Ok(())
     }
 

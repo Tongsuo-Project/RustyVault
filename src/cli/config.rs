@@ -42,7 +42,7 @@ pub struct Config {
     pub mount_entry_hmac_level: MountEntryHMACLevel,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum MountEntryHMACLevel {
     None,
