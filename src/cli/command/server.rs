@@ -161,7 +161,7 @@ impl Server {
 
         {
             let mut c = core.write()?;
-            c.config(Arc::clone(&core), Some(config))?;
+            c.config(Arc::clone(&core), Some(&config))?;
         }
 
         let mut http_server = HttpServer::new(move || {

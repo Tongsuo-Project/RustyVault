@@ -14,10 +14,16 @@ use crate::{
     context::Context,
     core::Core,
     errors::RvError,
-    logical::{Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response},
-    modules::{auth::AuthModule, Module},
-    mount::MountEntry,
+    logical::{
+        field::FieldTrait, Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Request, Response,
+    },
+    modules::{
+        auth::{AuthModule, AUTH_TABLE_TYPE},
+        Module,
+    },
+    mount::{MountEntry, MOUNT_TABLE_TYPE},
     new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
+    rv_error_response_status,
     storage::StorageEntry,
 };
 
@@ -92,6 +98,11 @@ impl SystemBackend {
                             field_type: FieldType::Str,
                             default: "",
                             description: r#"User-friendly description for this mount."#
+                        },
+                        "options": {
+                            field_type: FieldType::Map,
+                            required: false,
+                            description: r#"The options to pass into the backend. Should be a json object with string keys and values."#
                         }
                     },
                     operations: [
@@ -174,6 +185,11 @@ impl SystemBackend {
                             field_type: FieldType::Str,
                             default: "",
                             description: r#"User-friendly description for this crential backend."#
+                        },
+                        "options": {
+                            field_type: FieldType::Map,
+                            required: false,
+                            description: r#"The options to pass into the backend. Should be a json object with string keys and values."#
                         }
                     },
                     operations: [
@@ -285,6 +301,7 @@ impl SystemBackendInner {
         let path = req.get_data("path")?;
         let logical_type = req.get_data("type")?;
         let description = req.get_data_or_default("description")?;
+        let options = req.get_data_or_default("options")?;
 
         let path = path.as_str().unwrap();
         let logical_type = logical_type.as_str().unwrap();
@@ -294,7 +311,9 @@ impl SystemBackendInner {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let me = MountEntry::new(path, logical_type, description);
+        let mut me = MountEntry::new(&MOUNT_TABLE_TYPE, path, logical_type, description);
+        me.options = options.as_map();
+
         let core = self.core.read()?;
         core.mount(&me)?;
         Ok(None)
@@ -321,8 +340,41 @@ impl SystemBackendInner {
             return Err(RvError::ErrRequestInvalid);
         }
 
+        let from_path = sanitize_path(from);
+        let to_path = sanitize_path(to);
         let core = self.core.read()?;
-        core.remount(from, to)?;
+
+        if let Some(me) = core.router.matching_mount_entry(&from_path)? {
+            let mount_entry = me.read()?;
+
+            let dst_path_match = core.router.matching_mount(&to)?;
+            if dst_path_match.len() != 0 {
+                return Err(rv_error_response_status!(409, &format!("path already in use at {}", dst_path_match)));
+            }
+
+            let mount_entry_table_type = mount_entry.table.clone();
+
+            std::mem::drop(mount_entry);
+
+            match mount_entry_table_type.as_str() {
+                AUTH_TABLE_TYPE => {
+                    let module = self.get_auth_module()?;
+                    let auth_mod = module.read()?;
+                    let auth_module =
+                        auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+                    auth_module.remount_auth(&from_path, &to_path)?;
+                }
+                MOUNT_TABLE_TYPE => {
+                    core.remount(&from_path, &to_path)?;
+                }
+                _ => {
+                    return Err(rv_error_response_status!(409, "Unknown mount table type."));
+                }
+            }
+        } else {
+            return Err(rv_error_response_status!(409, &format!("no matching mount at {}", from_path)));
+        }
+
         Ok(None)
     }
 
@@ -345,41 +397,34 @@ impl SystemBackendInner {
     }
 
     pub fn handle_auth_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        let core = self.core.read()?;
         let mut data: Map<String, Value> = Map::new();
 
-        if let Some(module) = core.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                let router_store = auth_module.router_store.read()?;
-                let mounts = router_store.mounts.entries.read()?;
+        let module = self.get_auth_module()?;
+        let auth_mod = module.read()?;
+        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
 
-                for mount_entry in mounts.values() {
-                    let entry = mount_entry.read()?;
-                    let info: Value = json!({
-                        "type": entry.logical_type.clone(),
-                        "description": entry.description.clone(),
-                    });
-                    data.insert(entry.path.clone(), info);
-                }
+        let router_store = auth_module.router_store.read()?;
+        let mounts = router_store.mounts.entries.read()?;
 
-                return Ok(Some(Response::data_response(Some(data))));
-            } else {
-                log::error!("downcast auth module failed!");
-            }
-        } else {
-            log::error!("get auth module failed!");
+        for mount_entry in mounts.values() {
+            let entry = mount_entry.read()?;
+            let info: Value = json!({
+                "type": entry.logical_type.clone(),
+                "description": entry.description.clone(),
+            });
+            data.insert(entry.path.clone(), info);
         }
 
-        Err(RvError::ErrAuthModuleDisabled)
+        return Ok(Some(Response::data_response(Some(data))));
     }
 
     pub fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let logical_type = req.get_data("type")?;
         let description = req.get_data_or_default("description")?;
+        let options = req.get_data_or_default("options")?;
 
-        let path = path.as_str().unwrap();
+        let path = sanitize_path(path.as_str().unwrap());
         let logical_type = logical_type.as_str().unwrap();
         let description = description.as_str().unwrap();
 
@@ -387,44 +432,32 @@ impl SystemBackendInner {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let me = MountEntry::new(path, logical_type, description);
+        let mut me = MountEntry::new(&AUTH_TABLE_TYPE, &path, logical_type, description);
 
-        let core = self.core.read()?;
-        if let Some(module) = core.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                auth_module.enable_auth(&me)?;
-                return Ok(None);
-            } else {
-                log::error!("downcast auth module failed!");
-            }
-        } else {
-            log::error!("get auth module failed!");
-        }
+        me.options = options.as_map();
 
-        Err(RvError::ErrAuthModuleDisabled)
+        let module = self.get_auth_module()?;
+        let auth_mod = module.read()?;
+        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        auth_module.enable_auth(&me)?;
+
+        Ok(None)
     }
 
     pub fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let suffix = req.path.trim_start_matches("auth/");
-        if suffix.len() == 0 {
+        let path = sanitize_path(req.path.trim_start_matches("auth/"));
+        if path.len() == 0 {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let core = self.core.read()?;
-        if let Some(module) = core.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                auth_module.disable_auth(&suffix)?;
-                return Ok(None);
-            } else {
-                log::error!("downcast auth module failed!");
-            }
-        } else {
-            log::error!("get auth module failed!");
-        }
+        let module = self.get_auth_module()?;
+        let auth_mod = module.read()?;
+        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
 
-        Err(RvError::ErrAuthModuleDisabled)
+        auth_module.disable_auth(&path)?;
+
+        Ok(None)
     }
 
     pub fn handle_policy_list(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -511,6 +544,15 @@ impl SystemBackendInner {
 
         Ok(None)
     }
+
+    fn get_auth_module(&self) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
+        let core = self.core.read().unwrap();
+        if let Some(module) = core.module_manager.get_module("auth") {
+            return Ok(module);
+        }
+
+        Err(RvError::ErrModuleNotFound)
+    }
 }
 
 impl SystemModule {
@@ -537,4 +579,15 @@ impl Module for SystemModule {
     fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
         core.delete_logical_backend("system")
     }
+}
+
+fn sanitize_path(path: &str) -> String {
+    let mut new_path = path.to_string();
+    if !new_path.ends_with('/') {
+        new_path.push('/');
+    }
+    if new_path.starts_with('/') {
+        new_path = new_path[1..].to_string();
+    }
+    new_path
 }

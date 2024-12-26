@@ -181,7 +181,7 @@ fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     assert!(resp.is_some());
     let data = resp.unwrap().data;
     assert!(data.is_some());
-    assert_eq!(data.as_ref().unwrap().len(), 2);
+    assert_eq!(data.as_ref().unwrap().len(), 3);
 
     // test api: "mounts/kv" with valid type
     let mount_data = json!({
