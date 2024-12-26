@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use derive_more::Deref;
 use humantime::parse_duration;
@@ -15,15 +19,15 @@ use crate::{
     context::Context,
     core::Core,
     errors::RvError,
-    handler::Handler,
+    handler::{AuthHandler, Handler},
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
-    rv_error_response,
     new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
     router::Router,
+    rv_error_response,
     storage::{Storage, StorageEntry},
-    utils::{generate_uuid, is_str_subset, sha1, policy::sanitize_policies},
+    utils::{generate_uuid, is_str_subset, policy::sanitize_policies, sha1},
 };
 
 const TOKEN_LOOKUP_PREFIX: &str = "id/";
@@ -85,6 +89,7 @@ pub struct TokenStoreInner {
 pub struct TokenStore {
     #[deref]
     pub inner: Arc<TokenStoreInner>,
+    pub auth_handlers: Arc<RwLock<Vec<Arc<dyn AuthHandler>>>>,
 }
 
 impl TokenStore {
@@ -112,7 +117,7 @@ impl TokenStore {
         inner.view = Some(Arc::new(view));
         inner.expiration = expiration;
 
-        let token_store = TokenStore { inner: Arc::new(inner) };
+        let token_store = TokenStore { inner: Arc::new(inner), auth_handlers: Arc::clone(&core.auth_handlers) };
 
         Ok(token_store)
     }
@@ -598,12 +603,30 @@ impl Handler for TokenStore {
             return Ok(None);
         }
 
-        let auth = self.check_token(&req.path, &req.client_token)?;
+        let mut auth: Option<Auth> = None;
+
+        let auth_handlers = self.auth_handlers.read()?;
+        for auth_handler in auth_handlers.iter() {
+            if let Some(ret) = auth_handler.pre_auth(req)? {
+                auth = Some(ret);
+                break;
+            }
+        }
+
+        if auth.is_none() {
+            auth = self.check_token(&req.path, &req.client_token)?;
+        }
+
         if auth.is_none() {
             return Err(RvError::ErrPermissionDenied);
         }
 
         req.name = auth.as_ref().unwrap().display_name.clone();
+        req.auth = auth;
+
+        for auth_handler in auth_handlers.iter() {
+            auth_handler.post_auth(req)?;
+        }
 
         Ok(None)
     }
