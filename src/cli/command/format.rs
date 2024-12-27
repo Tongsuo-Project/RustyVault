@@ -109,6 +109,12 @@ impl Formatter for JsonFormatter {
 pub struct YamlFormatter;
 
 impl Formatter for YamlFormatter {
+    fn output(&self, data: &Value, _secret: Option<Secret>) -> Result<(), RvError> {
+        let b = self.format(data)?;
+        print!("{}", String::from_utf8_lossy(&b));
+        Ok(())
+    }
+
     fn format(&self, data: &Value) -> Result<Vec<u8>, RvError> {
         Ok(serde_yaml::to_string(data)?.as_bytes().to_vec())
     }

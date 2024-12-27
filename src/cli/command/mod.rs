@@ -252,19 +252,25 @@ mod test {
 
         // Reading data should ok
         let ret = test_http_server.cli(&["read"], &["kv/foo"]);
+        #[cfg(windows)]
+        assert_eq!(ret, Ok("Key    Value    \r\n---    -----    \r\naa     bb    \r\ncc     dd    \r\n".into()));
+        #[cfg(not(windows))]
         assert_eq!(ret, Ok("Key    Value    \n---    -----    \naa     bb    \ncc     dd    \n".into()));
 
         let ret = test_http_server.cli(&["read"], &["--format=table", "kv/foo"]);
+        #[cfg(windows)]
+        assert_eq!(ret, Ok("Key    Value    \r\n---    -----    \r\naa     bb    \r\ncc     dd    \r\n".into()));
+        #[cfg(not(windows))]
         assert_eq!(ret, Ok("Key    Value    \n---    -----    \naa     bb    \ncc     dd    \n".into()));
 
         let ret = test_http_server.cli(&["read"], &["--format=json", "kv/foo"]);
         assert_eq!(ret, Ok("{\n  \"aa\": \"bb\",\n  \"cc\": \"dd\"\n}\n".into()));
 
         let ret = test_http_server.cli(&["read"], &["--format=yaml", "kv/foo"]);
-        assert_eq!(ret, Ok("aa: bb\ncc: dd\n\n".into()));
+        assert_eq!(ret, Ok("aa: bb\ncc: dd\n".into()));
 
         let ret = test_http_server.cli(&["read"], &["--format=yml", "kv/foo"]);
-        assert_eq!(ret, Ok("aa: bb\ncc: dd\n\n".into()));
+        assert_eq!(ret, Ok("aa: bb\ncc: dd\n".into()));
 
         let ret = test_http_server.cli(&["read"], &["--format=raw", "kv/foo"]);
         assert_eq!(ret, Ok("{\"aa\":\"bb\",\"cc\":\"dd\"}\n".into()));
@@ -281,6 +287,9 @@ mod test {
 
         // list kv/
         let ret = test_http_server.cli(&["list"], &["kv/"]);
+        #[cfg(windows)]
+        assert_eq!(ret, Ok("Keys    \r\n----    \r\nfoo    \r\n".into()));
+        #[cfg(not(windows))]
         assert_eq!(ret, Ok("Keys    \n----    \nfoo    \n".into()));
 
         // list kvv/
@@ -293,6 +302,9 @@ mod test {
 
         // list kv/ again
         let ret = test_http_server.cli(&["list"], &["kv/"]);
+        #[cfg(windows)]
+        assert_eq!(ret, Ok("Keys    \r\n----    \r\nfoo    \r\ngoo    \r\n".into()));
+        #[cfg(not(windows))]
         assert_eq!(ret, Ok("Keys    \n----    \nfoo    \ngoo    \n".into()));
 
         // delete kv/goo
@@ -313,6 +325,9 @@ mod test {
 
         // list kv/ again
         let ret = test_http_server.cli(&["list"], &["kv/"]);
+        #[cfg(windows)]
+        assert_eq!(ret, Ok("Keys    \r\n----    \r\nfoo    \r\n".into()));
+        #[cfg(not(windows))]
         assert_eq!(ret, Ok("Keys    \n----    \nfoo    \n".into()));
     }
 }
