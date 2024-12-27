@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use async_trait::async_trait;
 use derive_more::Deref;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
@@ -592,12 +593,13 @@ impl TokenStoreInner {
     }
 }
 
+#[async_trait]
 impl Handler for TokenStore {
     fn name(&self) -> String {
         "auth_token".to_string()
     }
 
-    fn pre_route(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+    async fn pre_route(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         let is_unauth_path = self.router.is_unauth_path(&req.path)?;
         if is_unauth_path {
             return Ok(None);
@@ -605,9 +607,13 @@ impl Handler for TokenStore {
 
         let mut auth: Option<Auth> = None;
 
-        let auth_handlers = self.auth_handlers.read()?;
+        let auth_handlers: Vec<_> = {
+            let handlers = self.auth_handlers.read()?;
+            handlers.iter().cloned().collect::<Vec<_>>()
+        };
+
         for auth_handler in auth_handlers.iter() {
-            if let Some(ret) = auth_handler.pre_auth(req)? {
+            if let Some(ret) = auth_handler.pre_auth(req).await? {
                 auth = Some(ret);
                 break;
             }
@@ -625,13 +631,13 @@ impl Handler for TokenStore {
         req.auth = auth;
 
         for auth_handler in auth_handlers.iter() {
-            auth_handler.post_auth(req)?;
+            auth_handler.post_auth(req).await?;
         }
 
         Ok(None)
     }
 
-    fn post_route(&self, req: &mut Request, resp: &mut Option<Response>) -> Result<(), RvError> {
+    async fn post_route(&self, req: &mut Request, resp: &mut Option<Response>) -> Result<(), RvError> {
         if resp.is_none() {
             return Ok(());
         }

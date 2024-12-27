@@ -408,7 +408,7 @@ impl Core {
         Ok(())
     }
 
-    pub fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut resp = None;
         let mut err: Option<RvError> = None;
         let handlers = self.handlers.read()?;
@@ -418,7 +418,7 @@ impl Core {
         }
 
         for handler in handlers.iter() {
-            match handler.pre_route(req) {
+            match handler.pre_route(req).await {
                 Ok(res) => {
                     if res.is_some() {
                         resp = res;
@@ -436,7 +436,7 @@ impl Core {
 
         if resp.is_none() && err.is_none() {
             for handler in handlers.iter() {
-                match handler.route(req) {
+                match handler.route(req).await {
                     Ok(res) => {
                         if res.is_some() {
                             resp = res;
@@ -454,7 +454,7 @@ impl Core {
 
             if err.is_none() {
                 for handler in handlers.iter() {
-                    match handler.post_route(req, &mut resp) {
+                    match handler.post_route(req, &mut resp).await {
                         Ok(_) => {}
                         Err(error) => {
                             if error != RvError::ErrHandlerDefault {
@@ -468,7 +468,7 @@ impl Core {
         }
 
         for handler in handlers.iter() {
-            match handler.log(req, &resp) {
+            match handler.log(req, &resp).await {
                 Ok(_) => {}
                 Err(error) => {
                     if error != RvError::ErrHandlerDefault {

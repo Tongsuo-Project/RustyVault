@@ -278,6 +278,12 @@ pub enum RvError {
     #[error("Some rustls_pemfile error happened")]
     RustlsPemFileError(rustls_pemfile::Error),
 
+    #[error("Some tokio task error happened")]
+    TokioTaskJoinError {
+        #[from]
+        source: tokio::task::JoinError,
+    },
+
     #[error("Some string utf8 error happened, {:?}", .source)]
     StringUtf8Error {
         #[from]

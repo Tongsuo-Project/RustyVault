@@ -82,7 +82,7 @@ async fn logical_request_handler(
         }
     }
 
-    match core.read()?.handle_request(&mut r)? {
+    match core.read()?.handle_request(&mut r).await? {
         Some(resp) => response_logical(&resp, &r.path),
         None => {
             if matches!(r.operation, Operation::Read | Operation::List) {
