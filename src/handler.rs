@@ -8,6 +8,8 @@
 
 use std::sync::{Arc, RwLock};
 
+use derive_more::Display;
+
 use crate::{
     core::Core,
     cli::config::Config,
@@ -49,4 +51,20 @@ pub trait AuthHandler: Send + Sync {
     fn post_auth(&self, _req: &mut Request) -> Result<(), RvError> {
         Err(RvError::ErrHandlerDefault)
     }
+}
+
+#[derive(Display, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum HandlePhase {
+    #[display(fmt = "pre_auth")]
+    PreAuth,
+    #[display(fmt = "post_auth")]
+    PostAuth,
+    #[display(fmt = "pre_route")]
+    PreRoute,
+    #[display(fmt = "route")]
+    Route,
+    #[display(fmt = "post_route")]
+    PostRoute,
+    #[display(fmt = "log")]
+    Log,
 }

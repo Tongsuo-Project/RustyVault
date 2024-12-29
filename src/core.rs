@@ -21,7 +21,7 @@ use zeroize::Zeroizing;
 use crate::{
     cli::config::{Config, MountEntryHMACLevel},
     errors::RvError,
-    handler::{AuthHandler, Handler},
+    handler::{AuthHandler, HandlePhase, Handler},
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
     modules::{
@@ -393,7 +393,11 @@ impl Core {
 
         // Perform initial setup
         self.hmac_key = self.barrier.derive_hmac_key()?;
-        self.mounts.load_or_default(self.barrier.as_storage(), Some(&self.hmac_key), self.mount_entry_hmac_level.clone())?;
+        self.mounts.load_or_default(
+            self.barrier.as_storage(),
+            Some(&self.hmac_key),
+            self.mount_entry_hmac_level.clone(),
+        )?;
 
         self.setup_mounts()?;
 
@@ -417,66 +421,27 @@ impl Core {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        for handler in handlers.iter() {
-            match handler.pre_route(req) {
-                Ok(res) => {
-                    if res.is_some() {
-                        resp = res;
-                        break;
-                    }
-                }
-                Err(error) => {
-                    if error != RvError::ErrHandlerDefault {
-                        err = Some(error);
-                        break;
-                    }
-                }
-            }
+        match self.handle_pre_route_phase(&handlers, req) {
+            Ok(ret) => resp = ret,
+            Err(e) => err = Some(e),
         }
 
         if resp.is_none() && err.is_none() {
-            for handler in handlers.iter() {
-                match handler.route(req) {
-                    Ok(res) => {
-                        if res.is_some() {
-                            resp = res;
-                            break;
-                        }
-                    }
-                    Err(error) => {
-                        if error != RvError::ErrHandlerDefault {
-                            err = Some(error);
-                            break;
-                        }
-                    }
-                }
+            match self.handle_route_phase(&handlers, req) {
+                Ok(ret) => resp = ret,
+                Err(e) => err = Some(e),
             }
 
             if err.is_none() {
-                for handler in handlers.iter() {
-                    match handler.post_route(req, &mut resp) {
-                        Ok(_) => {}
-                        Err(error) => {
-                            if error != RvError::ErrHandlerDefault {
-                                err = Some(error);
-                                break;
-                            }
-                        }
-                    }
+                match self.handle_post_route_phase(&handlers, req, &mut resp) {
+                    Err(e) => err = Some(e),
+                    _ => {}
                 }
             }
         }
 
-        for handler in handlers.iter() {
-            match handler.log(req, &resp) {
-                Ok(_) => {}
-                Err(error) => {
-                    if error != RvError::ErrHandlerDefault {
-                        err = Some(error);
-                        break;
-                    }
-                }
-            }
+        if err.is_none() {
+            let _ = self.handle_log_phase(&handlers, req, &mut resp)?;
         }
 
         if err.is_some() {
@@ -484,6 +449,98 @@ impl Core {
         }
 
         Ok(resp)
+    }
+
+    fn handle_pre_route_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
+        req.handle_phase = HandlePhase::PreRoute;
+        for handler in handlers.iter() {
+            match handler.pre_route(req) {
+                Ok(Some(res)) => return Ok(Some(res)),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn handle_route_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
+        req.handle_phase = HandlePhase::Route;
+        if let Some(bind_handler) = req.get_handler() {
+            match bind_handler.route(req) {
+                Ok(res) => return Ok(res),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => {}
+            }
+        }
+
+        for handler in handlers.iter() {
+            match handler.route(req) {
+                Ok(Some(res)) => return Ok(Some(res)),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn handle_post_route_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+        resp: &mut Option<Response>,
+    ) -> Result<(), RvError> {
+        req.handle_phase = HandlePhase::PostRoute;
+        if let Some(bind_handler) = req.get_handler() {
+            match bind_handler.post_route(req, resp) {
+                Ok(_) => return Ok(()),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => {}
+            }
+        }
+
+        for handler in handlers.iter() {
+            match handler.post_route(req, resp) {
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_log_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+        resp: &mut Option<Response>,
+    ) -> Result<(), RvError> {
+        req.handle_phase = HandlePhase::Log;
+        if let Some(bind_handler) = req.get_handler() {
+            match bind_handler.log(req, resp) {
+                Ok(_) => return Ok(()),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => {}
+            }
+        }
+
+        for handler in handlers.iter() {
+            match handler.log(req, resp) {
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(())
     }
 }
 
