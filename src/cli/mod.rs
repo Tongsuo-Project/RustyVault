@@ -1,37 +1,63 @@
 //! The `rusty_vault::cli` module is used to serve the RustyVault application.
 //! This module basically accepts options from command-line and starts a server up.
 
-use clap::{Arg, ArgAction, ArgMatches, Command};
+use clap::{Parser, Subcommand};
 use sysexits::ExitCode;
+
+use crate::{VERSION, EXIT_CODE_INSUFFICIENT_PARAMS, cli::command::CommandExecutor};
 
 pub mod command;
 pub mod config;
+pub mod util;
 
-/// Defines command line options.
-pub fn define_command_line_options(mut app: Command) -> Command {
-    app = app.subcommands([
-        Command::new("server").about("Start a rusty_vault server").arg(
-            Arg::new("config")
-                .short('c')
-                .long("config")
-                .value_name("CONFIG")
-                .num_args(1)
-                .action(ArgAction::Set)
-                .required(true)
-                .help("[CONFIG] Path to a configuration file or directory of configuration files."),
-        ),
-        Command::new("status").about("Print seal and HA status"),
-    ]);
-
-    app
+#[derive(Parser)]
+#[command(
+    version = VERSION,
+    disable_help_subcommand = true,
+    about = "A secure and high performance secret management software that is compatible with Hashicorp Vault."
+)]
+pub struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
 }
 
-/// Do real jobs.
-#[inline]
-pub fn run(matches: &ArgMatches) -> ExitCode {
-    match matches.subcommand() {
-        Some(("server", server_matches)) => command::server::execute(&server_matches),
-        Some(("status", status_matches)) => command::status::execute(&status_matches),
-        _ => crate::EXIT_CODE_INSUFFICIENT_PARAMS,
+#[derive(Subcommand)]
+pub enum Commands {
+    Server(command::server::Server),
+    Status(command::status::Status),
+    Operator(command::operator::Operator),
+    Read(command::read::Read),
+    Write(command::write::Write),
+    Delete(command::delete::Delete),
+    List(command::list::List),
+    Login(command::login::Login),
+    Auth(command::auth::Auth),
+}
+
+impl Commands {
+    pub fn execute(&mut self) -> ExitCode {
+        return match self {
+            Commands::Server(server) => server.execute(),
+            Commands::Status(status) => status.execute(),
+            Commands::Operator(operator) => operator.execute(),
+            Commands::Read(read) => read.execute(),
+            Commands::Write(write) => write.execute(),
+            Commands::Delete(delete) => delete.execute(),
+            Commands::List(list) => list.execute(),
+            Commands::Login(login) => login.execute(),
+            Commands::Auth(auth) => auth.execute(),
+        }
+    }
+}
+
+impl Cli {
+    /// Do real jobs.
+    #[inline]
+    pub fn run(&mut self) -> ExitCode {
+        if let Some(ref mut cmd) = &mut self.command {
+            return cmd.execute();
+        }
+
+        EXIT_CODE_INSUFFICIENT_PARAMS
     }
 }

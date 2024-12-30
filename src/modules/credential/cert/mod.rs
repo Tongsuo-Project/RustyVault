@@ -26,6 +26,7 @@ use crate::{
     new_logical_backend, new_logical_backend_internal,
 };
 
+pub mod cli;
 pub mod path_certs;
 pub mod path_config;
 pub mod path_crls;

@@ -1,10 +1,10 @@
-use libc::c_int;
 use std::{
     collections::HashMap,
     default::Default,
     env, fs,
-    io::prelude::*,
-    path::Path,
+    io::{prelude::*},
+    path::{Path, PathBuf},
+    process::Command,
     sync::{Arc, Barrier, RwLock},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -19,6 +19,7 @@ use anyhow::format_err;
 use foreign_types::ForeignType;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
+use libc::c_int;
 use openssl::{
     asn1::{Asn1Object, Asn1OctetString, Asn1Time},
     hash::MessageDigest,
@@ -42,14 +43,12 @@ use tokio::sync::oneshot;
 use ureq::AgentBuilder;
 
 use crate::{
-    core::{Core, SealConfig},
-    errors::RvError,
-    http,
+    core::{Core, InitResult, SealConfig},
+    errors::RvError, http,
     logical::{Operation, Request, Response},
     metrics::{manager::MetricsManager, middleware::metrics_midleware, system_metrics::SystemMetrics},
-    rv_error_response,
-    storage::{self, Backend},
-    utils::cert::Certificate,
+    rv_error_response, rv_error_string,
+    storage::{self, Backend}, utils::cert::Certificate
 };
 
 lazy_static! {
@@ -71,13 +70,16 @@ pub struct TestTlsClientAuth {
 
 pub struct TestHttpServer {
     pub name: String,
+    pub binary_path: String,
     pub mount_path: String,
     pub core: Arc<RwLock<Core>>,
     pub root_token: String,
+    pub token: String,
     pub ca_cert_pem: String,
     pub ca_key_pem: String,
     pub server_cert_pem: String,
     pub server_key_pem: String,
+    pub cert_dir: String,
     pub tls_enable: bool,
     pub listen_addr: String,
     pub url_prefix: String,
@@ -87,9 +89,39 @@ pub struct TestHttpServer {
 
 impl TestHttpServer {
     pub fn new(name: &str, tls_enable: bool) -> Self {
+        let root_token;
+        let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
+        let mut test_http_server = TestHttpServer::new_without_init(name, tls_enable);
+
+        let init_result = test_rusty_vault_core_init(Arc::clone(&test_http_server.core));
+        println!("init_result: {:?}", init_result);
+
+        let mut keys: Vec<Vec<u8>> = Vec::new();
+
+        for i in 0..seal_config.secret_threshold {
+            keys.push(init_result.secret_shares[i as usize].clone());
+        }
+
+        let k: Vec<&[u8]> = keys.iter().map(|v| v.as_slice()).collect();
+
+        assert!(test_rusty_vault_core_unseal(Arc::clone(&test_http_server.core), &k));
+
+        root_token = init_result.root_token;
+        println!("root_token: {:?}", root_token);
+
+        test_http_server.root_token = root_token;
+
+        test_http_server
+    }
+
+    pub fn new_without_init(name: &str, tls_enable: bool) -> Self {
         let barrier = Arc::new(Barrier::new(2));
         let (stop_tx, stop_rx) = oneshot::channel();
-        let (root_token, core) = test_rusty_vault_init(name);
+        let core = test_rusty_vault_core_new(name);
+        {
+            let mut c = core.write().unwrap();
+            assert!(c.config(Arc::clone(&core), None).is_ok());
+        }
 
         let mut scheme = "http";
         let mut ca_cert_pem = "".into();
@@ -97,6 +129,7 @@ impl TestHttpServer {
         let mut server_cert_pem = "".into();
         let mut server_key_pem = "".into();
         let mut test_tls_config = None;
+        let mut cert_dir = "".into();
 
         if tls_enable {
             (ca_cert_pem, ca_key_pem) =
@@ -136,6 +169,7 @@ impl TestHttpServer {
             test_tls_config = Some(TestTlsConfig { cert_path, key_path });
 
             scheme = "https";
+            cert_dir = dir.clone();
         }
 
         let (server, listen_addr) = new_test_http_server(core.clone(), test_tls_config).unwrap();
@@ -147,13 +181,16 @@ impl TestHttpServer {
 
         Self {
             name: name.to_string(),
+            binary_path: get_project_binary_path(),
             core,
-            root_token,
+            root_token: "".into(),
+            token: "".into(),
             tls_enable,
             ca_cert_pem,
             ca_key_pem,
             server_cert_pem,
             server_key_pem,
+            cert_dir,
             listen_addr,
             url_prefix,
             mount_path: "".into(),
@@ -173,6 +210,7 @@ impl TestHttpServer {
         let mut server_cert_pem = "".into();
         let mut server_key_pem = "".into();
         let mut test_tls_config = None;
+        let mut cert_dir = "".into();
 
         if tls_enable {
             (ca_cert_pem, ca_key_pem) =
@@ -212,6 +250,7 @@ impl TestHttpServer {
             test_tls_config = Some(TestTlsConfig { cert_path, key_path });
 
             scheme = "https";
+            cert_dir = dir.clone();
         }
 
         let collection_interval: u64 = 15;
@@ -229,13 +268,16 @@ impl TestHttpServer {
 
         Self {
             name: name.to_string(),
+            binary_path: get_project_binary_path(),
             core,
             root_token,
+            token: "".into(),
             tls_enable,
             ca_cert_pem,
             ca_key_pem,
             server_cert_pem,
             server_key_pem,
+            cert_dir,
             listen_addr,
             url_prefix,
             mount_path: "".into(),
@@ -491,6 +533,46 @@ impl TestHttpServer {
                 println!("Request failed: {}", e);
                 return Err(RvError::UreqError { source: e });
             }
+        }
+    }
+
+    pub fn cli(&self, commands: &[&str], args: &[&str]) -> Result<String, RvError> {
+        let mut cmd = Command::new(&self.binary_path);
+
+        for command in commands {
+            cmd.arg(command);
+        }
+
+        if self.tls_enable {
+            cmd.arg(&format!("--address=https://{}", self.listen_addr));
+            cmd.arg(&format!("--ca-cert={}/ca.crt", self.cert_dir));
+            cmd.arg(&format!("--client-cert={}/server.crt", self.cert_dir));
+            cmd.arg(&format!("--client-key={}/key.pem", self.cert_dir));
+            cmd.arg("--tls-skip-verify");
+        } else {
+            cmd.arg(&format!("--address=http://{}", self.listen_addr));
+        }
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.env("VAULT_TOKEN", &self.token);
+
+        println!("cmd: {}, args: {:?}", self.binary_path, cmd.get_args());
+
+        match cmd.output() {
+            Ok(output) => {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    Ok(stdout.into_owned())
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    Err(rv_error_string!(format!("{}{}", stdout, stderr)))
+                }
+            }
+            Err(e) => Err(rv_error_string!(format!("Failed to execute command: {}", e))),
         }
     }
 }
@@ -822,36 +904,56 @@ pub fn test_backend(name: &str) -> Arc<dyn Backend> {
     backend.unwrap()
 }
 
-pub fn test_rusty_vault_init(name: &str) -> (String, Arc<RwLock<Core>>) {
-    let root_token;
+pub fn test_rusty_vault_core_new(name: &str) -> Arc<RwLock<Core>> {
     let backend = test_backend(name);
     let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-    let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
+    Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }))
+}
 
-    {
-        let mut core = c.write().unwrap();
-        assert!(core.config(Arc::clone(&c), None).is_ok());
+pub fn test_rusty_vault_core_init(core: Arc<RwLock<Core>>) -> InitResult {
+    let mut c = core.write().unwrap();
+    assert!(c.config(Arc::clone(&core), None).is_ok());
 
-        let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
+    let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
 
-        let result = core.init(&seal_config);
-        assert!(result.is_ok());
-        let init_result = result.unwrap();
-        println!("init_result: {:?}", init_result);
+    let result = c.init(&seal_config);
+    assert!(result.is_ok());
 
-        let mut unsealed = false;
-        for i in 0..seal_config.secret_threshold {
-            let key = &init_result.secret_shares[i as usize];
-            let unseal = core.unseal(key);
-            assert!(unseal.is_ok());
-            unsealed = unseal.unwrap();
-        }
+    result.unwrap()
+}
 
-        root_token = init_result.root_token;
-        println!("root_token: {:?}", root_token);
-
-        assert!(unsealed);
+pub fn test_rusty_vault_core_unseal(core: Arc<RwLock<Core>>, keys: &[&[u8]]) -> bool {
+    let mut c = core.write().unwrap();
+    let mut unsealed = false;
+    for key in keys.iter() {
+        let unseal = c.unseal(key);
+        assert!(unseal.is_ok());
+        unsealed = unseal.unwrap();
     }
+
+    unsealed
+}
+
+pub fn test_rusty_vault_init(name: &str) -> (String, Arc<RwLock<Core>>) {
+    let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
+    let root_token;
+    let c = test_rusty_vault_core_new(name);
+
+    let init_result = test_rusty_vault_core_init(Arc::clone(&c));
+    println!("init_result: {:?}", init_result);
+
+    let mut keys: Vec<Vec<u8>> = Vec::new();
+
+    for i in 0..seal_config.secret_threshold {
+        keys.push(init_result.secret_shares[i as usize].clone());
+    }
+
+    let k: Vec<&[u8]> = keys.iter().map(|v| v.as_slice()).collect();
+
+    assert!(test_rusty_vault_core_unseal(Arc::clone(&c), &k));
+
+    root_token = init_result.root_token;
+    println!("root_token: {:?}", root_token);
 
     (root_token, c)
 }
@@ -1104,4 +1206,19 @@ pub async fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &s
 
     let resp = test_write_api(core, token, format!("sys/auth/{}", path).as_str(), true, Some(auth_data)).await;
     assert!(resp.is_ok());
+}
+
+pub fn get_project_binary_path() -> String {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let bin_name = env::var("CARGO_BIN_NAME").unwrap_or_else(|_| "unknown".to_string());
+    let build_profile = env::var("CARGO_PROFILE_RELEASE_DEBUG").unwrap_or("debug".into());
+    let mut binary_path = PathBuf::from(manifest_dir);
+    if build_profile == "release" {
+        binary_path.push("target/release/");
+    } else {
+        binary_path.push("target/debug/");
+    }
+    binary_path.push(bin_name);
+
+    binary_path.into_os_string().into_string().unwrap_or_default()
 }

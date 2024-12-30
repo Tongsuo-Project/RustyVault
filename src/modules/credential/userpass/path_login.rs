@@ -72,6 +72,9 @@ impl UserPassBackendInner {
             ..Default::default()
         };
         auth.metadata.insert("username".to_string(), username.to_string());
+
+        user.populate_token_auth(&mut auth);
+
         let resp = Response { auth: Some(auth), ..Response::default() };
 
         Ok(Some(resp))

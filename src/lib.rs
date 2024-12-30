@@ -41,6 +41,7 @@ pub mod shamir;
 pub mod storage;
 pub mod utils;
 pub mod metrics;
+pub mod api;
 
 #[cfg(test)]
 pub mod test_utils;

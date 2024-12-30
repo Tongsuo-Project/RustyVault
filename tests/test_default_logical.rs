@@ -305,6 +305,7 @@ async fn test_sys_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
 #[tokio::test]
 async fn test_default_logical() {
     let dir = env::temp_dir().join("rusty_vault_core_init");
+    let _ = fs::remove_dir_all(&dir);
     assert!(fs::create_dir(&dir).is_ok());
     defer! (
         assert!(fs::remove_dir_all(&dir).is_ok());

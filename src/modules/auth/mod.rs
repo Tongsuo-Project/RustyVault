@@ -30,8 +30,8 @@ pub use token_store::TokenStore;
 
 const AUTH_CONFIG_PATH: &str = "core/auth";
 const AUTH_BARRIER_PREFIX: &str = "auth/";
-const AUTH_ROUTER_PREFIX: &str = "auth/";
 
+pub const AUTH_ROUTER_PREFIX: &str = "auth/";
 pub const AUTH_TABLE_TYPE: &str = "auth";
 
 lazy_static! {

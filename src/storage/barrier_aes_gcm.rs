@@ -57,7 +57,11 @@ impl Storage for AESGCMBarrier {
         if barrier_info.sealed {
             return Err(RvError::ErrBarrierSealed);
         }
-        self.backend.list(prefix)
+
+        let mut ret = self.backend.list(prefix)?;
+        ret.sort();
+
+        Ok(ret)
     }
 
     fn get(&self, key: &str) -> Result<Option<StorageEntry>, RvError> {

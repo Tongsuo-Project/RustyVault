@@ -19,9 +19,9 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct InitRequest {
-    secret_shares: u8,
-    secret_threshold: u8,
+pub struct InitRequest {
+    pub secret_shares: u8,
+    pub secret_threshold: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,6 +202,7 @@ async fn sys_remount_request_handler(
     body.clear();
 
     let mut r = request_auth(&req);
+    r.path = "sys/remount".to_string();
     r.operation = Operation::Write;
     r.body = Some(payload);
 
