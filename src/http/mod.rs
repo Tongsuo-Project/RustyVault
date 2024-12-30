@@ -194,9 +194,9 @@ pub fn response_json_ok<T: Serialize>(cookie: Option<Cookie>, body: T) -> HttpRe
     response_json(StatusCode::OK, cookie, body)
 }
 
-pub fn handle_request(core: web::Data<Arc<RwLock<Core>>>, req: &mut Request) -> Result<HttpResponse, RvError> {
+pub async fn handle_request(core: web::Data<Arc<RwLock<Core>>>, req: &mut Request) -> Result<HttpResponse, RvError> {
     let core = core.read()?;
-    let resp = core.handle_request(req)?;
+    let resp = core.handle_request(req).await?;
     if resp.is_none() {
         Ok(response_ok(None, None))
     } else {

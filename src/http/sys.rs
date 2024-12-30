@@ -150,7 +150,7 @@ async fn sys_list_mounts_request_handler(
     r.path = "sys/mounts".to_string();
     r.operation = Operation::Read;
 
-    handle_request(core, &mut r)
+    handle_request(core, &mut r).await
 }
 
 async fn sys_mount_request_handler(
@@ -172,7 +172,7 @@ async fn sys_mount_request_handler(
     r.operation = Operation::Write;
     r.body = Some(payload);
 
-    handle_request(core, &mut r)
+    handle_request(core, &mut r).await
 }
 
 async fn sys_unmount_request_handler(
@@ -189,7 +189,7 @@ async fn sys_unmount_request_handler(
     r.path = "sys/mounts/".to_owned() + mount_path.as_str();
     r.operation = Operation::Delete;
 
-    handle_request(core, &mut r)
+    handle_request(core, &mut r).await
 }
 
 async fn sys_remount_request_handler(
@@ -205,7 +205,7 @@ async fn sys_remount_request_handler(
     r.operation = Operation::Write;
     r.body = Some(payload);
 
-    handle_request(core, &mut r)
+    handle_request(core, &mut r).await
 }
 
 async fn sys_list_auth_mounts_request_handler(
@@ -216,7 +216,7 @@ async fn sys_list_auth_mounts_request_handler(
     r.path = "sys/auth".to_string();
     r.operation = Operation::Read;
 
-    handle_request(core, &mut r)
+    handle_request(core, &mut r).await
 }
 
 async fn sys_auth_enable_request_handler(
@@ -238,7 +238,7 @@ async fn sys_auth_enable_request_handler(
     r.operation = Operation::Write;
     r.body = Some(payload);
 
-    handle_request(core, &mut r)
+    handle_request(core, &mut r).await
 }
 
 async fn sys_auth_disable_request_handler(
@@ -255,7 +255,7 @@ async fn sys_auth_disable_request_handler(
     r.path = "sys/auth/".to_owned() + mount_path.as_str();
     r.operation = Operation::Delete;
 
-    handle_request(core, &mut r)
+    handle_request(core, &mut r).await
 }
 
 pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
