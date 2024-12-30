@@ -535,7 +535,7 @@ impl ExpirationManagerInner {
         }
 
         let mut req = Request::new_revoke_request(&le.path, secret, data);
-        let ret = self.router.as_ref().unwrap().as_handler().route(&mut req);
+        let ret = self.router.as_ref().unwrap().handle_request(&mut req);
         if ret.is_err() {
             log::error!("failed to revoke entry: {:?}, err: {}", le, ret.unwrap_err());
         }
@@ -563,7 +563,7 @@ impl ExpirationManagerInner {
         }
 
         let mut req = Request::new_renew_request(&le.path, secret, data);
-        let ret = self.router.as_ref().unwrap().as_handler().route(&mut req);
+        let ret = self.router.as_ref().unwrap().handle_request(&mut req);
         if ret.is_err() {
             log::error!("failed to renew entry: {}", ret.as_ref().unwrap_err());
         }
@@ -586,7 +586,7 @@ impl ExpirationManagerInner {
         }
 
         let mut req = Request::new_renew_auth_request(&le.path, auth, None);
-        let ret = self.router.as_ref().unwrap().as_handler().route(&mut req);
+        let ret = self.router.as_ref().unwrap().handle_request(&mut req);
         if ret.is_err() {
             log::error!("failed to renew_auth entry: {}", ret.as_ref().unwrap_err());
         }

@@ -220,13 +220,13 @@ mod test {
         test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
-    pub fn test_read_role(core: &Core, token: &str, path: &str, role_name: &str) -> Result<Option<Response>, RvError> {
-        let resp = test_read_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true);
+    pub async fn test_read_role(core: &Core, token: &str, path: &str, role_name: &str) -> Result<Option<Response>, RvError> {
+        let resp = test_read_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true).await;
         assert!(resp.is_ok());
         resp
     }
 
-    pub fn test_write_role(
+    pub async fn test_write_role(
         core: &Core,
         token: &str,
         path: &str,
@@ -252,16 +252,16 @@ mod test {
         }
 
         let _ =
-            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), expect, Some(role_data));
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), expect, Some(role_data)).await;
     }
 
-    pub fn test_delete_role(core: &Core, token: &str, path: &str, role_name: &str) {
-        assert!(test_delete_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None).is_ok());
+    pub async fn test_delete_role(core: &Core, token: &str, path: &str, role_name: &str) {
+        assert!(test_delete_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None).await.is_ok());
     }
 
-    pub fn generate_secret_id(core: &Core, token: &str, path: &str, role_name: &str) -> (String, String) {
+    pub async fn generate_secret_id(core: &Core, token: &str, path: &str, role_name: &str) -> (String, String) {
         let resp =
-            test_write_api(core, token, format!("auth/{}/role/{}/secret-id", path, role_name).as_str(), true, None);
+            test_write_api(core, token, format!("auth/{}/role/{}/secret-id", path, role_name).as_str(), true, None).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -270,7 +270,7 @@ mod test {
         (secret_id.to_string(), secret_id_accessor.to_string())
     }
 
-    pub fn test_login(
+    pub async fn test_login(
         core: &Core,
         path: &str,
         role_id: &str,
@@ -289,7 +289,7 @@ mod test {
         req.operation = Operation::Write;
         req.body = Some(data);
 
-        let resp = core.handle_request(&mut req);
+        let resp = core.handle_request(&mut req).await;
         if is_ok {
             assert!(resp.is_ok());
             let resp = resp.as_ref().unwrap();
@@ -303,23 +303,23 @@ mod test {
         resp
     }
 
-    fn test_approle(core: &Core, token: &str, path: &str, role_name: &str) {
+    async fn test_approle(core: &Core, token: &str, path: &str, role_name: &str) {
         // Create a role
-        let resp = test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None);
+        let resp = test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None).await;
         assert!(resp.is_ok());
 
         // Get the role-id
-        let resp = test_read_api(core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true);
+        let resp = test_read_api(core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data;
         let role_id = resp_data.unwrap()["role_id"].clone();
         let role_id = role_id.as_str().unwrap();
 
         // Create a secret-id
-        let (secret_id, secret_id_accessor) = generate_secret_id(core, token, path, role_name);
+        let (secret_id, secret_id_accessor) = generate_secret_id(core, token, path, role_name).await;
 
         // Ensure login works
-        let _ = test_login(core, path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true).await;
 
         // Destroy secret ID accessor
         let data = json!({
@@ -334,17 +334,17 @@ mod test {
             format!("auth/{}/role/{}/secret-id-accessor/destroy", path, role_name).as_str(),
             true,
             Some(data),
-        );
+        ).await;
         assert!(resp.is_ok());
 
         // Login again using the accessor's corresponding secret ID should fail
-        let _ = test_login(core, path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false).await;
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name).await;
 
         // Ensure login works
-        let _ = test_login(core, path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true).await;
 
         // Destroy secret ID
         let data = json!({
@@ -359,17 +359,17 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name).as_str(),
             true,
             Some(data),
-        );
+        ).await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(core, path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false).await;
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name).await;
 
         // Ensure login works
-        let _ = test_login(core, path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true).await;
 
         // Destroy the secret ID using lower cased role name
         let data = json!({
@@ -384,17 +384,17 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_lowercase()).as_str(),
             true,
             Some(data),
-        );
+        ).await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(core, path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false).await;
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name).await;
 
         // Ensure login works
-        let _ = test_login(core, path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true).await;
 
         // Destroy the secret ID using upper cased role name
         let data = json!({
@@ -409,17 +409,17 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_uppercase()).as_str(),
             true,
             Some(data),
-        );
+        ).await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(core, path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false).await;
 
         // Generate another secret ID
-        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name).await;
 
         // Ensure login works
-        let _ = test_login(core, path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true).await;
 
         // Destroy the secret ID using mixed case name
         let data = json!({
@@ -443,14 +443,14 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, mixed_case_name).as_str(),
             true,
             Some(data),
-        );
+        ).await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
-        let _ = test_login(core, path, role_id, &secret_id, false);
+        let _ = test_login(core, path, role_id, &secret_id, false).await;
     }
 
-    fn test_approle_role_service(core: &Core, token: &str, path: &str, role_name: &str) {
+    async fn test_approle_role_service(core: &Core, token: &str, path: &str, role_name: &str) {
         // Create a role
         let mut data = json!({
             "bind_secret_id":       true,
@@ -466,11 +466,11 @@ mod test {
         .unwrap()
         .clone();
         let resp =
-            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()));
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone())).await;
         assert!(resp.is_ok());
 
         // Get the role field
-        let resp = test_read_role(core, token, path, role_name);
+        let resp = test_read_role(core, token, path, role_name).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["bind_secret_id"].as_bool().unwrap(), data["bind_secret_id"].as_bool().unwrap());
         assert_eq!(resp_data["secret_id_num_uses"].as_i64().unwrap(), data["secret_id_num_uses"].as_i64().unwrap());
@@ -494,11 +494,11 @@ mod test {
         data["token_num_uses"] = Value::from(0);
         data["token_type"] = Value::from("batch");
         let resp =
-            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()));
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone())).await;
         assert!(resp.is_ok());
 
         // Get the role field
-        let resp = test_read_role(core, token, path, role_name);
+        let resp = test_read_role(core, token, path, role_name).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["bind_secret_id"].as_bool().unwrap(), data["bind_secret_id"].as_bool().unwrap());
         assert_eq!(resp_data["secret_id_num_uses"].as_i64().unwrap(), data["secret_id_num_uses"].as_i64().unwrap());
@@ -519,36 +519,36 @@ mod test {
         assert_eq!(resp_data["token_type"].as_str().unwrap(), data["token_type"].as_str().unwrap());
 
         // Get the role-id
-        let resp = test_read_api(core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true);
+        let resp = test_read_api(core, token, format!("auth/{}/role/{}/role-id", path, role_name).as_str(), true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data;
         let role_id = resp_data.unwrap()["role_id"].clone();
         let role_id = role_id.as_str().unwrap();
 
         // Create a secret-id
-        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name);
+        let (secret_id, _secret_id_accessor) = generate_secret_id(core, token, path, role_name).await;
 
         // Ensure login works
-        let _ = test_login(core, path, role_id, &secret_id, true);
+        let _ = test_login(core, path, role_id, &secret_id, true).await;
 
         // Get the role field
-        let resp = test_read_role(core, token, path, role_name);
+        let resp = test_read_role(core, token, path, role_name).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         println!("resp_data: {:?}", resp_data);
     }
 
-    #[test]
-    fn test_credential_approle_module() {
+    #[tokio::test]
+    async fn test_credential_approle_module() {
         let (root_token, core) = test_rusty_vault_init("test_approle_module");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle/");
+        test_mount_auth_api(&core, &root_token, "approle", "approle/").await;
 
-        test_approle(&core, &root_token, "approle", "samplerolename");
-        test_approle(&core, &root_token, "approle", "SAMPLEROLENAME");
-        test_approle(&core, &root_token, "approle", "SampleRoleName");
+        test_approle(&core, &root_token, "approle", "samplerolename").await;
+        test_approle(&core, &root_token, "approle", "SAMPLEROLENAME").await;
+        test_approle(&core, &root_token, "approle", "SampleRoleName").await;
 
-        test_approle_role_service(&core, &root_token, "approle", "testrole");
+        test_approle_role_service(&core, &root_token, "approle", "testrole").await;
     }
 }

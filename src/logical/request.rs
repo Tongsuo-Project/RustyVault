@@ -6,7 +6,9 @@ use tokio::task::JoinHandle;
 
 use super::{Operation, Path};
 use crate::{
+    context::Context,
     errors::RvError,
+    handler::{HandlePhase, Handler},
     logical::{auth::Auth, connection::Connection, secret::SecretData},
     storage::{Storage, StorageEntry},
 };
@@ -28,6 +30,11 @@ pub struct Request {
     pub secret: Option<SecretData>,
     pub auth: Option<Auth>,
     pub tasks: Vec<JoinHandle<()>>,
+    pub handler: Option<Arc<dyn Handler>>,
+    #[default(HandlePhase::PreRoute)]
+    pub handle_phase: HandlePhase,
+    #[default(Arc::new(Context::new()))]
+    pub ctx: Arc<Context>,
 }
 
 impl Request {
@@ -45,6 +52,14 @@ impl Request {
 
     pub fn new_renew_auth_request(path: &str, auth: Option<Auth>, data: Option<Map<String, Value>>) -> Self {
         Self { operation: Operation::Renew, path: path.to_string(), auth, data, ..Default::default() }
+    }
+
+    pub fn bind_handler(&mut self, handler: Arc<dyn Handler>) {
+        self.handler = Some(handler);
+    }
+
+    pub fn get_handler(&self) -> Option<Arc<dyn Handler>> {
+        self.handler.clone()
     }
 
     fn get_data_raw(&self, key: &str, default: bool) -> Result<Value, RvError> {
@@ -200,5 +215,17 @@ impl Request {
 
     pub fn add_task(&mut self, task: JoinHandle<()>) {
         self.tasks.push(task);
+    }
+
+    pub fn clear_task(&mut self) {
+        self.tasks.clear();
+    }
+
+    pub async fn wait_task_finish(&mut self) -> Result<(), RvError> {
+        for task in &mut self.tasks {
+            task.await?;
+        }
+
+        Ok(())
     }
 }

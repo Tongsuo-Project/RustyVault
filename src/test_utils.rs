@@ -1129,27 +1129,27 @@ pub fn start_test_http_server_with_prometheus(
     server_thread
 }
 
-pub fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
+pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::List;
     req.client_token = token.to_string();
-    let resp = core.handle_request(&mut req);
+    let resp = core.handle_request(&mut req).await;
     println!("list resp: {:?}", resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
 
-pub fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
+pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::Read;
     req.client_token = token.to_string();
-    let resp = core.handle_request(&mut req);
+    let resp = core.handle_request(&mut req).await;
     println!("read resp: {:?}", resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
 
-pub fn test_write_api(
+pub async fn test_write_api(
     core: &Core,
     token: &str,
     path: &str,
@@ -1161,13 +1161,13 @@ pub fn test_write_api(
     req.client_token = token.to_string();
     req.body = data;
 
-    let resp = core.handle_request(&mut req);
+    let resp = core.handle_request(&mut req).await;
     println!("write resp: {:?}", resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
 
-pub fn test_delete_api(
+pub async fn test_delete_api(
     core: &Core,
     token: &str,
     path: &str,
@@ -1178,13 +1178,13 @@ pub fn test_delete_api(
     req.operation = Operation::Delete;
     req.client_token = token.to_string();
     req.body = data;
-    let resp = core.handle_request(&mut req);
+    let resp = core.handle_request(&mut req).await;
     println!("delete resp: {:?}", resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
 
-pub fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
+pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     let data = json!({
         "type": mtype,
     })
@@ -1192,11 +1192,11 @@ pub fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     .unwrap()
     .clone();
 
-    let resp = test_write_api(core, token, format!("sys/mounts/{}", path).as_str(), true, Some(data));
+    let resp = test_write_api(core, token, format!("sys/mounts/{}", path).as_str(), true, Some(data)).await;
     assert!(resp.is_ok());
 }
 
-pub fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &str) {
+pub async fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &str) {
     let auth_data = json!({
         "type": atype,
     })
@@ -1204,7 +1204,7 @@ pub fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &str) {
     .unwrap()
     .clone();
 
-    let resp = test_write_api(core, token, format!("sys/auth/{}", path).as_str(), true, Some(auth_data));
+    let resp = test_write_api(core, token, format!("sys/auth/{}", path).as_str(), true, Some(auth_data)).await;
     assert!(resp.is_ok());
 }
 

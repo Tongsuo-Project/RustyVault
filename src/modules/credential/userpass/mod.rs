@@ -133,7 +133,7 @@ mod test {
         test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
-    fn test_write_user(core: &Core, token: &str, path: &str, username: &str, password: &str, ttl: i32) {
+    async fn test_write_user(core: &Core, token: &str, path: &str, username: &str, password: &str, ttl: i32) {
         let user_data = json!({
             "password": password,
             "ttl": ttl,
@@ -143,21 +143,21 @@ mod test {
         .clone();
 
         let resp =
-            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data));
+            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data)).await;
         assert!(resp.is_ok());
     }
 
-    fn test_read_user(core: &Core, token: &str, username: &str) -> Result<Option<Response>, RvError> {
-        let resp = test_read_api(core, token, format!("auth/pass/users/{}", username).as_str(), true);
+    async fn test_read_user(core: &Core, token: &str, username: &str) -> Result<Option<Response>, RvError> {
+        let resp = test_read_api(core, token, format!("auth/pass/users/{}", username).as_str(), true).await;
         assert!(resp.is_ok());
         resp
     }
 
-    fn test_delete_user(core: &Core, token: &str, username: &str) {
-        assert!(test_delete_api(core, token, format!("auth/pass/users/{}", username).as_str(), true, None).is_ok());
+    async fn test_delete_user(core: &Core, token: &str, username: &str) {
+        assert!(test_delete_api(core, token, format!("auth/pass/users/{}", username).as_str(), true, None).await.is_ok());
     }
 
-    fn test_login(
+    async fn test_login(
         core: &Core,
         path: &str,
         username: &str,
@@ -175,7 +175,7 @@ mod test {
         req.operation = Operation::Write;
         req.body = Some(login_data);
 
-        let resp = core.handle_request(&mut req);
+        let resp = core.handle_request(&mut req).await;
         assert!(resp.is_ok());
         if is_ok {
             let resp = resp.as_ref().unwrap();
@@ -184,42 +184,42 @@ mod test {
         resp
     }
 
-    #[test]
-    fn test_userpass_module() {
+    #[tokio::test]
+    async fn test_userpass_module() {
         let (root_token, core) = test_rusty_vault_init("test_userpass_module");
         let core = core.read().unwrap();
 
         // mount userpass auth to path: auth/pass
-        test_mount_auth_api(&core, &root_token, "userpass", "pass");
+        test_mount_auth_api(&core, &root_token, "userpass", "pass").await;
 
-        test_write_user(&core, &root_token, "pass", "test", "123qwe!@#", 0);
-        let resp = test_read_user(&core, &root_token, "test").unwrap();
+        test_write_user(&core, &root_token, "pass", "test", "123qwe!@#", 0).await;
+        let resp = test_read_user(&core, &root_token, "test").await.unwrap();
         assert!(resp.is_some());
 
-        test_delete_user(&core, &root_token, "test");
-        let resp = test_read_user(&core, &root_token, "test").unwrap();
+        test_delete_user(&core, &root_token, "test").await;
+        let resp = test_read_user(&core, &root_token, "test").await.unwrap();
         assert!(resp.is_none());
 
-        test_write_user(&core, &root_token, "pass", "test", "123qwe!@#", 0);
-        let _ = test_login(&core, "pass", "test", "123qwe!@#", true);
-        let _ = test_login(&core, "pass", "test", "xxxxxxx", false);
-        let _ = test_login(&core, "pass", "xxxx", "123qwe!@#", false);
-        let resp = test_login(&core, "pass", "test", "123qwe!@#", true);
+        test_write_user(&core, &root_token, "pass", "test", "123qwe!@#", 0).await;
+        let _ = test_login(&core, "pass", "test", "123qwe!@#", true).await;
+        let _ = test_login(&core, "pass", "test", "xxxxxxx", false).await;
+        let _ = test_login(&core, "pass", "xxxx", "123qwe!@#", false).await;
+        let resp = test_login(&core, "pass", "test", "123qwe!@#", true).await;
         let login_auth = resp.unwrap().unwrap().auth.unwrap();
         let test_client_token = login_auth.client_token.clone();
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", true);
+        let resp = test_read_api(&core, &test_client_token, "sys/mounts", true).await;
         println!("test mounts resp: {:?}", resp);
         assert!(resp.unwrap().is_some());
 
-        test_delete_user(&core, &root_token, "test");
-        let resp = test_login(&core, "pass", "test", "123qwe!@#", false);
+        test_delete_user(&core, &root_token, "test").await;
+        let resp = test_login(&core, "pass", "test", "123qwe!@#", false).await;
         let login_resp = resp.unwrap().unwrap();
         assert!(login_resp.auth.is_none());
 
-        test_write_user(&core, &root_token, "pass", "test2", "123qwe", 5);
-        let resp = test_read_user(&core, &root_token, "test").unwrap();
+        test_write_user(&core, &root_token, "pass", "test2", "123qwe", 5).await;
+        let resp = test_read_user(&core, &root_token, "test").await.unwrap();
         assert!(resp.is_none());
-        let resp = test_login(&core, "pass", "test2", "123qwe", true);
+        let resp = test_login(&core, "pass", "test2", "123qwe", true).await;
         let login_auth = resp.unwrap().unwrap().auth.unwrap();
         println!("user login_auth: {:?}", login_auth);
         assert_eq!(login_auth.lease.ttl.as_secs(), 5);
@@ -227,17 +227,17 @@ mod test {
         println!("wait 7s");
         std::thread::sleep(Duration::from_secs(7));
         let test_client_token = login_auth.client_token.clone();
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", false);
+        let resp = test_read_api(&core, &test_client_token, "sys/mounts", false).await;
         println!("test mounts resp: {:?}", resp);
 
         // mount userpass auth to path: auth/testpass
-        test_mount_auth_api(&core, &root_token, "userpass", "testpass");
-        test_write_user(&core, &root_token, "testpass", "testuser", "123qwe!@#", 0);
-        let resp = test_login(&core, "testpass", "testuser", "123qwe!@#", true);
+        test_mount_auth_api(&core, &root_token, "userpass", "testpass").await;
+        test_write_user(&core, &root_token, "testpass", "testuser", "123qwe!@#", 0).await;
+        let resp = test_login(&core, "testpass", "testuser", "123qwe!@#", true).await;
         let login_auth = resp.unwrap().unwrap().auth.unwrap();
         let test_client_token = login_auth.client_token.clone();
         println!("test_client_token: {}", test_client_token);
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", true);
+        let resp = test_read_api(&core, &test_client_token, "sys/mounts", true).await;
         println!("test mounts resp: {:?}", resp);
         assert!(resp.unwrap().is_some());
     }
