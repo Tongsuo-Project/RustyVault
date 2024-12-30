@@ -20,7 +20,7 @@ use crate::{
     context::Context,
     core::Core,
     errors::RvError,
-    handler::{AuthHandler, Handler},
+    handler::{AuthHandler, HandlePhase, Handler},
     logical::{
         Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
     },
@@ -607,6 +607,8 @@ impl Handler for TokenStore {
 
         let mut auth: Option<Auth> = None;
 
+        req.handle_phase = HandlePhase::PreAuth;
+
         let auth_handlers: Vec<_> = {
             let handlers = self.auth_handlers.read()?;
             handlers.iter().cloned().collect::<Vec<_>>()
@@ -629,6 +631,8 @@ impl Handler for TokenStore {
 
         req.name = auth.as_ref().unwrap().display_name.clone();
         req.auth = auth;
+
+        req.handle_phase = HandlePhase::PostAuth;
 
         for auth_handler in auth_handlers.iter() {
             auth_handler.post_auth(req).await?;
