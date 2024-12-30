@@ -67,6 +67,7 @@ ctor = "0.2.8"
 better_default = "1.0.5"
 prometheus-client = "0.22.3"
 sysinfo = "0.31.4"
+async-trait = "0.1"
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }

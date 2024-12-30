@@ -216,4 +216,16 @@ impl Request {
     pub fn add_task(&mut self, task: JoinHandle<()>) {
         self.tasks.push(task);
     }
+
+    pub fn clear_task(&mut self) {
+        self.tasks.clear();
+    }
+
+    pub async fn wait_task_finish(&mut self) -> Result<(), RvError> {
+        for task in &mut self.tasks {
+            task.await?;
+        }
+
+        Ok(())
+    }
 }

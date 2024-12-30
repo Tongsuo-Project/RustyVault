@@ -4,6 +4,7 @@
 
 use std::sync::{Arc, RwLock};
 
+use async_trait::async_trait;
 use radix_trie::{Trie, TrieCommon};
 
 use crate::{
@@ -192,14 +193,8 @@ impl Router {
     pub fn as_handler(&self) -> &dyn Handler {
         self
     }
-}
 
-impl Handler for Router {
-    fn name(&self) -> String {
-        "core_router".to_string()
-    }
-
-    fn route(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         if !req.path.contains('/') {
             req.path.push('/');
         }
@@ -251,6 +246,17 @@ impl Handler for Router {
         req.client_token = client_token;
 
         Ok(response)
+    }
+}
+
+#[async_trait]
+impl Handler for Router {
+    fn name(&self) -> String {
+        "core_router".to_string()
+    }
+
+    async fn route(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+        self.handle_request(req)
     }
 }
 

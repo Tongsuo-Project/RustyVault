@@ -251,9 +251,7 @@ mod test {
         time::{Duration, Instant},
     };
 
-    use actix_rt::System;
     use as_any::Downcast;
-    use tokio::runtime::Builder;
 
     use super::{
         super::{path_role::RoleEntry, AppRoleModule},
@@ -265,13 +263,13 @@ mod test {
         test_utils::{test_mount_auth_api, test_rusty_vault_init},
     };
 
-    #[test]
-    fn test_approle_tidy_dangling_accessors_normal() {
+    #[actix_rt::test]
+    async fn test_approle_tidy_dangling_accessors_normal() {
         let (root_token, core) = test_rusty_vault_init("test_approle_tidy_dangling_accessors_normal");
         let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&c, &root_token, "approle", "approle/");
+        test_mount_auth_api(&c, &root_token, "approle", "approle/").await;
 
         let module = c.module_manager.get_module("approle").unwrap();
         let approle_mod = module.read().unwrap();
@@ -297,7 +295,7 @@ mod test {
         req.operation = Operation::Write;
         req.path = "auth/approle/role/role1/secret-id".to_string();
         req.client_token = root_token.to_string();
-        let _resp = c.handle_request(&mut req);
+        let _resp = c.handle_request(&mut req).await;
         req.storage = c.get_system_view().map(|arc| arc as Arc<dyn Storage>);
 
         let mut mock_backend = approle_module.new_backend();
@@ -333,18 +331,11 @@ mod test {
         let accessor = accessor.unwrap();
         assert_eq!(accessor.len(), 3);
 
-        let rt =
-            System::with_tokio_rt(|| Builder::new_multi_thread().worker_threads(128).enable_all().build().unwrap());
-        rt.block_on(async {
-            req.operation = Operation::Write;
-            req.path = "tidy/secret-id".to_string();
-            let _resp = mock_backend.handle_request(&mut req);
-            actix_rt::System::current().stop();
-        });
+        req.operation = Operation::Write;
+        req.path = "tidy/secret-id".to_string();
+        let _resp = mock_backend.handle_request(&mut req);
 
-        let _ = rt.run().unwrap();
-
-        std::thread::sleep(Duration::from_secs(5));
+        assert!(req.wait_task_finish().await.is_ok());
 
         let accessor = req.storage_list("accessor/");
         assert!(accessor.is_ok());
@@ -352,13 +343,13 @@ mod test {
         assert_eq!(accessor.len(), 1);
     }
 
-    #[test]
-    fn test_approle_tidy_dangling_accessors_race() {
+    #[actix_rt::test]
+    async fn test_approle_tidy_dangling_accessors_race() {
         let (root_token, core) = test_rusty_vault_init("test_approle_tidy_dangling_accessors_race");
         let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&c, &root_token, "approle", "approle/");
+        test_mount_auth_api(&c, &root_token, "approle", "approle/").await;
 
         let module = c.module_manager.get_module("approle").unwrap();
         let approle_mod = module.read().unwrap();
@@ -387,7 +378,7 @@ mod test {
         req.operation = Operation::Write;
         req.path = "auth/approle/role/role1/secret-id".to_string();
         req.client_token = root_token.to_string();
-        let _resp = c.handle_request(&mut req);
+        let _resp = c.handle_request(&mut req).await;
         req.storage = c.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.write_role_secret_id(&mock_backend, &mut req);
         assert!(resp.is_ok());
@@ -396,62 +387,49 @@ mod test {
         let start = Instant::now();
         let core_cloned = core.clone();
 
-        //let invalid_accessors = Arc::new(Mutex::new());
-
-        let rt =
-            System::with_tokio_rt(|| Builder::new_multi_thread().worker_threads(128).enable_all().build().unwrap());
-
-        rt.block_on(async {
-            while start.elapsed() < Duration::new(5, 0) {
-                if start.elapsed() > Duration::from_millis(100)
-                    && approle_module.tidy_secret_id_cas_guard.load(Ordering::SeqCst) == 0
+        while start.elapsed() < Duration::new(5, 0) {
+            if start.elapsed() > Duration::from_millis(100)
+                && approle_module.tidy_secret_id_cas_guard.load(Ordering::SeqCst) == 0
                 {
                     req.operation = Operation::Write;
                     req.path = "tidy/secret-id".to_string();
                     let _ = mock_backend.handle_request(&mut req);
                 }
 
-                let core_cloned2 = core_cloned.clone();
-                let token = root_token.clone();
-                let mb = mock_backend.clone();
+            let core_cloned2 = core_cloned.clone();
+            let token = root_token.clone();
+            let mb = mock_backend.clone();
 
-                actix_rt::spawn(async move {
-                    let c = core_cloned2.read().unwrap();
-                    let module = c.module_manager.get_module("approle").unwrap();
-                    let approle_mod = module.read().unwrap();
-                    let approle_module = approle_mod.as_ref().downcast_ref::<AppRoleModule>().unwrap();
-                    let mut req = Request::new("auth/approle/role/role1/secret-id");
-                    req.operation = Operation::Write;
-                    req.client_token = token.clone();
-                    let _resp = c.handle_request(&mut req);
-                    req.storage = c.get_system_view().map(|arc| arc as Arc<dyn Storage>);
-                    let resp = approle_module.write_role_secret_id(&mb, &mut req);
-                    assert!(resp.is_ok());
-                });
+            actix_rt::spawn(async move {
+                let c = core_cloned2.read().unwrap();
+                let module = c.module_manager.get_module("approle").unwrap();
+                let approle_mod = module.read().unwrap();
+                let approle_module = approle_mod.as_ref().downcast_ref::<AppRoleModule>().unwrap();
+                let mut req = Request::new("auth/approle/role/role1/secret-id");
+                req.operation = Operation::Write;
+                req.client_token = token.clone();
+                let _resp = c.handle_request(&mut req).await;
+                req.storage = c.get_system_view().map(|arc| arc as Arc<dyn Storage>);
+                let resp = approle_module.write_role_secret_id(&mb, &mut req);
+                assert!(resp.is_ok());
+            });
 
-                let mut num = count.lock().unwrap();
+            let mut num = count.lock().unwrap();
 
-                let entry = StorageEntry::new(
-                    format!("accessor/invalid{}", *num).as_str(),
-                    &SecretIdAccessorStorageEntry { secret_id_hmac: "samplesecretidhmac".to_string() },
+            let entry = StorageEntry::new(
+                format!("accessor/invalid{}", *num).as_str(),
+                &SecretIdAccessorStorageEntry { secret_id_hmac: "samplesecretidhmac".to_string() },
                 )
                 .unwrap();
 
-                assert!(req.storage_put(&entry).is_ok());
+            assert!(req.storage_put(&entry).is_ok());
 
-                *num += 1;
+            *num += 1;
 
-                thread::sleep(Duration::from_micros(10));
-            }
+            thread::sleep(Duration::from_micros(10));
+        }
 
-            for task in &mut req.tasks {
-                task.await.unwrap();
-            }
-
-            actix_rt::System::current().stop();
-        });
-
-        let _ = rt.run().unwrap();
+        assert!(req.wait_task_finish().await.is_ok());
 
         // Wait for tidy to finish
         while approle_module.tidy_secret_id_cas_guard.load(Ordering::SeqCst) != 0 {
@@ -459,24 +437,15 @@ mod test {
         }
 
         // Run tidy again
-        req.tasks.clear();
+        req.clear_task();
 
-        let rt =
-            System::with_tokio_rt(|| Builder::new_multi_thread().worker_threads(128).enable_all().build().unwrap());
-        rt.block_on(async {
-            req.operation = Operation::Write;
-            req.path = "tidy/secret-id".to_string();
-            let resp = mock_backend.handle_request(&mut req);
-            assert!(resp.is_ok());
+        req.operation = Operation::Write;
+        req.path = "tidy/secret-id".to_string();
+        let resp = mock_backend.handle_request(&mut req);
+        assert!(resp.is_ok());
 
-            for task in &mut req.tasks {
-                task.await.unwrap();
-            }
+        assert!(req.wait_task_finish().await.is_ok());
 
-            actix_rt::System::current().stop();
-        });
-
-        let _ = rt.run().unwrap();
 
         let num = count.lock().unwrap();
 
