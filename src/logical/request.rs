@@ -162,6 +162,12 @@ impl Request {
         field.get_default()
     }
 
+    pub fn data_iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        let data_iter = self.data.as_ref().into_iter().flat_map(|m| m.iter());
+        let body_iter = self.body.as_ref().into_iter().flat_map(|m| m.iter());
+        data_iter.chain(body_iter)
+    }
+
     //TODO: the sensitive data is still in the memory. Need to totally resolve this in `serde_json` someday.
     pub fn clear_data(&mut self, key: &str) {
         if self.data.is_some() {

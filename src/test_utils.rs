@@ -927,6 +927,7 @@ pub fn test_rusty_vault_core_unseal(core: Arc<RwLock<Core>>, keys: &[&[u8]]) -> 
     let mut unsealed = false;
     for key in keys.iter() {
         let unseal = c.unseal(key);
+        println!("unseal: {:?}", unseal);
         assert!(unseal.is_ok());
         unsealed = unseal.unwrap();
     }

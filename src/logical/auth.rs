@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use better_default::Default;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
@@ -37,4 +38,23 @@ pub struct Auth {
     // Metadata is used to attach arbitrary string-type metadata to an authenticated user.
     // This metadata will be outputted into the audit log.
     pub metadata: HashMap<String, String>,
+
+    // policy_results is the set of policies that grant the token access to the requesting path.
+    pub policy_results: Option<PolicyResults>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PolicyResults {
+    pub allowed: bool,
+    pub granting_policies: Vec<PolicyInfo>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PolicyInfo {
+    pub name: String,
+    pub namespace_id: String,
+    pub namespace_path: String,
+    #[serde(rename = "type")]
+    #[default("acl".into())]
+    pub policy_type: String,
 }

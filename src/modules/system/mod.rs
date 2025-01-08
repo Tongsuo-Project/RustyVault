@@ -19,6 +19,7 @@ use crate::{
     },
     modules::{
         auth::{AuthModule, AUTH_TABLE_TYPE},
+        policy::PolicyModule,
         Module,
     },
     mount::{MountEntry, MOUNT_TABLE_TYPE},
@@ -64,7 +65,8 @@ impl SystemBackend {
         let sys_backend_auth_table = Arc::clone(&self.inner);
         let sys_backend_auth_enable = Arc::clone(&self.inner);
         let sys_backend_auth_disable = Arc::clone(&self.inner);
-        let sys_backend_policy_list = Arc::clone(&self.inner);
+        let sys_backend_policy_list1 = Arc::clone(&self.inner);
+        let sys_backend_policy_list2 = Arc::clone(&self.inner);
         let sys_backend_policy_read = Arc::clone(&self.inner);
         let sys_backend_policy_write = Arc::clone(&self.inner);
         let sys_backend_policy_delete = Arc::clone(&self.inner);
@@ -198,9 +200,10 @@ impl SystemBackend {
                     ]
                 },
                 {
-                    pattern: "policy$",
+                    pattern: "policy/?$",
                     operations: [
-                        {op: Operation::Read, handler: sys_backend_policy_list.handle_policy_list}
+                        {op: Operation::Read, handler: sys_backend_policy_list1.handle_policy_list},
+                        {op: Operation::List, handler: sys_backend_policy_list2.handle_policy_list}
                     ]
                 },
                 {
@@ -210,7 +213,7 @@ impl SystemBackend {
                             field_type: FieldType::Str,
                             description: r#"The name of the policy. Example: "ops""#
                         },
-                        "rules": {
+                        "policy": {
                             field_type: FieldType::Str,
                             description: r#"The rules of the policy. Either given in HCL or JSON format."#
                         }
@@ -460,24 +463,40 @@ impl SystemBackendInner {
         Ok(None)
     }
 
-    pub fn handle_policy_list(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
+    pub fn handle_policy_list(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let module = self.get_policy_module()?;
+        let policy_mod = module.read()?;
+        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        policy_module.handle_policy_list(backend, req)
     }
 
-    pub fn handle_policy_read(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
+    pub fn handle_policy_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let module = self.get_policy_module()?;
+        let policy_mod = module.read()?;
+        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        policy_module.handle_policy_read(backend, req)
     }
 
-    pub fn handle_policy_write(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
+    pub fn handle_policy_write(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let module = self.get_policy_module()?;
+        let policy_mod = module.read()?;
+        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        policy_module.handle_policy_write(backend, req)
     }
 
     pub fn handle_policy_delete(
         &self,
-        _backend: &dyn Backend,
-        _req: &mut Request,
+        backend: &dyn Backend,
+        req: &mut Request,
     ) -> Result<Option<Response>, RvError> {
-        Ok(None)
+        let module = self.get_policy_module()?;
+        let policy_mod = module.read()?;
+        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        policy_module.handle_policy_delete(backend, req)
     }
 
     pub fn handle_audit_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -545,13 +564,21 @@ impl SystemBackendInner {
         Ok(None)
     }
 
-    fn get_auth_module(&self) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
+    fn get_module(&self, name: &str) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
         let core = self.core.read().unwrap();
-        if let Some(module) = core.module_manager.get_module("auth") {
+        if let Some(module) = core.module_manager.get_module(name) {
             return Ok(module);
         }
 
         Err(RvError::ErrModuleNotFound)
+    }
+
+    fn get_auth_module(&self) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
+        self.get_module("auth")
+    }
+
+    fn get_policy_module(&self) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
+        self.get_module("policy")
     }
 }
 

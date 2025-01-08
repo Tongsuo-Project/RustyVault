@@ -15,6 +15,7 @@ pub mod crypto;
 pub mod kv;
 pub mod pki;
 pub mod system;
+pub mod policy;
 
 pub trait Module: AsAny + Send + Sync {
     //! Description for a trait itself.

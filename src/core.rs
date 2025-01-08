@@ -28,6 +28,7 @@ use crate::{
         auth::AuthModule,
         credential::{approle::AppRoleModule, cert::CertModule, userpass::UserPassModule},
         pki::PkiModule,
+        policy::PolicyModule,
     },
     mount::MountTable,
     router::Router,
@@ -119,6 +120,10 @@ impl Core {
         let auth_module = AuthModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(auth_module))))?;
 
+        // add policy_module
+        let policy_module = PolicyModule::new(self);
+        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(policy_module))))?;
+
         // add pki_module
         let pki_module = PkiModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(pki_module))))?;
@@ -135,9 +140,7 @@ impl Core {
         let cert_module = CertModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
 
-        let handlers = {
-            self.handlers.read()?.clone()
-        };
+        let handlers = { self.handlers.read()?.clone() };
         for handler in handlers.iter() {
             match handler.post_config(self, config) {
                 Ok(_) => {
