@@ -832,10 +832,4 @@ mod crypto_test {
     fn test_sm2_encrypt_decrypt() {
         assert_eq!(1, 1);
     }
-
-    #[cfg(feature = "crypto_adaptor_tongsuo")]
-    #[test]
-    fn test_sm2_encrypt_decrypt() {
-        assert_eq!(1, 1);
-    }
 }
