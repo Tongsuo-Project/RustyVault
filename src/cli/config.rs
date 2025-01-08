@@ -101,6 +101,8 @@ pub struct Storage {
     pub config: HashMap<String, Value>,
 }
 
+static STORAGE_TYPE_KEYWORDS: &[&str] = &["file", "mysql"];
+
 fn default_bool_true() -> bool {
     true
 }
@@ -182,11 +184,11 @@ where
 {
     let storage: HashMap<String, Storage> = Deserialize::deserialize(deserializer)?;
 
-    // for key in storage.keys() {
-    //     if key != "file" {
-    //         return Err(serde::de::Error::custom("Invalid storage key"));
-    //     }
-    // }
+    for key in storage.keys() {
+        if !STORAGE_TYPE_KEYWORDS.contains(&key.as_str()) {
+            return Err(serde::de::Error::custom("Invalid storage key"));
+        }
+    }
 
     Ok(storage)
 }
