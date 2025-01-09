@@ -270,15 +270,17 @@ impl PolicyStore {
     pub fn get_policy(&self, name: &str, policy_type: PolicyType) -> Result<Option<Arc<Policy>>, RvError> {
         let name = self.sanitize_name(name);
         let index = self.cache_key(&name);
+        let mut policy_type = policy_type;
         let (view, cache) = match policy_type {
             PolicyType::Acl => (Some(self.get_acl_view()?), &self.token_policies_lru),
             PolicyType::Rgp => (Some(self.get_rgp_view()?), &self.token_policies_lru),
             PolicyType::Egp => (Some(self.get_egp_view()?), &self.egp_lru),
             PolicyType::Token => {
                 let (v, c) = if let Some(val) = self.policy_type_map.get(&index) {
+                    policy_type = *val;
                     match *val {
-                        PolicyType::Acl => (Some(self.get_acl_view()?), &None),
-                        PolicyType::Rgp => (Some(self.get_rgp_view()?), &None),
+                        PolicyType::Acl => (Some(self.get_acl_view()?), &self.token_policies_lru),
+                        PolicyType::Rgp => (Some(self.get_rgp_view()?), &self.token_policies_lru),
                         _ => {
                             return Err(rv_error_string!(format!(
                                 "invalid type of policy in type map: {}",
@@ -617,12 +619,9 @@ impl AuthHandler for PolicyStore {
         }
 
         if let Some(auth) = &mut req.auth {
-            // TODO
-            /*
             if is_root_path && !acl_result.root_privs && req.operation != Operation::Help {
                 return Err(rv_error_string!("cannot access root path in unauthenticated request"));
             }
-            */
 
             let allowed = acl_result.allowed;
 
@@ -634,8 +633,7 @@ impl AuthHandler for PolicyStore {
                      \"{}\"",
                     req.path
                 );
-                // TODO
-                //return Err(RvError::ErrPermissionDenied);
+                return Err(RvError::ErrPermissionDenied);
             }
         }
 
