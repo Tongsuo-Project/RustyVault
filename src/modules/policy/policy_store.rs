@@ -617,9 +617,12 @@ impl AuthHandler for PolicyStore {
         }
 
         if let Some(auth) = &mut req.auth {
+            // TODO
+            /*
             if is_root_path && !acl_result.root_privs && req.operation != Operation::Help {
                 return Err(rv_error_string!("cannot access root path in unauthenticated request"));
             }
+            */
 
             let allowed = acl_result.allowed;
 
@@ -631,7 +634,8 @@ impl AuthHandler for PolicyStore {
                      \"{}\"",
                     req.path
                 );
-                return Err(RvError::ErrPermissionDenied);
+                // TODO
+                //return Err(RvError::ErrPermissionDenied);
             }
         }
 

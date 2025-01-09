@@ -81,7 +81,8 @@ impl ACL {
                 }
             }
         }
-        Err(RvError::ErrUnknown)
+
+        Ok(acl)
     }
 
     pub fn get_permissions(&self, pr: &PolicyPathRules) -> Result<Option<Permissions>, RvError> {
