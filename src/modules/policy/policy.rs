@@ -1,3 +1,19 @@
+//! This file defines structures and implementations for handling security policies.
+//!
+//! The core components include:
+//! - `PolicyType`: An enum representing different types of policies such as ACL, RGP, EGP, and Token.
+//! - `Policy`: A struct that represents a security policy, encompassing a name, type, and rules associated with specific paths.
+//! - `PolicyPathRules`: A struct that defines rules and permissions for individual paths within a policy.
+//! - `Permissions`: A struct managing capabilities and parameter rules for policies, including allowed, denied, and required parameters.
+//! - `Capability`: An enum representing various capabilities (e.g., Read, Write, Delete) that can be associated with a policy path.
+//!
+//! Key functionality:
+//! - Parsing policies from strings using the `FromStr` trait, supporting both HCL and JSON formats.
+//! - Checking permissions against requests to determine allowed operations.
+//! - Merging permissions from multiple sources, ensuring correct precedence and handling of capabilities.
+//! - Managing and querying capabilities as bitmaps, converting between bit representations and string lists.
+//! - Handling parameter rules, including merging and checking against allowed and denied lists.
+
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use better_default::Default;
@@ -31,6 +47,7 @@ pub enum PolicyType {
 #[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
 pub struct SentinelPolicy {}
 
+/// The `Policy` struct holds the main policy details including its rules and configurations.
 #[derive(Debug, Clone, Default)]
 pub struct Policy {
     pub sentinal_policy: SentinelPolicy,
@@ -42,6 +59,7 @@ pub struct Policy {
     pub templated: bool,
 }
 
+/// Describes rules associated with specific paths in a policy.
 #[derive(Debug, Clone, Default)]
 pub struct PolicyPathRules {
     pub path: String,
@@ -53,6 +71,7 @@ pub struct PolicyPathRules {
     pub max_wrapping_ttl: Duration,
 }
 
+/// Structure holding permissions and associated configurations.
 #[derive(Debug, Clone, Default)]
 pub struct Permissions {
     pub capabilities_bitmap: u32,
@@ -64,11 +83,13 @@ pub struct Permissions {
     pub granting_policies_map: DashMap<u32, Vec<PolicyInfo>>,
 }
 
+// Configuration struct used to parse policy data from HCL/JSON.
 #[derive(Debug, Deserialize)]
 struct PolicyConfig {
     pub path: HashMap<String, PolicyPathConfig>,
 }
 
+// Path-specific configuration used in policy definitions.
 #[derive(Debug, Deserialize)]
 struct PolicyPathConfig {
     #[serde(default)]
@@ -85,7 +106,8 @@ struct PolicyPathConfig {
     pub required_parameters: Vec<String>,
 }
 
-#[derive(Debug, StrumDisplay, Copy, Clone, EnumString, EnumIter, Deserialize)]
+/// Enumeration of possible capabilities, supporting string conversion and iteration.
+#[derive(Debug, StrumDisplay, Copy, Clone, PartialEq, Eq, EnumString, EnumIter, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[repr(u32)]
 pub enum Capability {
@@ -108,6 +130,7 @@ pub enum Capability {
 }
 
 impl Capability {
+    /// Converts a capability to its bit representation.
     pub fn to_bits(&self) -> u32 {
         *self as u32
     }
@@ -116,8 +139,73 @@ impl Capability {
 impl FromStr for Policy {
     type Err = RvError;
 
+    /// Parses a string into a Policy struct. The input string can be in either HCL or JSON format.
+    /// It constructs a `Policy` object by parsing paths and associated configurations from the input.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - A string slice that holds the representation of the policy configuration.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Policy)` if parsing succeeds.
+    /// * `Err(RvError)` if the input string is malformed or if there are invalid configurations.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if path contains invalid wildcards (`+*`).
+    /// * Returns an error if `allowed_parameters` or `denied_parameters` are not arrays.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::str::FromStr;
+    /// use rusty_vault::modules::policy::Policy;
+    ///
+    /// let policy_str = r#"
+    /// {
+    ///     "path": {
+    ///         "secret/data/*": {
+    ///             "capabilities": ["read", "list"],
+    ///             "allowed_parameters": {
+    ///                 "version": ["1", "2"]
+    ///             }
+    ///         }
+    ///     }
+    /// }
+    /// "#;
+    ///
+    /// let policy = Policy::from_str(policy_str);
+    /// assert!(policy.is_ok());
+    ///
+    /// let invalid_policy_str = r#"
+    /// {
+    ///     "path": {
+    ///         "secret/data/+*": { // Invalid path with `+*` wildcard
+    ///             "capabilities": ["read"]
+    ///         }
+    ///     }
+    /// }
+    /// "#;
+    ///
+    /// let invalid_policy = Policy::from_str(invalid_policy_str);
+    /// assert!(invalid_policy.is_err());
+    ///
+    /// let policy_str = r#"
+    /// path "secret/*" {
+    ///     capabilities = ["read", "list"]
+    ///     min_wrapping_ttl = "1h"
+    ///     max_wrapping_ttl = "24h"
+    ///     allowed_parameters = {"key1" = ["value1", "value2"]}
+    ///     denied_parameters = {"key2" = ["value3", "value4"]}
+    ///     required_parameters = ["param1", "param2"]
+    /// }
+    /// "#;
+    ///
+    /// let policy = Policy::from_str(policy_str);
+    /// assert!(policy.is_ok());
+    /// ```
     fn from_str(s: &str) -> Result<Self, RvError> {
-        //let policy_config: PolicyConfig = hcl::from_str(s)?;
         let policy_config =
             if let Ok(pc) = hcl::from_str::<PolicyConfig>(s) { pc } else { serde_json::from_str::<PolicyConfig>(s)? };
 
@@ -190,16 +278,20 @@ impl FromStr for Policy {
 }
 
 impl Policy {
+    /// Dummy method to input sentinel policy data; currently does nothing.
     pub fn input_sentinel_policy_data(&mut self, _req: &Request) -> Result<(), RvError> {
         Ok(())
     }
 
+    /// Dummy method to add sentinel policy data; currently does nothing.
     pub fn add_sentinel_policy_data(&self, _resp: &Response) -> Result<(), RvError> {
         Ok(())
     }
 }
 
 impl Permissions {
+    /// Checks the permissions against a request to determine if it is allowed.
+    /// Evaluates capabilities, required parameters, and allowed/denied parameters.
     pub fn check(&self, req: &Request, check_only: bool) -> Result<ACLResults, RvError> {
         let mut ret = ACLResults::default();
         let _path = ensure_no_leading_slash(&req.path);
@@ -260,6 +352,7 @@ impl Permissions {
                 if (req.data.is_none() || req.data.as_ref().unwrap().is_empty())
                     && (req.body.is_none() || req.body.as_ref().unwrap().is_empty())
                 {
+                    ret.capabilities_bitmap = self.capabilities_bitmap;
                     ret.allowed = true;
                     return Ok(ret);
                 }
@@ -280,6 +373,7 @@ impl Permissions {
                 let allowed_all = self.allowed_parameters.get("*").is_some();
 
                 if self.allowed_parameters.is_empty() || (allowed_all && self.allowed_parameters.len() == 1) {
+                    ret.capabilities_bitmap = self.capabilities_bitmap;
                     ret.allowed = true;
                     return Ok(ret);
                 }
@@ -298,11 +392,14 @@ impl Permissions {
             _ => {}
         }
 
+        ret.capabilities_bitmap = self.capabilities_bitmap;
         ret.allowed = true;
 
         Ok(ret)
     }
 
+    /// Merges another set of permissions into the current set.
+    /// Ensures that deny capabilities override others and merges parameter rules.
     pub fn merge(&mut self, other: &Permissions) -> Result<(), RvError> {
         let deny = Capability::Deny.to_bits();
         if self.capabilities_bitmap & deny != 0 {
@@ -338,11 +435,11 @@ impl Permissions {
         }
 
         if !other.allowed_parameters.is_empty() {
-            serde_map_merge(&mut self.allowed_parameters, &other.allowed_parameters);
+            merge_map(&mut self.allowed_parameters, &other.allowed_parameters);
         }
 
         if !other.denied_parameters.is_empty() {
-            serde_map_merge(&mut self.denied_parameters, &other.denied_parameters);
+            merge_map(&mut self.denied_parameters, &other.denied_parameters);
         }
 
         if !other.required_parameters.is_empty() {
@@ -375,6 +472,29 @@ impl Permissions {
     }
 }
 
+/// Converts a bitmask to a vector of capability strings.
+///
+/// This function takes a 32-bit integer representing a bitmask of capabilities and converts it into
+/// a vector of string representations of the enabled capabilities. The capabilities are defined in
+/// the `Capability` enum, and each capability has a corresponding bit position.
+///
+/// # Arguments
+///
+/// * `value` - A 32-bit integer representing the bitmask of capabilities.
+///
+/// # Returns
+///
+/// A vector of strings, where each string is the name of an enabled capability.
+///
+/// # Examples
+///
+/// ```
+/// use rusty_vault::modules::policy::policy::{Capability, to_granting_capabilities};
+///
+/// let bitmask = Capability::Read.to_bits() | Capability::Update.to_bits();
+/// let capabilities = to_granting_capabilities(bitmask);
+/// assert_eq!(capabilities, vec!["read", "update"]);
+/// ```
 pub fn to_granting_capabilities(value: u32) -> Vec<String> {
     let mut ret = Vec::new();
     let deny = Capability::Deny;
@@ -392,24 +512,277 @@ pub fn to_granting_capabilities(value: u32) -> Vec<String> {
     ret
 }
 
-pub fn serde_map_merge(dst: &mut Map<String, Value>, src: &Map<String, Value>) {
+/// Merges two `Map<String, Value>` structures.
+///
+/// This function merges the contents of two `Map<String, Value>` structures. If a key exists in both
+/// maps, the values are combined. If a key exists in only one map, it is added to the destination map.
+/// If a key's value is an empty array, it is removed from the destination map.
+///
+/// # Arguments
+///
+///  * `dst` - The destination map to which the source map will be merged.
+///  * `src` - The source map whose contents will be merged into the destination map.
+///
+/// # Examples
+///
+/// ```
+/// use serde_json::{json, Map, Value};
+/// use rusty_vault::modules::policy::policy::merge_map;
+///
+/// let mut dst: Map<String, Value> = serde_json::Map::new();
+/// dst.insert("key1".to_string(), Value::Array(vec![Value::String("a".to_string())]));
+/// dst.insert("key2".to_string(), Value::Array(vec![]));
+/// dst.insert("key3".to_string(), Value::Array(vec![Value::String("b".to_string())]));
+///
+/// let mut src: Map<String, Value> = serde_json::Map::new();
+/// src.insert("key1".to_string(), Value::Array(vec![Value::String("c".to_string())]));
+/// src.insert("key3".to_string(), Value::Array(vec![]));
+/// src.insert("key4".to_string(), Value::Array(vec![Value::String("d".to_string())]));
+///
+/// merge_map(&mut dst, &src);
+///
+/// assert_eq!(
+///     Value::Object(dst),
+///     json!({
+///         "key1": ["a", "c"],
+///         "key2": [],
+///         "key4": ["d"]
+///     })
+/// );
+/// ```
+pub fn merge_map(dst: &mut Map<String, Value>, src: &Map<String, Value>) {
     if dst.is_empty() {
         *dst = src.clone();
     } else {
         for (key, value) in src.iter() {
-            let value_is_empty = value.as_array().map_or(false, |v| v.is_empty());
-            let existing = dst.get(key.as_str());
-            let existing_is_empty = existing.map_or(false, |x| x.as_array().map_or(false, |v| v.is_empty()));
+            let src_arr = value.as_array().unwrap_or(&Vec::new()).clone();
 
-            if value_is_empty || existing_is_empty {
+            if src_arr.is_empty() {
                 dst.remove(key.as_str());
-            } else {
-                let mut new_arr = value.as_array().unwrap_or(&Vec::new()).clone();
-                let existing_arr: Vec<Value> =
-                    existing.map_or(Vec::new(), |x| x.as_array().map_or(Vec::new(), |v| v.clone()));
-                new_arr.extend(existing_arr);
-                dst.insert(key.clone(), Value::Array(new_arr));
+                continue;
+            }
+
+            let mut new_arr: Vec<Value> = Vec::new();
+
+            if let Some(found) = dst.get(key.as_str()) {
+                if let Some(found_arr) = found.as_array() {
+                    if found_arr.is_empty() {
+                        dst.remove(key.as_str());
+                        continue;
+                    }
+                    new_arr.extend(found_arr.clone());
+                }
+            }
+
+            new_arr.extend(src_arr);
+
+            dst.insert(key.clone(), Value::Array(new_arr));
+        }
+    }
+}
+
+#[cfg(test)]
+mod mod_policy_tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_policy_from_str_hcl() {
+        let hcl_policy = r#"
+        path "secret/*" {
+            capabilities = ["read", "list"]
+            min_wrapping_ttl = "1h"
+            max_wrapping_ttl = "24h"
+            allowed_parameters = {"key1" = ["value1", "value2"]}
+            denied_parameters = {"key2" = ["value3", "value4"]}
+            required_parameters = ["param1", "param2"]
+        }"#;
+
+        let policy: Result<Policy, RvError> = Policy::from_str(hcl_policy);
+        assert!(policy.is_ok());
+
+        let policy = policy.unwrap();
+        assert_eq!(policy.name, "");
+        assert_eq!(policy.raw, hcl_policy);
+        assert_eq!(policy.paths.len(), 1);
+        assert_eq!(policy.paths[0].path, "secret/");
+        assert_eq!(policy.paths[0].is_prefix, true);
+        assert_eq!(
+            policy.paths[0].permissions.capabilities_bitmap,
+            Capability::Read.to_bits() | Capability::List.to_bits()
+        );
+        assert_eq!(policy.paths[0].permissions.min_wrapping_ttl, Duration::from_secs(3600));
+        assert_eq!(policy.paths[0].permissions.max_wrapping_ttl, Duration::from_secs(86400));
+        assert_eq!(policy.paths[0].permissions.allowed_parameters.len(), 1);
+        assert_eq!(policy.paths[0].permissions.denied_parameters.len(), 1);
+        assert_eq!(policy.paths[0].permissions.required_parameters, vec!["param1", "param2"]);
+    }
+
+    #[test]
+    fn test_policy_from_str_json() {
+        let json_policy = r#"{
+            "path": {
+                    "secret/*": {
+                    "capabilities": ["read", "list"],
+                    "min_wrapping_ttl": "1h",
+                    "max_wrapping_ttl": "24h",
+                    "allowed_parameters": {"key1": ["value1", "value2"]},
+                    "denied_parameters": {"key2": ["value3", "value4"]},
+                    "required_parameters": ["param1", "param2"]
+                }
+            }
+        }"#;
+
+        let policy: Result<Policy, RvError> = Policy::from_str(json_policy);
+        assert!(policy.is_ok());
+
+        let policy = policy.unwrap();
+        assert_eq!(policy.name, "");
+        assert_eq!(policy.paths.len(), 1);
+        assert_eq!(policy.paths[0].path, "secret/");
+        assert_eq!(policy.paths[0].is_prefix, true);
+        assert_eq!(
+            policy.paths[0].permissions.capabilities_bitmap,
+            Capability::Read.to_bits() | Capability::List.to_bits()
+        );
+        assert_eq!(policy.paths[0].permissions.min_wrapping_ttl, Duration::from_secs(3600));
+        assert_eq!(policy.paths[0].permissions.max_wrapping_ttl, Duration::from_secs(86400));
+        assert_eq!(policy.paths[0].permissions.allowed_parameters.len(), 1);
+        assert_eq!(policy.paths[0].permissions.denied_parameters.len(), 1);
+        assert_eq!(policy.paths[0].permissions.required_parameters, vec!["param1", "param2"]);
+    }
+
+    #[test]
+    fn test_policy_from_str_invalid_wildcards() {
+        let invalid_policy = r#"
+        path "secret/+*" {
+            capabilities = ["read", "list"]
+        }"#;
+
+        let policy: Result<Policy, RvError> = Policy::from_str(invalid_policy);
+        assert!(policy.is_err());
+    }
+
+    #[test]
+    fn test_policy_from_str_invalid_allowed_parameters() {
+        let invalid_policy = r#"
+        path "secret/*" {
+            capabilities = ["read", "list"]
+            allowed_parameters = {"key1": "value1"}
+        }
+        "#;
+
+        let policy: Result<Policy, RvError> = Policy::from_str(invalid_policy);
+        assert!(policy.is_err());
+    }
+
+    #[test]
+    fn test_policy_from_str_hcl_with_multi_path() {
+        let hcl_policy = r#"
+        path "secret/ak1" {
+            capabilities = ["read", "list", "create"]
+            min_wrapping_ttl = "1h"
+            max_wrapping_ttl = "24h"
+            allowed_parameters = {
+                "key1" = ["value1", "value2"]
+                "key2" = ["value2"]
+            }
+            denied_parameters = {"key2" = ["value3", "value4"]}
+        }
+        path "secret/ak2" {
+            capabilities = ["read", "list", "create", "update"]
+            min_wrapping_ttl = "2h"
+            max_wrapping_ttl = "24h"
+            allowed_parameters = {
+                "key1" = ["value1", "value2"]
+                "key2" = ["value2"]
+            }
+            required_parameters = ["param1"]
+        }
+        path "secret/akn/*" {
+            capabilities = ["read", "list", "create", "update", "delete"]
+            min_wrapping_ttl = "3h"
+            denied_parameters = {
+                "key1" = ["value1", "value2"]
+                "key2" = ["value2"]
+            }
+            required_parameters = ["param1", "param2"]
+        }"#;
+
+        let policy: Result<Policy, RvError> = Policy::from_str(hcl_policy);
+        assert!(policy.is_ok());
+
+        let policy = policy.unwrap();
+        assert_eq!(policy.name, "");
+        assert_eq!(policy.paths.len(), 3);
+
+        let (mut i, mut j, mut k) = (0, 1, 2);
+        for n in 0..3 {
+            if policy.paths[n].path == "secret/ak1" {
+                i = n;
+            }
+            if policy.paths[n].path == "secret/ak2" {
+                j = n;
+            }
+            if policy.paths[n].path == "secret/akn/" {
+                k = n;
             }
         }
+
+        assert_eq!(policy.paths[i].path, "secret/ak1");
+        assert_eq!(policy.paths[i].is_prefix, false);
+        assert_eq!(
+            policy.paths[i].permissions.capabilities_bitmap,
+            Capability::Read.to_bits() | Capability::List.to_bits() | Capability::Create.to_bits()
+        );
+        assert_eq!(policy.paths[i].permissions.min_wrapping_ttl, Duration::from_secs(3600));
+        assert_eq!(policy.paths[i].permissions.max_wrapping_ttl, Duration::from_secs(86400));
+        assert_eq!(policy.paths[i].permissions.allowed_parameters.len(), 2);
+        assert_eq!(policy.paths[i].permissions.denied_parameters.len(), 1);
+        assert_eq!(policy.paths[i].permissions.required_parameters.len(), 0);
+        assert_eq!(policy.paths[i].capabilities, vec![Capability::Read, Capability::List, Capability::Create]);
+        assert_eq!(policy.paths[i].has_segment_wildcards, false);
+
+        assert_eq!(policy.paths[j].path, "secret/ak2");
+        assert_eq!(policy.paths[j].is_prefix, false);
+        assert_eq!(
+            policy.paths[j].permissions.capabilities_bitmap,
+            Capability::Read.to_bits()
+                | Capability::List.to_bits()
+                | Capability::Create.to_bits()
+                | Capability::Update.to_bits()
+        );
+        assert_eq!(policy.paths[j].permissions.min_wrapping_ttl, Duration::from_secs(3600 * 2));
+        assert_eq!(policy.paths[j].permissions.max_wrapping_ttl, Duration::from_secs(86400));
+        assert_eq!(policy.paths[j].permissions.allowed_parameters.len(), 2);
+        assert_eq!(policy.paths[j].permissions.denied_parameters.len(), 0);
+        assert_eq!(policy.paths[j].permissions.required_parameters, vec!["param1"]);
+        assert_eq!(
+            policy.paths[j].capabilities,
+            vec![Capability::Read, Capability::List, Capability::Create, Capability::Update]
+        );
+        assert_eq!(policy.paths[j].has_segment_wildcards, false);
+
+        assert_eq!(policy.paths[k].path, "secret/akn/");
+        assert_eq!(policy.paths[k].is_prefix, true);
+        assert_eq!(
+            policy.paths[k].permissions.capabilities_bitmap,
+            Capability::Read.to_bits()
+                | Capability::List.to_bits()
+                | Capability::Create.to_bits()
+                | Capability::Update.to_bits()
+                | Capability::Delete.to_bits()
+        );
+        assert_eq!(policy.paths[k].permissions.min_wrapping_ttl, Duration::from_secs(3600 * 3));
+        assert_eq!(policy.paths[k].permissions.max_wrapping_ttl, Duration::from_secs(0));
+        assert_eq!(policy.paths[k].permissions.allowed_parameters.len(), 0);
+        assert_eq!(policy.paths[k].permissions.denied_parameters.len(), 2);
+        assert_eq!(policy.paths[k].permissions.required_parameters, vec!["param1", "param2"]);
+        assert_eq!(
+            policy.paths[k].capabilities,
+            vec![Capability::Read, Capability::List, Capability::Create, Capability::Update, Capability::Delete]
+        );
+        assert_eq!(policy.paths[k].has_segment_wildcards, false);
     }
 }

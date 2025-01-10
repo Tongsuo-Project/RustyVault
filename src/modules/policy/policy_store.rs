@@ -1,3 +1,23 @@
+//! The `policy_store.rs` file manages the storage and retrieval of security policies. It provides
+//! mechanisms for setting, getting, listing, and deleting policies. This is crucial in systems
+//! that rely on policy-based access controls.
+//!
+//! The main components include:
+//! - PolicyEntry: Represents an individual policy with metadata.
+//! - PolicyStore: Manages the lifecycle of policies, including caching and storage.
+//!
+//! Key functionality includes:
+//! - Creation and management of ACL (Access Control List), RGP, and EGP policies.
+//! - Policy caching to improve access speed.
+//! - Methods to handle CRUD operations on policies.
+//!
+//! External dependencies:
+//! - Uses `stretto` for caching and `dashmap` for concurrent collections.
+//!
+//! Note:
+//! - The code includes placeholder functions (e.g., `handle_sentinel_policy`) intended for future implementation.
+//! - The design assumes a highly concurrent environment, where caching is critical.
+
 use std::{
     str::FromStr,
     sync::{Arc, RwLock, Weak},
@@ -7,7 +27,6 @@ use async_trait::async_trait;
 use better_default::Default;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use stretto::Cache;
 
@@ -160,13 +179,13 @@ TODO
 "#;
 
 lazy_static! {
-    static ref DISPLAY_NAME_SANITIZE: Regex = Regex::new(r"[^a-zA-Z0-9-]").unwrap();
     static ref IMMUTABLE_POLICIES: Vec<&'static str> =
         vec!["root", RESPONSE_WRAPPING_POLICY_NAME, CONTROL_GROUP_POLICY_NAME,];
     static ref NON_ASSIGNABLE_POLICIES: Vec<&'static str> =
         vec![RESPONSE_WRAPPING_POLICY_NAME, CONTROL_GROUP_POLICY_NAME,];
 }
 
+/// Represents a policy entry in the policy store.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PolicyEntry {
     pub version: u32,
@@ -178,6 +197,7 @@ pub struct PolicyEntry {
     pub sentinal_policy: SentinelPolicy,
 }
 
+/// The main policy store structure.
 #[derive(Default)]
 pub struct PolicyStore {
     pub core: Arc<RwLock<Core>>,
@@ -193,6 +213,17 @@ pub struct PolicyStore {
 }
 
 impl PolicyStore {
+    /// Creates a new `PolicyStore` with initial setup based on the given `Core`.
+    ///
+    /// This function initializes views and caches necessary for policy management.
+    ///
+    /// # Arguments
+    ///
+    /// * `core` - A reference to the `Core` struct used for initializing views and caches.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Arc<PolicyStore>, RvError>` - An Arc-wrapped `PolicyStore` instance or an error.
     pub fn new(core: &Core) -> Result<Arc<PolicyStore>, RvError> {
         if core.system_view.is_none() {
             return Err(RvError::ErrBarrierSealed);
@@ -248,6 +279,8 @@ impl PolicyStore {
         wrap_self
     }
 
+    /// Set a policy in the policy store.
+    /// This function validates the policy name, checks for immutability, and inserts the policy into the appropriate view.
     pub fn set_policy(&self, policy: Policy) -> Result<(), RvError> {
         if policy.name.is_empty() {
             return Err(rv_error_string!("policy name missing"));
@@ -267,6 +300,8 @@ impl PolicyStore {
         self.set_policy_internal(Arc::new(policy))
     }
 
+    // Get a policy from the policy store.
+    // This function retrieves the policy from the appropriate view, checks the cache, and handles policy type mapping.
     pub fn get_policy(&self, name: &str, policy_type: PolicyType) -> Result<Option<Arc<Policy>>, RvError> {
         let name = self.sanitize_name(name);
         let index = self.cache_key(&name);
@@ -360,6 +395,8 @@ impl PolicyStore {
         Ok(Some(p))
     }
 
+    /// List policies of a specific type in the policy store.
+    /// This function retrieves the keys from the appropriate view and filters out non-assignable policies for ACLs.
     pub fn list_policy(&self, policy_type: PolicyType) -> Result<Vec<String>, RvError> {
         let view = self.get_barrier_view(policy_type)?;
         match policy_type {
@@ -377,6 +414,8 @@ impl PolicyStore {
         }
     }
 
+    /// Delete a policy from the policy store.
+    /// This function removes the policy from the appropriate view, updates the cache, and handles sentinel policy invalidation.
     pub fn delete_policy(&self, name: &str, policy_type: PolicyType) -> Result<(), RvError> {
         let name = self.sanitize_name(name);
         let view = self.get_barrier_view(policy_type)?;
@@ -412,6 +451,8 @@ impl PolicyStore {
         Ok(())
     }
 
+    /// Load an ACL policy into the policy store.
+    /// This function retrieves the policy if it exists, validates immutability, and sets the policy.
     pub fn load_acl_policy(&self, policy_name: &str, policy_text: &str) -> Result<(), RvError> {
         let name = self.sanitize_name(policy_name);
         let policy = self.get_policy(&name, PolicyType::Acl)?;
@@ -428,6 +469,7 @@ impl PolicyStore {
         self.set_policy_internal(Arc::new(policy))
     }
 
+    /// Load default ACL policies into the policy store.
     pub fn load_default_acl_policy(&self) -> Result<(), RvError> {
         self.load_acl_policy(DEFAULT_POLICY_NAME, DEFAULT_POLICY)?;
         self.load_acl_policy(RESPONSE_WRAPPING_POLICY_NAME, RESPONSE_WRAPPING_POLICY)?;
@@ -435,6 +477,8 @@ impl PolicyStore {
         Ok(())
     }
 
+    /// Create a new ACL instance from a list of policy names and additional policies.
+    /// This function retrieves policies by name, combines them with additional policies, and creates an ACL.
     pub fn new_acl(
         &self,
         policy_names: &[String],
@@ -585,10 +629,12 @@ impl PolicyStore {
         Ok(())
     }
 
+    /// Sanitize a policy name by converting it to lowercase.
     fn sanitize_name(&self, name: &str) -> String {
         name.to_lowercase().to_string()
     }
 
+    /// Generate a cache key for a given policy name.
     fn cache_key(&self, name: &str) -> String {
         name.to_string()
     }
@@ -600,6 +646,8 @@ impl AuthHandler for PolicyStore {
         "policy_store".to_string()
     }
 
+    /// Handle authentication for a given request.
+    /// This function checks the request path, performs capability checks, and updates authentication results.
     async fn post_auth(&self, req: &mut Request) -> Result<(), RvError> {
         let is_root_path = self.router.is_root_path(&req.path)?;
 
@@ -638,5 +686,160 @@ impl AuthHandler for PolicyStore {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod mod_policy_store_tests {
+    use super::{super::policy::Capability, *};
+    use crate::test_utils::test_rusty_vault_init;
+
+    #[test]
+    fn test_policy_store_crud() {
+        let (_, core) = test_rusty_vault_init("test_policy_store_crud");
+        let core = core.read().unwrap();
+
+        let policy_store = PolicyStore::new(&core).unwrap();
+
+        let policy1_name = "test-policy1";
+        let policy1_hcl = r#"
+        path "secret/data/test1" {
+            capabilities = ["read", "list"]
+        }"#;
+
+        let policy2_name = "test-policy2";
+        let policy2_hcl = r#"
+        path "secret/data/test2" {
+            capabilities = ["create", "delete"]
+        }"#;
+
+        let mut policy1 = Policy::from_str(policy1_hcl).unwrap();
+        policy1.name = policy1_name.to_string();
+
+        let mut policy2 = Policy::from_str(policy2_hcl).unwrap();
+        policy2.name = policy2_name.to_string();
+
+        // Set the policy
+        let result = policy_store.set_policy(policy1);
+        assert!(result.is_ok());
+        let result = policy_store.set_policy(policy2);
+        assert!(result.is_ok());
+
+        // Verify the policy is set
+        let retrieved_policy = policy_store.get_policy(policy1_name, PolicyType::Acl).unwrap();
+        assert!(retrieved_policy.is_some());
+        let retrieved_policy = retrieved_policy.unwrap();
+        assert_eq!(retrieved_policy.name, policy1_name);
+        assert_eq!(retrieved_policy.raw, policy1_hcl);
+        let retrieved_policy = policy_store.get_policy(policy2_name, PolicyType::Acl).unwrap();
+        assert!(retrieved_policy.is_some());
+        let retrieved_policy = retrieved_policy.unwrap();
+        assert_eq!(retrieved_policy.name, policy2_name);
+        assert_eq!(retrieved_policy.raw, policy2_hcl);
+
+        // List policies
+        let policies = policy_store.list_policy(PolicyType::Acl).unwrap();
+        assert!(policies.contains(&policy1_name.to_string()));
+        assert!(policies.contains(&policy2_name.to_string()));
+
+        // Delete the policy
+        assert!(policy_store.delete_policy(policy1_name, PolicyType::Acl).is_ok());
+        let retrieved_policy = policy_store.get_policy(policy1_name, PolicyType::Acl).unwrap();
+        assert!(retrieved_policy.is_none());
+
+        // List policies again
+        let policies = policy_store.list_policy(PolicyType::Acl).unwrap();
+        assert!(!policies.contains(&policy1_name.to_string()));
+        assert!(policies.contains(&policy2_name.to_string()));
+    }
+
+    #[test]
+    fn test_policy_load_default() {
+        let (_, core) = test_rusty_vault_init("test_policy_load_default");
+        let core = core.read().unwrap();
+
+        let policy_store = PolicyStore::new(&core).unwrap();
+
+        // Load default ACL policies
+        policy_store.load_default_acl_policy().unwrap();
+
+        // Verify the default policies are loaded
+        let default_policy = policy_store.get_policy("default", PolicyType::Acl).unwrap();
+        assert!(default_policy.is_some());
+
+        let response_wrapping_policy = policy_store.get_policy("response-wrapping", PolicyType::Acl).unwrap();
+        assert!(response_wrapping_policy.is_some());
+
+        let control_group_policy = policy_store.get_policy("control-group", PolicyType::Acl).unwrap();
+        assert!(control_group_policy.is_some());
+    }
+
+    #[test]
+    fn test_policy_root() {
+        let (_, core) = test_rusty_vault_init("test_policy_root");
+        let core = core.read().unwrap();
+
+        let policy_store = PolicyStore::new(&core).unwrap();
+
+        // Get should return a special policy
+        let root_policy = policy_store.get_policy("root", PolicyType::Token).unwrap();
+        assert!(root_policy.is_some());
+        let root_policy = root_policy.unwrap();
+        assert_eq!(root_policy.name, "root");
+
+        // Set should fail
+        assert!(policy_store.set_policy(Policy {
+            name: "root".into(),
+            ..Default::default()
+        }).is_err());
+
+        // Delete should fail
+        assert!(policy_store.delete_policy("root", PolicyType::Acl).is_err());
+    }
+
+    #[test]
+    fn test_policy_new_acl() {
+        let (_, core) = test_rusty_vault_init("test_policy_new_acl");
+        let core = core.read().unwrap();
+
+        let policy_store = PolicyStore::new(&core).unwrap();
+
+        let policy1_name = "test-policy1";
+        let policy1_hcl = r#"
+        path "secret/data/test1/*" {
+            capabilities = ["read", "list"]
+        }"#;
+
+        let policy2_name = "test-policy2";
+        let policy2_hcl = r#"
+        path "secret/data/test2" {
+            capabilities = ["create", "delete"]
+        }"#;
+
+        let mut policy1 = Policy::from_str(policy1_hcl).unwrap();
+        policy1.name = policy1_name.to_string();
+
+        let mut policy2 = Policy::from_str(policy2_hcl).unwrap();
+        policy2.name = policy2_name.to_string();
+
+        // Set the policy
+        policy_store.set_policy(policy1).unwrap();
+        policy_store.set_policy(policy2).unwrap();
+
+        // Load default ACL policies
+        policy_store.load_default_acl_policy().unwrap();
+
+        // Create a new ACL
+        let acl = policy_store.new_acl(&vec![policy1_name.to_string(), policy2_name.to_string()], None).unwrap();
+
+        // Verify the ACL contains the policies
+        assert_eq!(
+            acl.prefix_rules.get_ancestor_value("secret/data/test1/kk/vv").unwrap().capabilities_bitmap,
+            Capability::Read.to_bits() | Capability::List.to_bits()
+        );
+        assert_eq!(
+            acl.exact_rules.get("secret/data/test2").unwrap().capabilities_bitmap,
+            Capability::Create.to_bits() | Capability::Delete.to_bits()
+        );
     }
 }

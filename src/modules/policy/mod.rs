@@ -45,8 +45,14 @@ impl PolicyModule {
     }
 
     pub fn handle_policy_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let policies = self.policy_store.list_policy(PolicyType::Acl)?;
+        let mut policies = self.policy_store.list_policy(PolicyType::Acl)?;
+
+        // TODO: After the "namespace" feature is added here, it is necessary to determine whether it is the root
+        // namespace before the root can be added.
+        policies.push("root".into());
+
         let mut resp = Response::list_response(&policies);
+
         if req.path.starts_with("policy") {
             let data = resp.data.as_mut().unwrap();
             data.insert("policies".into(), data["keys"].clone());
@@ -128,5 +134,239 @@ impl Module for PolicyModule {
         core.delete_auth_handler(Arc::clone(&self.policy_store) as Arc<dyn AuthHandler>)?;
         self.policy_store = Arc::new(PolicyStore::default());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod mod_policy_tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::{
+        logical::{Operation, Request},
+        test_utils::{
+            test_delete_api, test_list_api, test_mount_api, test_mount_auth_api, test_read_api, test_rusty_vault_init,
+            test_write_api,
+        },
+    };
+
+    async fn test_write_policy(core: &Core, token: &str, name: &str, policy: &str) {
+        let data = json!({
+            "policy": policy,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let resp = test_write_api(core, token, format!("sys/policy/{}", name).as_str(), true, Some(data)).await;
+        assert!(resp.is_ok());
+    }
+
+    async fn test_read_policy(core: &Core, token: &str, name: &str) -> Result<Option<Response>, RvError> {
+        let resp = test_read_api(core, token, format!("sys/policy/{}", name).as_str(), true).await;
+        assert!(resp.is_ok());
+        resp
+    }
+
+    async fn test_delete_policy(core: &Core, token: &str, name: &str) {
+        assert!(test_delete_api(core, token, format!("sys/policy/{}", name).as_str(), true, None).await.is_ok());
+    }
+
+    async fn test_write_user(
+        core: &Core,
+        token: &str,
+        path: &str,
+        username: &str,
+        password: &str,
+        policy: &str,
+        ttl: i32,
+    ) {
+        let user_data = json!({
+            "password": password,
+            "token_policies": policy,
+            "ttl": ttl,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let resp =
+            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data))
+                .await;
+        assert!(resp.is_ok());
+    }
+
+    async fn test_user_login(
+        core: &Core,
+        path: &str,
+        username: &str,
+        password: &str,
+        is_ok: bool,
+    ) -> Result<Option<Response>, RvError> {
+        let login_data = json!({
+            "password": password,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let mut req = Request::new(format!("auth/{}/login/{}", path, username).as_str());
+        req.operation = Operation::Write;
+        req.body = Some(login_data);
+
+        let resp = core.handle_request(&mut req).await;
+        assert!(resp.is_ok());
+        if is_ok {
+            let resp = resp.as_ref().unwrap();
+            assert!(resp.is_some());
+        }
+        resp
+    }
+
+    #[tokio::test]
+    async fn test_policy_http_api() {
+        let (root_token, core) = test_rusty_vault_init("test_policy_http_api");
+        let core = core.read().unwrap();
+
+        let policy1_name = "policy1";
+        let policy1_hcl = r#"
+            path "path1/" {
+                capabilities = ["read"]
+            }
+        "#;
+
+        // Write
+        test_write_policy(&core, &root_token, policy1_name, policy1_hcl).await;
+
+        // Read
+        let policy1 = test_read_policy(&core, &root_token, policy1_name).await;
+        assert!(policy1.is_ok());
+        let policy1 = policy1.unwrap();
+        assert!(policy1.is_some());
+        let policy1 = policy1.unwrap();
+        assert!(policy1.data.is_some());
+        let policy1 = policy1.data.unwrap();
+        assert_eq!(policy1["name"], policy1_name);
+        assert_eq!(policy1["rules"], policy1_hcl.trim());
+
+        // List
+        let policies = test_list_api(&core, &root_token, "sys/policy", true).await;
+        assert!(policies.is_ok());
+        let policies = policies.unwrap();
+        assert!(policies.is_some());
+        let policies = policies.unwrap();
+        assert!(policies.data.is_some());
+        let policies = policies.data.unwrap();
+        assert_eq!(policies["keys"], json!(["default", policy1_name, "root"]));
+        assert_eq!(policies["policies"], json!(["default", policy1_name, "root"]));
+
+        // Delete
+        test_delete_policy(&core, &root_token, policy1_name).await;
+
+        // Read again
+        let policy1 = test_read_policy(&core, &root_token, policy1_name).await;
+        let policy1 = policy1.unwrap();
+        assert!(policy1.is_none());
+
+        // List again
+        let policies = test_list_api(&core, &root_token, "sys/policy", true).await;
+        let policies = policies.unwrap().unwrap().data.unwrap();
+        assert_eq!(policies["keys"], json!(["default", "root"]));
+        assert_eq!(policies["policies"], json!(["default", "root"]));
+    }
+
+    #[tokio::test]
+    async fn test_policy_acl_check() {
+        let (root_token, core) = test_rusty_vault_init("test_policy_acl_check");
+        let core = core.read().unwrap();
+
+        let policy1_name = "policy1";
+        let policy1_hcl = r#"
+            path "path1/*" {
+                capabilities = ["read"]
+            }
+
+            path "path1/kv1" {
+                capabilities = ["read", "list", "create", "update", "delete"]
+            }
+        "#;
+        let policy2_name = "policy2";
+        let policy2_hcl = r#"
+            path "path1/*" {
+                capabilities = ["read", "list", "create", "update"]
+            }
+        "#;
+
+        // Write
+        test_write_policy(&core, &root_token, policy1_name, policy1_hcl).await;
+        test_write_policy(&core, &root_token, policy2_name, policy2_hcl).await;
+
+        // Mount userpass auth
+        test_mount_auth_api(&core, &root_token, "userpass", "up1").await;
+
+        // Add user xxx with policy1, add user yyy with policy2
+        test_write_user(&core, &root_token, "up1", "xxx", "123qwe!@#", policy1_name, 0).await;
+        let resp = test_user_login(&core, "up1", "xxx", "123qwe!@#", true).await;
+        assert!(resp.is_ok());
+        let xxx_token = resp.unwrap().unwrap().auth.unwrap().client_token;
+        test_write_user(&core, &root_token, "up1", "yyy", "123456", policy2_name, 0).await;
+        let resp = test_user_login(&core, "up1", "yyy", "123456", true).await;
+        assert!(resp.is_ok());
+        let yyy_token = resp.unwrap().unwrap().auth.unwrap().client_token;
+
+        // Mount kv to path1/ and path2/
+        test_mount_api(&core, &root_token, "kv", "path1/").await;
+        test_mount_api(&core, &root_token, "kv", "path2/").await;
+
+        // User xxx write path path1/kv1 should succeed
+        let data = json!({
+            "aa": "bb",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let resp = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+        assert!(resp.is_ok());
+
+        // User xxx write path1/kv2 should fail
+        let resp = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+        assert!(resp.is_err());
+
+        // User yyy write path1/kv2 should succeed
+        let resp = test_write_api(&core, &yyy_token, "path1/kv2", true, Some(data.clone())).await;
+        assert!(resp.is_ok());
+
+        // User xxx read path1/kv1 should succeed
+        let resp = test_read_api(&core, &xxx_token, "path1/kv1", true,).await;
+        assert!(resp.is_ok());
+
+        // User xxx read path1/kv2 should succeed
+        let resp = test_read_api(&core, &xxx_token, "path1/kv2", true,).await;
+        assert!(resp.is_ok());
+
+        // User yyy read path1/kv1 should succeed
+        let resp = test_read_api(&core, &yyy_token, "path1/kv1", true,).await;
+        assert!(resp.is_ok());
+
+        // User yyy read path1/kv2 should succeed
+        let resp = test_read_api(&core, &yyy_token, "path1/kv2", true,).await;
+        assert!(resp.is_ok());
+
+        // User xxx delete path1/ should fail
+        let resp = test_list_api(&core, &xxx_token, "path1", false).await;
+        assert!(resp.is_err());
+
+        // User yyy delete path1/ should fail
+        let resp = test_list_api(&core, &yyy_token, "path1", false).await;
+        assert!(resp.is_err());
+
+
+        // User yyy delete path1/kv1 should fail
+        let resp = test_delete_api(&core, &yyy_token, "path1/kv1", false, None).await;
+        assert!(resp.is_err());
+
+        // User yyy delete path1/kv2 should fail
+        let resp = test_delete_api(&core, &yyy_token, "path1/kv2", false, None).await;
+        assert!(resp.is_err());
     }
 }
