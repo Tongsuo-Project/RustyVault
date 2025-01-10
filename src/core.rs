@@ -135,9 +135,11 @@ impl Core {
         let cert_module = CertModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
 
-        let handlers = self.handlers.read()?;
+        let handlers = {
+            self.handlers.read()?.clone()
+        };
         for handler in handlers.iter() {
-            match handler.post_config(Arc::clone(&core), config) {
+            match handler.post_config(self, config) {
                 Ok(_) => {
                     continue;
                 }

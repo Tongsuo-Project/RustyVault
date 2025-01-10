@@ -615,9 +615,14 @@ impl Handler for TokenStore {
         };
 
         for auth_handler in auth_handlers.iter() {
-            if let Some(ret) = auth_handler.pre_auth(req).await? {
-                auth = Some(ret);
-                break;
+            match auth_handler.pre_auth(req).await {
+                Ok(Some(ret)) => {
+                    auth = Some(ret);
+                    break;
+                }
+                Ok(None) | Err(RvError::ErrHandlerDefault) => continue,
+                Err(e) => return Err(e),
+
             }
         }
 
@@ -635,7 +640,10 @@ impl Handler for TokenStore {
         req.handle_phase = HandlePhase::PostAuth;
 
         for auth_handler in auth_handlers.iter() {
-            auth_handler.post_auth(req).await?;
+            match auth_handler.post_auth(req).await {
+                Ok(()) | Err(RvError::ErrHandlerDefault) => continue,
+                Err(e) => return Err(e),
+            }
         }
 
         Ok(None)
