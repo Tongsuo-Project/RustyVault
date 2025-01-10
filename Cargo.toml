@@ -1,6 +1,6 @@
 [package]
 name = "rusty_vault"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "Apache-2.0"
 description = """
@@ -13,6 +13,9 @@ RustyVault's RESTful API is designed to be fully compatible with Hashicorp Vault
 repository = "https://github.com/Tongsuo-Project/RustyVault"
 documentation = "https://docs.rs/rusty_vault/latest/rusty_vault/"
 build = "build.rs"
+exclude = [
+    "docs/*",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
