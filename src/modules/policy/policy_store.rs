@@ -145,11 +145,6 @@ path "sys/tools/hash/*" {
 path "sys/control-group/request" {
     capabilities = ["update"]
 }
-
-# Allow a token to make requests to the Authorization Endpoint for OIDC providers.
-path "identity/oidc/provider/+/authorize" {
-    capabilities = ["read", "update"]
-}
 "#;
 
 static RESPONSE_WRAPPING_POLICY_NAME: &str = "response-wrapping";

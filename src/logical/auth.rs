@@ -27,6 +27,9 @@ pub struct Auth {
     // Policies is the list of policies that the authenticated user is associated with.
     pub policies: Vec<String>,
 
+    // token_policies break down the list in policies to help determine where a policy was sourced
+    pub token_policies: Vec<String>,
+
     // Indicates that the default policy should not be added by core when creating a token.
     // The default policy will still be added if it's explicitly defined.
     pub no_default_policy: bool,

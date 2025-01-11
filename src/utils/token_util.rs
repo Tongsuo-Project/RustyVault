@@ -194,6 +194,7 @@ impl TokenParams {
         auth.ttl = self.token_ttl;
         auth.max_ttl = self.token_max_ttl;
         auth.policies = self.token_policies.clone();
+        auth.no_default_policy = self.token_no_default_policy;
         auth.renewable = true;
     }
 }

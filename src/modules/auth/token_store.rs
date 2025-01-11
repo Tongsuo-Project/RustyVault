@@ -311,13 +311,16 @@ impl TokenStoreInner {
 
         self.use_token(&mut entry)?;
 
-        let auth = Auth {
+        let mut auth = Auth {
             client_token: token.to_string(),
             display_name: entry.display_name,
+            token_policies: entry.policies.clone(),
             policies: entry.policies.clone(),
             metadata: entry.meta,
             ..Auth::default()
         };
+
+        sanitize_policies(&mut auth.policies, false);
 
         Ok(Some(auth))
     }
@@ -704,9 +707,11 @@ impl Handler for TokenStore {
                 auth.ttl = MAX_LEASE_DURATION_SECS;
             }
 
-            sanitize_policies(&mut auth.policies, !auth.no_default_policy);
 
-            if auth.policies.contains(&"root".to_string()) {
+            auth.token_policies = auth.policies.clone();
+            sanitize_policies(&mut auth.token_policies, !auth.no_default_policy);
+
+            if auth.token_policies.contains(&"root".to_string()) {
                 return Err(rv_error_response!("auth methods cannot create root tokens"));
             }
 
@@ -715,6 +720,7 @@ impl Handler for TokenStore {
                 meta: auth.metadata.clone(),
                 display_name: auth.display_name.clone(),
                 ttl: auth.ttl.as_secs(),
+                policies: auth.token_policies.clone(),
                 ..Default::default()
             };
 
