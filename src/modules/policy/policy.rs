@@ -343,9 +343,19 @@ impl Permissions {
             // Only check parameter permissions for operations that can modify parameters.
             Operation::Read | Operation::Write => {
                 for parameter in self.required_parameters.iter() {
-                    if !req.get_data(parameter.to_lowercase().as_str()).is_ok() {
-                        return Ok(ret);
+                    let key = parameter.to_lowercase();
+                    if let Some(data) = &req.data {
+                        if data.get(key.as_str()).is_some() {
+                            continue;
+                        }
                     }
+                    if let Some(body) = &req.body {
+                        if body.get(key.as_str()).is_some() {
+                            continue;
+                        }
+                    }
+
+                    return Ok(ret);
                 }
 
                 // If there are no data fields, allow
@@ -361,10 +371,10 @@ impl Permissions {
                     return Ok(ret);
                 }
 
-                for (denied_key, denied_value) in self.denied_parameters.iter() {
-                    if let Ok(param) = req.get_data(denied_key.to_lowercase().as_str()) {
-                        let denied_array = denied_value.as_array().unwrap();
-                        if denied_array.contains(&param) {
+                for (param_key, param_value) in req.data_iter() {
+                    if let Some(denied_param) = self.denied_parameters.get(param_key.to_lowercase().as_str()) {
+                        let denied_array = denied_param.as_array().unwrap();
+                        if denied_array.contains(param_value) {
                             return Ok(ret);
                         }
                     }

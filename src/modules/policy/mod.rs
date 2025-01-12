@@ -337,29 +337,28 @@ mod mod_policy_tests {
         assert!(resp.is_ok());
 
         // User xxx read path1/kv1 should succeed
-        let resp = test_read_api(&core, &xxx_token, "path1/kv1", true,).await;
+        let resp = test_read_api(&core, &xxx_token, "path1/kv1", true).await;
         assert!(resp.is_ok());
 
         // User xxx read path1/kv2 should succeed
-        let resp = test_read_api(&core, &xxx_token, "path1/kv2", true,).await;
+        let resp = test_read_api(&core, &xxx_token, "path1/kv2", true).await;
         assert!(resp.is_ok());
 
         // User yyy read path1/kv1 should succeed
-        let resp = test_read_api(&core, &yyy_token, "path1/kv1", true,).await;
+        let resp = test_read_api(&core, &yyy_token, "path1/kv1", true).await;
         assert!(resp.is_ok());
 
         // User yyy read path1/kv2 should succeed
-        let resp = test_read_api(&core, &yyy_token, "path1/kv2", true,).await;
+        let resp = test_read_api(&core, &yyy_token, "path1/kv2", true).await;
         assert!(resp.is_ok());
 
-        // User xxx delete path1/ should fail
+        // User xxx list path1/ should fail
         let resp = test_list_api(&core, &xxx_token, "path1", false).await;
         assert!(resp.is_err());
 
-        // User yyy delete path1/ should fail
+        // User yyy list path1/ should fail
         let resp = test_list_api(&core, &yyy_token, "path1", false).await;
         assert!(resp.is_err());
-
 
         // User yyy delete path1/kv1 should fail
         let resp = test_delete_api(&core, &yyy_token, "path1/kv1", false, None).await;
@@ -368,5 +367,229 @@ mod mod_policy_tests {
         // User yyy delete path1/kv2 should fail
         let resp = test_delete_api(&core, &yyy_token, "path1/kv2", false, None).await;
         assert!(resp.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_policy_acl_check_with_policy_parameters() {
+        let (root_token, core) = test_rusty_vault_init("test_policy_acl_check_with_policy_parameters");
+        let core = core.read().unwrap();
+
+        let policy1_name = "policy1";
+        let policy1_hcl = r#"
+            path "path1/*" {
+                capabilities = ["read", "list"]
+            }
+
+            path "path1/kv1" {
+                capabilities = ["read", "list", "create", "update", "delete"]
+                allowed_parameters = {"key1" = ["value1", "value2"], "key2" = ["value3", "value4"]}
+                required_parameters = ["key1"]
+            }
+
+            path "path1/kv2" {
+                capabilities = ["read", "list", "create", "update"]
+                required_parameters = ["key1", "key2", "key3"]
+            }
+
+            path "path1/kv3" {
+                capabilities = ["read", "list", "create", "update"]
+                denied_parameters = {"*" = []}
+            }
+
+            path "path1/kv4" {
+                capabilities = ["read", "list", "create", "update"]
+                denied_parameters = {"key2" = ["value3", "value4"]}
+            }
+        "#;
+
+        // Write
+        test_write_policy(&core, &root_token, policy1_name, policy1_hcl).await;
+
+        // Mount userpass auth
+        test_mount_auth_api(&core, &root_token, "userpass", "up1").await;
+
+        // Add user xxx with policy1
+        test_write_user(&core, &root_token, "up1", "xxx", "123qwe!@#", policy1_name, 0).await;
+        let resp = test_user_login(&core, "up1", "xxx", "123qwe!@#", true).await;
+        assert!(resp.is_ok());
+        let xxx_token = resp.unwrap().unwrap().auth.unwrap().client_token;
+
+        // Mount kv to path1/ and path2/
+        test_mount_api(&core, &root_token, "kv", "path1/").await;
+
+        // User xxx write path path1/kv1 with parameters key1=value1 should succeed
+        let data = json!({
+            "key1": "value1",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+
+        // User xxx write path path1/kv1 with parameters key1=value2 should succeed
+        let data = json!({
+            "key1": "value2",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+
+        // User xxx write path1/kv2 should fail
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv1 with parameters key1=value1 and key2=value3 should succeed
+        let data = json!({
+            "key1": "value1",
+            "key2": "value3",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+
+        // User xxx write path path1/kv1 with parameters key1=value1 and key2=value4 should succeed
+        let data = json!({
+            "key1": "value1",
+            "key2": "value4",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+
+        // User xxx write path path1/kv1 with parameters key1=value2 and key2=value22 should fail
+        let data = json!({
+            "key1": "value2",
+            "key2": "value22",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, Some(data.clone())).await;
+
+        // User xxx read path1/kv1 without parameters should fail
+        let _ = test_read_api(&core, &xxx_token, "path1/kv1", false).await;
+
+        // User xxx list path1/ should fail
+        let _ = test_list_api(&core, &xxx_token, "path1", false).await;
+
+        // User xxx write path path1/kv1 with parameters key1=value3 should fail
+        let data = json!({
+            "key1": "value3",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv1 with parameters key2=value3 (missing key1) should fail
+        let data = json!({
+            "key2": "value3",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv2 with parameters key1 (missing key2 and key3) should fail
+        let data = json!({
+            "key1": "xx",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv2 with parameters key1 and key2 (missing key3) should fail
+        let data = json!({
+            "key1": "xx",
+            "key2": "yy",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv2 with parameters key1、key2 and key3 should succeed
+        let data = json!({
+            "key1": "xx",
+            "key2": "yy",
+            "key3": "zz",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", true, Some(data.clone())).await;
+
+        // User xxx write path path1/kv2 with parameters key1、key2、key3 and other param should succeed
+        let data = json!({
+            "key1": "xx",
+            "key2": "yy",
+            "key3": "zz",
+            "key4": "vv",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", true, Some(data.clone())).await;
+
+        // User xxx write path path1/kv3 with parameters key1 should fail
+        let data = json!({
+            "key1": "xx",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv3", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv3 with parameters key1 should fail
+        let data = json!({
+            "key1": "xx",
+            "key2": "yy"
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv3", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv4 with parameters key1 should succeed
+        let data = json!({
+            "key1": "xx"
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", true, Some(data.clone())).await;
+
+        // User xxx write path path1/kv4 with parameters key1 and key2=yy should succeed
+        let data = json!({
+            "key1": "xx",
+            "key2": "yy"
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", true, Some(data.clone())).await;
+
+        // User xxx write path path1/kv4 with parameters key1 and key2=value3 should succeed
+        let data = json!({
+            "key1": "xx",
+            "key2": "value3"
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", false, Some(data.clone())).await;
+
+        // User xxx write path path1/kv4 with parameters key1 and key2=value4 should succeed
+        let data = json!({
+            "key1": "xx",
+            "key2": "value4"
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", false, Some(data.clone())).await;
     }
 }
