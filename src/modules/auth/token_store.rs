@@ -711,7 +711,11 @@ impl Handler for TokenStore {
             auth.token_policies = auth.policies.clone();
             sanitize_policies(&mut auth.token_policies, !auth.no_default_policy);
 
-            if auth.token_policies.contains(&"root".to_string()) {
+            let all_policies = auth.token_policies.clone();
+
+            // TODO: add identity_policies to all_policies
+
+            if all_policies.contains(&"root".to_string()) {
                 return Err(rv_error_response!("auth methods cannot create root tokens"));
             }
 
@@ -729,6 +733,8 @@ impl Handler for TokenStore {
             auth.client_token = te.id.clone();
 
             self.expiration.register_auth(&req.path, auth)?;
+
+            auth.policies = all_policies;
         }
 
         Ok(())
