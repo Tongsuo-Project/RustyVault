@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use better_default::Default;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +27,9 @@ pub struct Auth {
     // Policies is the list of policies that the authenticated user is associated with.
     pub policies: Vec<String>,
 
+    // token_policies break down the list in policies to help determine where a policy was sourced
+    pub token_policies: Vec<String>,
+
     // Indicates that the default policy should not be added by core when creating a token.
     // The default policy will still be added if it's explicitly defined.
     pub no_default_policy: bool,
@@ -37,4 +41,23 @@ pub struct Auth {
     // Metadata is used to attach arbitrary string-type metadata to an authenticated user.
     // This metadata will be outputted into the audit log.
     pub metadata: HashMap<String, String>,
+
+    // policy_results is the set of policies that grant the token access to the requesting path.
+    pub policy_results: Option<PolicyResults>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PolicyResults {
+    pub allowed: bool,
+    pub granting_policies: Vec<PolicyInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyInfo {
+    pub name: String,
+    pub namespace_id: String,
+    pub namespace_path: String,
+    #[serde(rename = "type")]
+    #[default("acl".into())]
+    pub policy_type: String,
 }

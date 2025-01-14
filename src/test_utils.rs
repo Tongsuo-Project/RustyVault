@@ -1134,7 +1134,7 @@ pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     req.operation = Operation::List;
     req.client_token = token.to_string();
     let resp = core.handle_request(&mut req).await;
-    println!("list resp: {:?}", resp);
+    println!("list path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
@@ -1144,7 +1144,7 @@ pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     req.operation = Operation::Read;
     req.client_token = token.to_string();
     let resp = core.handle_request(&mut req).await;
-    println!("read resp: {:?}", resp);
+    println!("read path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
@@ -1162,7 +1162,7 @@ pub async fn test_write_api(
     req.body = data;
 
     let resp = core.handle_request(&mut req).await;
-    println!("write resp: {:?}", resp);
+    println!("write path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
@@ -1179,7 +1179,7 @@ pub async fn test_delete_api(
     req.client_token = token.to_string();
     req.body = data;
     let resp = core.handle_request(&mut req).await;
-    println!("delete resp: {:?}", resp);
+    println!("delete path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
