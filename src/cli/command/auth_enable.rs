@@ -87,11 +87,7 @@ impl CommandExecutor for Enable {
         match sys.enable_auth(&auth_input) {
             Ok(ret) => match ret.response_status {
                 200 | 204 => {
-                    println!(
-                        "Success! Enabled {} auth method at: {}",
-                        self.method,
-                        auth_input.path
-                    );
+                    println!("Success! Enabled {} auth method at: {}", self.method, auth_input.path);
                 }
                 _ => ret.print_debug_info(),
             },

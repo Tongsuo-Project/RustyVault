@@ -11,10 +11,10 @@
 //! A crypto adaptor is a module that conveys and translates high level cryptography
 //! operations like encryption, signing into the APIs provided by underlying cryptography
 //! libraries such as OpenSSL, Tongsuo and so forth.
-//! 
+//!
 //! At current stage, only one crypto_adaptor can be enabled at compilation phase and later
 //! be used at run-time. "crypto_adaptor"s are configured as 'feature's in the Cargo context.
-//! 
+//!
 //! Currently, the supported feature names of crypto adaptors are as follows, you can enable
 //! them by adding one '--features crypto_adaptor_name' option when running "cargo build":
 //!
@@ -55,11 +55,12 @@
 //! $ cargo build --features crypto_adaptor_tongsuo --no-default-features
 //! ~~~
 
-use crate::errors::RvError;
 #[cfg(feature = "crypto_adaptor_openssl")]
 use crypto_adaptors::openssl_adaptor::AdaptorCTX;
 #[cfg(feature = "crypto_adaptor_tongsuo")]
 use crypto_adaptors::tongsuo_adaptor::AdaptorCTX;
+
+use crate::errors::RvError;
 
 pub mod crypto_adaptors;
 
@@ -401,18 +402,22 @@ pub trait Encryption: PublicKey {
 
 #[cfg(test)]
 mod crypto_test {
-    use crate::modules::crypto::{AES, AESKeySize, CipherMode, BlockCipher, AEADCipher};
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     use crate::modules::crypto::SM4;
+    use crate::modules::crypto::{AEADCipher, AESKeySize, BlockCipher, CipherMode, AES};
 
     #[test]
     fn test_aes_keygen() {
         let data = b"The best way to not feel hopeless is to get up and do something.".to_vec();
-        let mut aes_encrypter = AES::new(true, Some(AESKeySize::AES128),
-            Some(CipherMode::CBC), None, None).unwrap();
-        let mut aes_decrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::CBC), Some(aes_encrypter.get_key_iv().0),
-            Some(aes_encrypter.get_key_iv().1)).unwrap();
+        let mut aes_encrypter = AES::new(true, Some(AESKeySize::AES128), Some(CipherMode::CBC), None, None).unwrap();
+        let mut aes_decrypter = AES::new(
+            false,
+            Some(AESKeySize::AES128),
+            Some(CipherMode::CBC),
+            Some(aes_encrypter.get_key_iv().0),
+            Some(aes_encrypter.get_key_iv().1),
+        )
+        .unwrap();
 
         let ct = aes_encrypter.encrypt(&data).unwrap();
         let pt = aes_decrypter.decrypt(&ct).unwrap();
@@ -424,10 +429,11 @@ mod crypto_test {
         let data = b"The best way to not feel hopeless is to get up and do something.".to_vec();
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
-        let mut aes_encrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::CBC), Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut aes_decrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::CBC), Some(key), Some(iv)).unwrap();
+        let mut aes_encrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::CBC), Some(key.clone()), Some(iv.clone()))
+                .unwrap();
+        let mut aes_decrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::CBC), Some(key), Some(iv)).unwrap();
 
         let ct = aes_encrypter.encrypt(&data).unwrap();
         let pt = aes_decrypter.decrypt(&ct).unwrap();
@@ -440,10 +446,11 @@ mod crypto_test {
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
         let aad = b"some additional authenticated data.".to_vec();
-        let mut aes_encrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::GCM), Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut aes_decrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::GCM), Some(key), Some(iv)).unwrap();
+        let mut aes_encrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::GCM), Some(key.clone()), Some(iv.clone()))
+                .unwrap();
+        let mut aes_decrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::GCM), Some(key), Some(iv)).unwrap();
 
         // set aad, encrypt and get tag.
         aes_encrypter.set_aad(aad.clone()).unwrap();
@@ -461,21 +468,21 @@ mod crypto_test {
 
     #[test]
     fn test_aes_stream() {
-        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ",
-                                b"is to get up and do something."];
+        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ", b"is to get up and do something."];
         let data2 = b"The best way to not feel hopeless is to get up and do something.";
         let data_len = data.iter().fold(0, |sum, x| sum + x.len());
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
-        let mut aes_encrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::CBC), Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut aes_decrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::CBC), Some(key), Some(iv)).unwrap();
+        let mut aes_encrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::CBC), Some(key.clone()), Some(iv.clone()))
+                .unwrap();
+        let mut aes_decrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::CBC), Some(key), Some(iv)).unwrap();
         let mut ct: Vec<u8> = vec![];
 
         let mut v1: Vec<u8> = vec![0; data_len + 16];
-        let mut v2: Vec<u8>= vec![0; data_len + 16];
-        let mut v3: Vec<u8>= vec![0; data_len + 16];
+        let mut v2: Vec<u8> = vec![0; data_len + 16];
+        let mut v3: Vec<u8> = vec![0; data_len + 16];
         let mut count = aes_encrypter.encrypt_update((&data[0]).to_vec(), &mut v1).unwrap();
         v1.truncate(count);
         count = aes_encrypter.encrypt_update((&data[1]).to_vec(), &mut v2).unwrap();
@@ -488,8 +495,8 @@ mod crypto_test {
 
         let data_len2 = ct.len();
         let mut pt1: Vec<u8> = vec![0; data_len2 + 16];
-        let mut pt2: Vec<u8>= vec![0; data_len2 + 16];
-        let mut pt3: Vec<u8>= vec![0; data_len2 + 16];
+        let mut pt2: Vec<u8> = vec![0; data_len2 + 16];
+        let mut pt3: Vec<u8> = vec![0; data_len2 + 16];
         let mut pt: Vec<u8> = vec![];
         // separate ciphertext into 2 pieces.
         let cts = [&ct[..9], &ct[9..]];
@@ -510,24 +517,24 @@ mod crypto_test {
 
     #[test]
     fn test_aes_aead_stream() {
-        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ",
-                                b"is to get up and do something."];
+        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ", b"is to get up and do something."];
         let data2 = b"The best way to not feel hopeless is to get up and do something.";
         let data_len = data.iter().fold(0, |sum, x| sum + x.len());
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
         let aad = b"some additional authenticated data.".to_vec();
-        let mut aes_encrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::GCM), Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut aes_decrypter = AES::new(false, Some(AESKeySize::AES128),
-            Some(CipherMode::GCM), Some(key), Some(iv)).unwrap();
+        let mut aes_encrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::GCM), Some(key.clone()), Some(iv.clone()))
+                .unwrap();
+        let mut aes_decrypter =
+            AES::new(false, Some(AESKeySize::AES128), Some(CipherMode::GCM), Some(key), Some(iv)).unwrap();
         let mut ct: Vec<u8> = vec![];
 
         // set aad, encrypt and get tag.
         aes_encrypter.set_aad(aad.clone()).unwrap();
         let mut v1: Vec<u8> = vec![0; data_len + 16];
-        let mut v2: Vec<u8>= vec![0; data_len + 16];
-        let mut v3: Vec<u8>= vec![0; data_len + 16];
+        let mut v2: Vec<u8> = vec![0; data_len + 16];
+        let mut v3: Vec<u8> = vec![0; data_len + 16];
         let mut count = aes_encrypter.encrypt_update((&data[0]).to_vec(), &mut v1).unwrap();
         v1.truncate(count);
         count = aes_encrypter.encrypt_update((&data[1]).to_vec(), &mut v2).unwrap();
@@ -545,8 +552,8 @@ mod crypto_test {
         // separate cipher into 2 pieces.
         let data_len2 = ct.len();
         let mut pt1: Vec<u8> = vec![0; data_len2 + 16];
-        let mut pt2: Vec<u8>= vec![0; data_len2 + 16];
-        let mut pt3: Vec<u8>= vec![0; data_len2 + 16];
+        let mut pt2: Vec<u8> = vec![0; data_len2 + 16];
+        let mut pt3: Vec<u8> = vec![0; data_len2 + 16];
         let mut pt: Vec<u8> = vec![];
         let cts = [&ct[..9], &ct[9..]];
         count = aes_decrypter.decrypt_update((&cts[0]).to_vec(), &mut pt1).unwrap();
@@ -568,8 +575,13 @@ mod crypto_test {
     fn test_sm4_keygen() {
         let data = b"The best way to not feel hopeless is to get up and do something.".to_vec();
         let mut sm4_encrypter = SM4::new(true, Some(CipherMode::CBC), None, None).unwrap();
-        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::CBC),
-            Some(sm4_encrypter.get_key_iv().0), Some(sm4_encrypter.get_key_iv().1)).unwrap();
+        let mut sm4_decrypter = SM4::new(
+            false,
+            Some(CipherMode::CBC),
+            Some(sm4_encrypter.get_key_iv().0),
+            Some(sm4_encrypter.get_key_iv().1),
+        )
+        .unwrap();
 
         let ct = sm4_encrypter.encrypt(&data).unwrap();
         let pt = sm4_decrypter.decrypt(&ct).unwrap();
@@ -582,10 +594,8 @@ mod crypto_test {
         let data = b"The best way to not feel hopeless is to get up and do something.".to_vec();
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
-        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::CBC),
-            Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::CBC),
-            Some(key), Some(iv)).unwrap();
+        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::CBC), Some(key.clone()), Some(iv.clone())).unwrap();
+        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::CBC), Some(key), Some(iv)).unwrap();
 
         let ct = sm4_encrypter.encrypt(&data).unwrap();
         let pt = sm4_decrypter.decrypt(&ct).unwrap();
@@ -599,10 +609,8 @@ mod crypto_test {
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
         let aad = b"some additional authenticated data.".to_vec();
-        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::GCM),
-            Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::GCM),
-            Some(key), Some(iv)).unwrap();
+        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::GCM), Some(key.clone()), Some(iv.clone())).unwrap();
+        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::GCM), Some(key), Some(iv)).unwrap();
 
         // set aad, encrypt and get tag.
         sm4_encrypter.set_aad(aad.clone()).unwrap();
@@ -621,21 +629,18 @@ mod crypto_test {
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     #[test]
     fn test_sm4_stream() {
-        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ",
-                                b"is to get up and do something."];
+        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ", b"is to get up and do something."];
         let data2 = b"The best way to not feel hopeless is to get up and do something.";
         let data_len = data.iter().fold(0, |sum, x| sum + x.len());
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
-        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::CBC),
-            Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::CBC),
-            Some(key), Some(iv)).unwrap();
+        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::CBC), Some(key.clone()), Some(iv.clone())).unwrap();
+        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::CBC), Some(key), Some(iv)).unwrap();
         let mut ct: Vec<u8> = vec![];
 
         let mut v1: Vec<u8> = vec![0; data_len + 16];
-        let mut v2: Vec<u8>= vec![0; data_len + 16];
-        let mut v3: Vec<u8>= vec![0; data_len + 16];
+        let mut v2: Vec<u8> = vec![0; data_len + 16];
+        let mut v3: Vec<u8> = vec![0; data_len + 16];
         let mut count = sm4_encrypter.encrypt_update((&data[0]).to_vec(), &mut v1).unwrap();
         v1.truncate(count);
         count = sm4_encrypter.encrypt_update((&data[1]).to_vec(), &mut v2).unwrap();
@@ -648,8 +653,8 @@ mod crypto_test {
 
         let data_len2 = ct.len();
         let mut pt1: Vec<u8> = vec![0; data_len2 + 16];
-        let mut pt2: Vec<u8>= vec![0; data_len2 + 16];
-        let mut pt3: Vec<u8>= vec![0; data_len2 + 16];
+        let mut pt2: Vec<u8> = vec![0; data_len2 + 16];
+        let mut pt3: Vec<u8> = vec![0; data_len2 + 16];
         let mut pt: Vec<u8> = vec![];
         // separate ciphertext into 2 pieces.
         let cts = [&ct[..9], &ct[9..]];
@@ -671,24 +676,21 @@ mod crypto_test {
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     #[test]
     fn test_sm4_aead_stream() {
-        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ",
-                                b"is to get up and do something."];
+        let data: [&[u8]; 2] = [b"The best way to not feel hopeless ", b"is to get up and do something."];
         let data2 = b"The best way to not feel hopeless is to get up and do something.";
         let data_len = data.iter().fold(0, |sum, x| sum + x.len());
         let key = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F".to_vec();
         let iv = b"\x00\x01\x02\x03\x04\x05\x06\x07\x00\x01\x02\x03\x04\x05\x06\x07".to_vec();
         let aad = b"some additional authenticated data.".to_vec();
-        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::GCM),
-            Some(key.clone()), Some(iv.clone())).unwrap();
-        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::GCM),
-            Some(key), Some(iv)).unwrap();
+        let mut sm4_encrypter = SM4::new(false, Some(CipherMode::GCM), Some(key.clone()), Some(iv.clone())).unwrap();
+        let mut sm4_decrypter = SM4::new(false, Some(CipherMode::GCM), Some(key), Some(iv)).unwrap();
         let mut ct: Vec<u8> = vec![];
 
         // set aad, encrypt and get tag.
         sm4_encrypter.set_aad(aad.clone()).unwrap();
         let mut v1: Vec<u8> = vec![0; data_len + 16];
-        let mut v2: Vec<u8>= vec![0; data_len + 16];
-        let mut v3: Vec<u8>= vec![0; data_len + 16];
+        let mut v2: Vec<u8> = vec![0; data_len + 16];
+        let mut v3: Vec<u8> = vec![0; data_len + 16];
         let mut count = sm4_encrypter.encrypt_update((&data[0]).to_vec(), &mut v1).unwrap();
         v1.truncate(count);
         count = sm4_encrypter.encrypt_update((&data[1]).to_vec(), &mut v2).unwrap();
@@ -706,8 +708,8 @@ mod crypto_test {
         // separate cipher into 2 pieces.
         let data_len2 = ct.len();
         let mut pt1: Vec<u8> = vec![0; data_len2 + 16];
-        let mut pt2: Vec<u8>= vec![0; data_len2 + 16];
-        let mut pt3: Vec<u8>= vec![0; data_len2 + 16];
+        let mut pt2: Vec<u8> = vec![0; data_len2 + 16];
+        let mut pt3: Vec<u8> = vec![0; data_len2 + 16];
         let mut pt: Vec<u8> = vec![];
         let cts = [&ct[..9], &ct[9..]];
         count = sm4_decrypter.decrypt_update((&cts[0]).to_vec(), &mut pt1).unwrap();

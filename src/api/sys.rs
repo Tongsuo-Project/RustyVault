@@ -1,15 +1,9 @@
 use derive_more::Deref;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
 
 use super::{secret::SecretAuth, Client, HttpResponse};
-
-use crate::{
-    errors::RvError,
-    http::sys::InitRequest,
-};
-
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use crate::{errors::RvError, http::sys::InitRequest};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Secret {
@@ -61,9 +55,7 @@ pub struct Sys<'a> {
 
 impl Client {
     pub fn sys(&self) -> Sys {
-        Sys {
-            client: self
-        }
+        Sys { client: self }
     }
 }
 

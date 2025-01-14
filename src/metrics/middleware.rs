@@ -16,7 +16,6 @@ use std::{
     time::Instant,
 };
 
-use crate::metrics::http_metrics::HttpLabel;
 use actix_web::{
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
@@ -27,6 +26,7 @@ use actix_web::{
 };
 
 use super::{http_metrics::MetricsMethod, manager::MetricsManager};
+use crate::metrics::http_metrics::HttpLabel;
 
 pub async fn metrics_midleware(
     req: ServiceRequest,
@@ -59,10 +59,12 @@ pub async fn metrics_midleware(
 
 #[cfg(test)]
 mod tests {
-    use crate::metrics::http_metrics::*;
-    use crate::metrics::system_metrics::*;
-    use crate::test_utils::TestHttpServer;
     use std::collections::HashMap;
+
+    use crate::{
+        metrics::{http_metrics::*, system_metrics::*},
+        test_utils::TestHttpServer,
+    };
 
     static SYS_METRICS_MAP: &[(&str, &str)] = &[
         (CPU_USAGE_PERCENT, CPU_USAGE_PERCENT_HELP),

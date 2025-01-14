@@ -1,27 +1,16 @@
-use std::{
-    fs,
-    io::BufReader,
-    sync::Arc,
-    time::Duration,
-    path::PathBuf,
-    collections::HashMap,
-};
+use std::{collections::HashMap, fs, io::BufReader, path::PathBuf, sync::Arc, time::Duration};
 
-use serde_json::{Map, Value};
 use better_default::Default;
-use ureq::AgentBuilder;
 use rustls::{
-    pki_types::{PrivateKeyDer, pem::PemObject},
-    ALL_VERSIONS, ClientConfig, RootCertStore,
+    pki_types::{pem::PemObject, PrivateKeyDer},
+    ClientConfig, RootCertStore, ALL_VERSIONS,
 };
+use serde_json::{Map, Value};
+use ureq::AgentBuilder;
 use webpki_roots::TLS_SERVER_ROOTS;
 
 use super::HttpResponse;
-
-use crate::{
-    errors::RvError,
-    utils::cert::DisabledVerifier,
-};
+use crate::{errors::RvError, utils::cert::DisabledVerifier};
 
 #[derive(Clone)]
 pub struct TLSConfig {
@@ -65,7 +54,11 @@ impl TLSConfigBuilder {
         self
     }
 
-    pub fn with_client_cert_path(mut self, client_cert_path: &PathBuf, client_key_path: &PathBuf) -> Result<Self, RvError> {
+    pub fn with_client_cert_path(
+        mut self,
+        client_cert_path: &PathBuf,
+        client_key_path: &PathBuf,
+    ) -> Result<Self, RvError> {
         let cert_data = fs::read(client_cert_path)?;
         self.client_cert_pem = Some(cert_data);
 
@@ -99,9 +92,7 @@ impl TLSConfigBuilder {
 
         let builder = if self.insecure {
             log::debug!("Certificate verification disabled");
-            builder
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(DisabledVerifier))
+            builder.dangerous().with_custom_certificate_verifier(Arc::new(DisabledVerifier))
         } else {
             if let Some(server_ca) = &self.server_ca_pem {
                 let mut cert_reader = BufReader::new(&server_ca[..]);
@@ -111,26 +102,23 @@ impl TLSConfigBuilder {
                 let (_added, _ignored) = root_store.add_parsable_certificates(root_certs);
                 builder.with_root_certificates(root_store)
             } else {
-                let root_store = RootCertStore {
-                    roots: TLS_SERVER_ROOTS.to_vec(),
-                };
+                let root_store = RootCertStore { roots: TLS_SERVER_ROOTS.to_vec() };
                 builder.with_root_certificates(root_store)
             }
         };
 
-        let client_config = if let (Some(client_cert_pem), Some(client_key_pem)) = (&self.client_cert_pem, &self.client_key_pem) {
-            let mut cert_reader = BufReader::new(&client_cert_pem[..]);
-            let client_certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
-            let client_key = PrivateKeyDer::from_pem_slice(client_key_pem)?;
+        let client_config =
+            if let (Some(client_cert_pem), Some(client_key_pem)) = (&self.client_cert_pem, &self.client_key_pem) {
+                let mut cert_reader = BufReader::new(&client_cert_pem[..]);
+                let client_certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
+                let client_key = PrivateKeyDer::from_pem_slice(client_key_pem)?;
 
-            builder.with_client_auth_cert(client_certs, client_key)?
-        } else {
-            builder.with_no_client_auth()
-        };
+                builder.with_client_auth_cert(client_certs, client_key)?
+            } else {
+                builder.with_no_client_auth()
+            };
 
-        Ok(TLSConfig {
-            client_config
-        })
+        Ok(TLSConfig { client_config })
     }
 }
 
@@ -160,9 +148,7 @@ impl Client {
     }
 
     pub fn build(mut self) -> Self {
-        let mut agent = AgentBuilder::new()
-            .timeout_connect(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30));
+        let mut agent = AgentBuilder::new().timeout_connect(Duration::from_secs(10)).timeout(Duration::from_secs(30));
 
         if let Some(tls_config) = &self.tls_config {
             agent = agent.tls_config(Arc::new(tls_config.client_config.clone()));
@@ -172,12 +158,7 @@ impl Client {
         self
     }
 
-    pub fn request(
-        &self,
-        method: &str,
-        path: &str,
-        data: Option<Map<String, Value>>
-    ) -> Result<HttpResponse, RvError> {
+    pub fn request(&self, method: &str, path: &str, data: Option<Map<String, Value>>) -> Result<HttpResponse, RvError> {
         let url = if path.starts_with("/") {
             format!("{}{}", self.address, path)
         } else {
@@ -192,11 +173,7 @@ impl Client {
             req = req.set("X-RustyVault-Token", &self.token);
         }
 
-        let mut ret = HttpResponse {
-            method: method.to_string(),
-            url: url,
-            ..Default::default()
-        };
+        let mut ret = HttpResponse { method: method.to_string(), url, ..Default::default() };
 
         let response_result = if let Some(send_data) = data { req.send_json(send_data) } else { req.call() };
 
@@ -236,18 +213,15 @@ impl Client {
         self.request("GET", path, None)
     }
 
-    pub fn request_write(&self, path: &str, data: Option<Map<String, Value>>,
-    ) -> Result<HttpResponse, RvError> {
+    pub fn request_write(&self, path: &str, data: Option<Map<String, Value>>) -> Result<HttpResponse, RvError> {
         self.request("POST", path, data)
     }
 
-    pub fn request_put(&self, path: &str, data: Option<Map<String, Value>>,
-    ) -> Result<HttpResponse, RvError> {
+    pub fn request_put(&self, path: &str, data: Option<Map<String, Value>>) -> Result<HttpResponse, RvError> {
         self.request("PUT", path, data)
     }
 
-    pub fn request_delete(&self, path: &str, data: Option<Map<String, Value>>,
-    ) -> Result<HttpResponse, RvError> {
+    pub fn request_delete(&self, path: &str, data: Option<Map<String, Value>>) -> Result<HttpResponse, RvError> {
         self.request("DELETE", path, data)
     }
 }

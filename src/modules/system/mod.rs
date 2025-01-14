@@ -487,11 +487,7 @@ impl SystemBackendInner {
         policy_module.handle_policy_write(backend, req)
     }
 
-    pub fn handle_policy_delete(
-        &self,
-        backend: &dyn Backend,
-        req: &mut Request,
-    ) -> Result<Option<Response>, RvError> {
+    pub fn handle_policy_delete(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let module = self.get_policy_module()?;
         let policy_mod = module.read()?;
         let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;

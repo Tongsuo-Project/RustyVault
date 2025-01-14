@@ -8,7 +8,7 @@ use super::{util::DEFAULT_MAX_TTL, PkiBackend, PkiBackendInner};
 use crate::{
     context::Context,
     errors::RvError,
-    logical::{Backend, Field, FieldType, field::FieldTrait, Operation, Path, PathOperation, Request, Response},
+    logical::{field::FieldTrait, Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
     new_fields, new_fields_internal, new_path, new_path_internal,
     storage::StorageEntry,
     utils::{deserialize_duration, serialize_duration},
@@ -369,7 +369,7 @@ impl PkiBackendInner {
                 if key_bits != 256 {
                     return Err(RvError::ErrPkiKeyBitsInvalid);
                 }
-            },
+            }
             _ => {
                 return Err(RvError::ErrPkiKeyTypeInvalid);
             }

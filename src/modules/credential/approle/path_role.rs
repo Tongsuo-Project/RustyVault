@@ -2270,7 +2270,9 @@ mod test {
         // Create secret IDs on testrole1
         let len = 10;
         for _i in 0..len {
-            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None).await.is_ok());
+            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None)
+                .await
+                .is_ok());
         }
 
         // Check the number of secret IDs generated
@@ -2281,7 +2283,9 @@ mod test {
 
         // Create secret IDs on testrole2
         for _i in 0..len {
-            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true, None).await.is_ok());
+            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true, None)
+                .await
+                .is_ok());
         }
 
         // Check the number of secret IDs generated
@@ -2560,7 +2564,8 @@ mod test {
         .unwrap()
         .clone();
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrolename/secret-id/lookup", true, Some(data)).await;
+            test_write_api(&core, &root_token, "auth/approle/role/testrolename/secret-id/lookup", true, Some(data))
+                .await;
         assert!(resp.is_ok());
 
         // Listing of secret IDs should work in case-insensitive manner
@@ -2667,7 +2672,8 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true).await;
@@ -2685,7 +2691,8 @@ mod test {
             "auth/approle/role/testrole1/secret-id",
             false,
             Some(secret_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.is_err());
 
         role_data["bound_cidr_list"] = Value::from("192.168.27.29/16,172.245.30.40/24,10.20.30.40/30");
@@ -2693,7 +2700,8 @@ mod test {
         assert!(resp.is_ok());
 
         secret_data["cidr_list"] = Value::from("192.168.27.29/20,172.245.30.40/25,10.20.30.40/32");
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, Some(secret_data)).await;
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, Some(secret_data)).await;
         assert!(resp.is_ok());
     }
 
@@ -2713,7 +2721,8 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true).await;
@@ -2731,7 +2740,8 @@ mod test {
             "auth/approle/role/testrole1/secret-id",
             true,
             Some(secret_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.is_ok());
 
         secret_data["token_bound_cidrs"] = Value::from("127.0.0.1/24");
@@ -2756,19 +2766,22 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
         // Set bound_cidr_list alone by explicitly disabling bind_secret_id
         role_data.insert("bind_secret_id".to_string(), Value::from(false));
         role_data.insert("token_bound_cidrs".to_string(), Value::from("0.0.0.0/0"));
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
         // Remove both constraints
         role_data["bind_secret_id"] = Value::from(false);
         role_data["token_bound_cidrs"] = Value::from("");
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", false, Some(role_data.clone())).await;
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", false, Some(role_data.clone())).await;
         assert!(resp.is_err());
     }
 
@@ -2789,7 +2802,8 @@ mod test {
         .unwrap()
         .clone();
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone())).await;
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone()))
+                .await;
         assert!(resp.is_ok());
 
         let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None).await;
@@ -2834,7 +2848,8 @@ mod test {
             "auth/approle/role/testrole1/role-id",
             false,
             Some(role_id_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.is_err());
 
         role_id_data["role_id"] = Value::from("role-id-123");
@@ -2844,17 +2859,20 @@ mod test {
             "auth/approle/role/testrole2/role-id",
             false,
             Some(role_id_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.is_err());
 
         role_id_data["role_id"] = Value::from("role-id-2000");
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrole2/role-id", true, Some(role_id_data.clone())).await;
+            test_write_api(&core, &root_token, "auth/approle/role/testrole2/role-id", true, Some(role_id_data.clone()))
+                .await;
         assert!(resp.is_ok());
 
         role_id_data["role_id"] = Value::from("role-id-1000");
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone())).await;
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone()))
+                .await;
         assert!(resp.is_ok());
     }
 
@@ -2906,7 +2924,8 @@ mod test {
             "auth/approle/role/role1/secret-id/lookup",
             true,
             Some(secret_id_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.unwrap().unwrap().data.is_some());
 
         let _ = test_delete_api(
@@ -2915,14 +2934,16 @@ mod test {
             "auth/approle/role/role1/secret-id/destroy",
             true,
             Some(secret_id_data.clone()),
-        ).await;
+        )
+        .await;
         let resp = test_write_api(
             &core,
             &root_token,
             "auth/approle/role/role1/secret-id/lookup",
             true,
             Some(secret_id_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.unwrap().is_none());
     }
 
@@ -2957,7 +2978,8 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/lookup",
             true,
             Some(hmac_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.unwrap().unwrap().data.is_some());
 
         let _ = test_delete_api(
@@ -2966,14 +2988,16 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/destroy",
             true,
             Some(hmac_data.clone()),
-        ).await;
+        )
+        .await;
         let _ = test_write_api(
             &core,
             &root_token,
             "auth/approle/role/role1/secret-id-accessor/lookup",
             false,
             Some(hmac_data.clone()),
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -2998,7 +3022,8 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/lookup",
             false,
             Some(hmac_data.clone()),
-        ).await;
+        )
+        .await;
         // TODO: resp should ok
     }
 
@@ -3092,7 +3117,8 @@ mod test {
             "auth/approle/role/role1/custom-secret-id",
             true,
             Some(secret_id_data.clone()),
-        ).await;
+        )
+        .await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -3138,7 +3164,8 @@ mod test {
                 "auth/approle/role/role1/secret-id",
                 true,
                 Some(secret_id_data.clone()),
-            ).await;
+            )
+            .await;
             assert!(resp.is_ok());
             let resp_data = resp.unwrap().unwrap().data.unwrap();
             let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -3154,7 +3181,8 @@ mod test {
                 "auth/approle/role/role1/custom-secret-id",
                 true,
                 Some(secret_id_data.clone()),
-            ).await;
+            )
+            .await;
             assert!(resp.is_ok());
             let resp_data = resp.unwrap().unwrap().data.unwrap();
             let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -3249,7 +3277,8 @@ mod test {
                 format!("auth/approle/role/role{}", i).as_str(),
                 true,
                 Some(role_data.clone()),
-            ).await;
+            )
+            .await;
 
             for tc in case["cases"].as_array().unwrap().iter() {
                 let secret_id_data = tc["payload"].as_object().unwrap().clone();
@@ -3259,7 +3288,8 @@ mod test {
                     format!("auth/approle/role/role{}/secret-id", i).as_str(),
                     false,
                     Some(secret_id_data.clone()),
-                ).await;
+                )
+                .await;
                 if let Err(RvError::ErrResponse(err_text)) = resp {
                     assert_eq!(err_text, tc["expected"].as_str().unwrap());
                 }
@@ -3269,7 +3299,8 @@ mod test {
                     format!("auth/approle/role/role{}/custom-secret-id", i).as_str(),
                     false,
                     Some(secret_id_data.clone()),
-                ).await;
+                )
+                .await;
                 if let Err(RvError::ErrResponse(err_text)) = resp {
                     assert_eq!(err_text, tc["expected"].as_str().unwrap());
                 }
@@ -3371,7 +3402,8 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/role-id", true, Some(req_data.clone())).await;
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/role-id", true, Some(req_data.clone())).await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/role-id", true).await;
         assert!(resp.is_ok());
@@ -3389,7 +3421,8 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true, Some(req_data.clone())).await;
+            test_write_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true, Some(req_data.clone()))
+                .await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true).await;
         assert!(resp.is_ok());
@@ -3413,7 +3446,8 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/policies", true, Some(req_data.clone())).await;
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/policies", true, Some(req_data.clone())).await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/policies", true).await;
         assert!(resp.is_ok());
@@ -3450,7 +3484,8 @@ mod test {
             "auth/approle/role/role1/secret-id-num-uses",
             true,
             Some(req_data.clone()),
-        ).await;
+        )
+        .await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true).await;
         assert!(resp.is_ok());
@@ -3475,7 +3510,8 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true, Some(req_data.clone())).await;
+            test_write_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true, Some(req_data.clone()))
+                .await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true).await;
         assert!(resp.is_ok());
@@ -3502,7 +3538,8 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true, Some(req_data.clone())).await;
+            test_write_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true, Some(req_data.clone()))
+                .await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true).await;
         assert!(resp.is_ok());
@@ -3526,7 +3563,8 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/period", true, Some(req_data.clone())).await;
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/period", true, Some(req_data.clone())).await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/period", true).await;
         assert!(resp.is_ok());
@@ -3552,7 +3590,8 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true, Some(req_data.clone())).await;
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true, Some(req_data.clone())).await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true).await;
         assert!(resp.is_ok());
@@ -3579,7 +3618,8 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true, Some(req_data.clone())).await;
+            test_write_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true, Some(req_data.clone()))
+                .await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true).await;
         assert!(resp.is_ok());
@@ -3700,7 +3740,8 @@ mod test {
             "auth/approle/role/role1/secret-id-bound-cidrs",
             true,
             Some(req_data.clone()),
-        ).await;
+        )
+        .await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true).await;
         assert!(resp.is_ok());
@@ -3741,7 +3782,8 @@ mod test {
             "auth/approle/role/role1/token-bound-cidrs",
             true,
             Some(req_data.clone()),
-        ).await;
+        )
+        .await;
 
         let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true).await;
         assert!(resp.is_ok());
@@ -4005,7 +4047,8 @@ mod test {
                 format!("auth/approle/role/{}", role_name).as_str(),
                 true,
                 Some(role_data.clone()),
-            ).await;
+            )
+            .await;
 
             let resp = test_write_api(
                 &core,
@@ -4013,7 +4056,8 @@ mod test {
                 format!("auth/approle/role/{}/secret-id", role_name).as_str(),
                 true,
                 None,
-            ).await;
+            )
+            .await;
             assert!(resp.is_ok());
             let resp_data = resp.unwrap().unwrap().data.unwrap();
             let secret_id_ttl = resp_data["secret_id_ttl"].as_duration().unwrap();
@@ -4063,6 +4107,7 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/destroy",
             false,
             Some(hmac_data.clone()),
-        ).await;
+        )
+        .await;
     }
 }

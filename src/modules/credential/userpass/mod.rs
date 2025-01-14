@@ -1,11 +1,11 @@
-use std::
-    sync::{Arc, RwLock}
-;
+use std::sync::{Arc, RwLock};
 
 use as_any::Downcast;
 use derive_more::Deref;
+
 use crate::{
-    core::Core, errors::RvError,
+    core::Core,
+    errors::RvError,
     logical::{Backend, LogicalBackend, Request, Response},
     modules::{auth::AuthModule, Module},
     new_logical_backend, new_logical_backend_internal,
@@ -143,7 +143,8 @@ mod test {
         .clone();
 
         let resp =
-            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data)).await;
+            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data))
+                .await;
         assert!(resp.is_ok());
     }
 
@@ -154,7 +155,9 @@ mod test {
     }
 
     async fn test_delete_user(core: &Core, token: &str, username: &str) {
-        assert!(test_delete_api(core, token, format!("auth/pass/users/{}", username).as_str(), true, None).await.is_ok());
+        assert!(test_delete_api(core, token, format!("auth/pass/users/{}", username).as_str(), true, None)
+            .await
+            .is_ok());
     }
 
     async fn test_login(

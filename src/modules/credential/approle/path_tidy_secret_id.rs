@@ -390,11 +390,11 @@ mod test {
         while start.elapsed() < Duration::new(5, 0) {
             if start.elapsed() > Duration::from_millis(100)
                 && approle_module.tidy_secret_id_cas_guard.load(Ordering::SeqCst) == 0
-                {
-                    req.operation = Operation::Write;
-                    req.path = "tidy/secret-id".to_string();
-                    let _ = mock_backend.handle_request(&mut req);
-                }
+            {
+                req.operation = Operation::Write;
+                req.path = "tidy/secret-id".to_string();
+                let _ = mock_backend.handle_request(&mut req);
+            }
 
             let core_cloned2 = core_cloned.clone();
             let token = root_token.clone();
@@ -419,8 +419,8 @@ mod test {
             let entry = StorageEntry::new(
                 format!("accessor/invalid{}", *num).as_str(),
                 &SecretIdAccessorStorageEntry { secret_id_hmac: "samplesecretidhmac".to_string() },
-                )
-                .unwrap();
+            )
+            .unwrap();
 
             assert!(req.storage_put(&entry).is_ok());
 
@@ -445,7 +445,6 @@ mod test {
         assert!(resp.is_ok());
 
         assert!(req.wait_task_finish().await.is_ok());
-
 
         let num = count.lock().unwrap();
 

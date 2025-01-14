@@ -1,7 +1,7 @@
 //! Define and implement operating system metrics, using [sysinfo](https://docs.rs/sysinfo/latest/sysinfo/) to capture.
-use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::registry::Registry;
 use std::sync::{atomic::AtomicU64, Arc, Mutex};
+
+use prometheus_client::{metrics::gauge::Gauge, registry::Registry};
 use sysinfo::{Disks, System};
 use tokio::time::{self, Duration};
 
@@ -131,11 +131,9 @@ impl SystemMetrics {
 
 #[cfg(test)]
 mod tests {
-    use crate::metrics::system_metrics::*;
-    use crate::test_utils::TestHttpServer;
-    use std::collections::HashMap;
-    use std::thread;
-    use std::time::Duration;
+    use std::{collections::HashMap, thread, time::Duration};
+
+    use crate::{metrics::system_metrics::*, test_utils::TestHttpServer};
 
     static SYS_METRICS_MAP: &[(&str, &str)] = &[
         (CPU_USAGE_PERCENT, CPU_USAGE_PERCENT_HELP),

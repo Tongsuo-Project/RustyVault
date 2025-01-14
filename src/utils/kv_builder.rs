@@ -1,8 +1,11 @@
 //! Builder is a struct to build a key/value mapping based on a list
 //! of "k=v" pairs, where the value might come from stdin, a file, etc.
 
-use std::fs;
-use std::io::{self, Read};
+use std::{
+    fs,
+    io::{self, Read},
+};
+
 use serde_json::{Map, Value};
 
 pub trait KvPairParse {

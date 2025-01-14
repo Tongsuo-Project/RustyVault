@@ -1,13 +1,8 @@
 use clap::{Parser, Subcommand};
 use sysexits::ExitCode;
 
-use super::{
-    operator_init,
-    operator_seal,
-    operator_unseal,
-};
-
-use crate::{EXIT_CODE_INSUFFICIENT_PARAMS, cli::command::CommandExecutor};
+use super::{operator_init, operator_seal, operator_unseal};
+use crate::{cli::command::CommandExecutor, EXIT_CODE_INSUFFICIENT_PARAMS};
 
 #[derive(Parser)]
 #[command(
@@ -47,7 +42,7 @@ impl Commands {
             Commands::Init(init) => init.execute(),
             Commands::Seal(seal) => seal.execute(),
             Commands::Unseal(unseal) => unseal.execute(),
-        }
+        };
     }
 }
 

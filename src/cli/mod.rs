@@ -4,7 +4,7 @@
 use clap::{Parser, Subcommand};
 use sysexits::ExitCode;
 
-use crate::{VERSION, EXIT_CODE_INSUFFICIENT_PARAMS, cli::command::CommandExecutor};
+use crate::{cli::command::CommandExecutor, EXIT_CODE_INSUFFICIENT_PARAMS, VERSION};
 
 pub mod command;
 pub mod config;
@@ -46,7 +46,7 @@ impl Commands {
             Commands::List(list) => list.execute(),
             Commands::Login(login) => login.execute(),
             Commands::Auth(auth) => auth.execute(),
-        }
+        };
     }
 }
 
