@@ -8,7 +8,7 @@
 //! - `Capability`: An enum representing various capabilities (e.g., Read, Write, Delete) that can be associated with a policy path.
 //!
 //! Key functionality:
-//! - Parsing policies from strings using the `FromStr` trait, supporting both HCL and JSON formats.
+//! - Parsing policies from strings using the `FromStr` trait, supporting HCL formats.
 //! - Checking permissions against requests to determine allowed operations.
 //! - Merging permissions from multiple sources, ensuring correct precedence and handling of capabilities.
 //! - Managing and querying capabilities as bitmaps, converting between bit representations and string lists.
@@ -87,7 +87,7 @@ pub struct Permissions {
     pub granting_policies_map: DashMap<u32, Vec<PolicyInfo>>,
 }
 
-// Configuration struct used to parse policy data from HCL/JSON.
+// Configuration struct used to parse policy data from HCL.
 #[derive(Debug, Default, Deserialize)]
 struct PolicyConfig {
     pub name: String,
@@ -672,40 +672,6 @@ mod mod_policy_tests {
         let policy = policy.unwrap();
         assert_eq!(policy.name, "");
         assert_eq!(policy.raw, hcl_policy);
-        assert_eq!(policy.paths.len(), 1);
-        assert_eq!(policy.paths[0].path, "secret/");
-        assert_eq!(policy.paths[0].is_prefix, true);
-        assert_eq!(
-            policy.paths[0].permissions.capabilities_bitmap,
-            Capability::Read.to_bits() | Capability::List.to_bits()
-        );
-        assert_eq!(policy.paths[0].permissions.min_wrapping_ttl, Duration::from_secs(3600));
-        assert_eq!(policy.paths[0].permissions.max_wrapping_ttl, Duration::from_secs(86400));
-        assert_eq!(policy.paths[0].permissions.allowed_parameters.len(), 1);
-        assert_eq!(policy.paths[0].permissions.denied_parameters.len(), 1);
-        assert_eq!(policy.paths[0].permissions.required_parameters, vec!["param1", "param2"]);
-    }
-
-    #[test]
-    fn test_policy_from_str_json() {
-        let json_policy = r#"{
-            "path": {
-                    "secret/*": {
-                    "capabilities": ["read", "list"],
-                    "min_wrapping_ttl": "1h",
-                    "max_wrapping_ttl": "24h",
-                    "allowed_parameters": {"key1": ["value1", "value2"]},
-                    "denied_parameters": {"key2": ["value3", "value4"]},
-                    "required_parameters": ["param1", "param2"]
-                }
-            }
-        }"#;
-
-        let policy: Result<Policy, RvError> = Policy::from_str(json_policy);
-        assert!(policy.is_ok());
-
-        let policy = policy.unwrap();
-        assert_eq!(policy.name, "");
         assert_eq!(policy.paths.len(), 1);
         assert_eq!(policy.paths[0].path, "secret/");
         assert_eq!(policy.paths[0].is_prefix, true);
