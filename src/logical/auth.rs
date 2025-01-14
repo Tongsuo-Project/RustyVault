@@ -52,7 +52,7 @@ pub struct PolicyResults {
     pub granting_policies: Vec<PolicyInfo>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PolicyInfo {
     pub name: String,
     pub namespace_id: String,

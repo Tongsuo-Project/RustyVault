@@ -19,8 +19,9 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 use better_default::Default;
 use dashmap::DashMap;
 use derive_more::Display;
+use hcl::{Body, Expression};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use strum::IntoEnumIterator;
 use strum_macros::{Display as StrumDisplay, EnumIter, EnumString};
 
@@ -29,7 +30,10 @@ use crate::{
     errors::RvError,
     logical::{auth::PolicyInfo, Operation, Request, Response},
     rv_error_string,
-    utils::{deserialize_duration, string::ensure_no_leading_slash},
+    utils::{
+        deserialize_duration,
+        string::{ensure_no_leading_slash, GlobContains},
+    },
 };
 
 #[derive(Display, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,15 +81,16 @@ pub struct Permissions {
     pub capabilities_bitmap: u32,
     pub min_wrapping_ttl: Duration,
     pub max_wrapping_ttl: Duration,
-    pub allowed_parameters: Map<String, Value>,
-    pub denied_parameters: Map<String, Value>,
+    pub allowed_parameters: HashMap<String, Vec<Value>>,
+    pub denied_parameters: HashMap<String, Vec<Value>>,
     pub required_parameters: Vec<String>,
     pub granting_policies_map: DashMap<u32, Vec<PolicyInfo>>,
 }
 
 // Configuration struct used to parse policy data from HCL/JSON.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct PolicyConfig {
+    pub name: String,
     pub path: HashMap<String, PolicyPathConfig>,
 }
 
@@ -93,17 +98,33 @@ struct PolicyConfig {
 #[derive(Debug, Deserialize)]
 struct PolicyPathConfig {
     #[serde(default)]
+    pub policy: Option<OldPathPolicy>,
+    #[serde(default)]
     pub capabilities: Vec<Capability>,
     #[serde(default, deserialize_with = "deserialize_duration")]
     pub min_wrapping_ttl: Duration,
     #[serde(default, deserialize_with = "deserialize_duration")]
     pub max_wrapping_ttl: Duration,
     #[serde(default)]
-    pub allowed_parameters: Map<String, Value>,
+    pub allowed_parameters: HashMap<String, Vec<Value>>,
     #[serde(default)]
-    pub denied_parameters: Map<String, Value>,
+    pub denied_parameters: HashMap<String, Vec<Value>>,
     #[serde(default)]
     pub required_parameters: Vec<String>,
+}
+
+/// Enumeration of backwards capabilities, old-style policies.
+#[derive(Debug, StrumDisplay, Copy, Clone, PartialEq, Eq, EnumString, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OldPathPolicy {
+    #[strum(to_string = "deny")]
+    Deny,
+    #[strum(to_string = "read")]
+    Read,
+    #[strum(to_string = "write")]
+    Write,
+    #[strum(to_string = "sudo")]
+    Sudo,
 }
 
 /// Enumeration of possible capabilities, supporting string conversion and iteration.
@@ -139,7 +160,7 @@ impl Capability {
 impl FromStr for Policy {
     type Err = RvError;
 
-    /// Parses a string into a Policy struct. The input string can be in either HCL or JSON format.
+    /// Parses a string into a Policy struct. The input string can be in HCL format.
     /// It constructs a `Policy` object by parsing paths and associated configurations from the input.
     ///
     /// # Arguments
@@ -163,35 +184,6 @@ impl FromStr for Policy {
     /// use rusty_vault::modules::policy::Policy;
     ///
     /// let policy_str = r#"
-    /// {
-    ///     "path": {
-    ///         "secret/data/*": {
-    ///             "capabilities": ["read", "list"],
-    ///             "allowed_parameters": {
-    ///                 "version": ["1", "2"]
-    ///             }
-    ///         }
-    ///     }
-    /// }
-    /// "#;
-    ///
-    /// let policy = Policy::from_str(policy_str);
-    /// assert!(policy.is_ok());
-    ///
-    /// let invalid_policy_str = r#"
-    /// {
-    ///     "path": {
-    ///         "secret/data/+*": { // Invalid path with `+*` wildcard
-    ///             "capabilities": ["read"]
-    ///         }
-    ///     }
-    /// }
-    /// "#;
-    ///
-    /// let invalid_policy = Policy::from_str(invalid_policy_str);
-    /// assert!(invalid_policy.is_err());
-    ///
-    /// let policy_str = r#"
     /// path "secret/*" {
     ///     capabilities = ["read", "list"]
     ///     min_wrapping_ttl = "1h"
@@ -206,17 +198,126 @@ impl FromStr for Policy {
     /// assert!(policy.is_ok());
     /// ```
     fn from_str(s: &str) -> Result<Self, RvError> {
-        let policy_config =
-            if let Ok(pc) = hcl::from_str::<PolicyConfig>(s) { pc } else { serde_json::from_str::<PolicyConfig>(s)? };
+        let policy_config = Policy::parse(s)?;
 
         let mut policy = Policy::default();
         policy.raw = s.to_string();
+        policy.name = policy_config.name.clone();
 
-        for (path, pc) in policy_config.path.iter() {
-            if path.contains("+*") {
-                return Err(rv_error_string!(&format!("path {}: invalid use of wildcards ('+*' is forbidden)", path)));
+        policy.init(&policy_config)?;
+
+        Ok(policy)
+    }
+}
+
+impl Policy {
+    /// Dummy method to input sentinel policy data; currently does nothing.
+    pub fn input_sentinel_policy_data(&mut self, _req: &Request) -> Result<(), RvError> {
+        Ok(())
+    }
+
+    /// Dummy method to add sentinel policy data; currently does nothing.
+    pub fn add_sentinel_policy_data(&self, _resp: &Response) -> Result<(), RvError> {
+        Ok(())
+    }
+
+    fn parse(s: &str) -> Result<PolicyConfig, RvError> {
+        let body: Body = hcl::from_str(s)?;
+
+        let mut policy_config = PolicyConfig::default();
+
+        for attribute in body.attributes() {
+            if attribute.key.as_str() == "name" {
+                if let Expression::String(name) = &attribute.expr {
+                    policy_config.name = name.clone();
+                }
             }
+        }
 
+        for block in body.blocks() {
+            if block.identifier() == "path" {
+                if let Some(path_label) = block.labels().first() {
+                    let path_str = path_label.as_str().to_string();
+                    if path_str.contains("+*") {
+                        return Err(rv_error_string!(&format!(
+                            "path {}: invalid use of wildcards ('+*' is forbidden)",
+                            path_str
+                        )));
+                    }
+
+                    let mut path_config: PolicyPathConfig = hcl::from_body(block.body().clone())?;
+                    let allowed_parameters: HashMap<String, Vec<Value>> = path_config
+                        .allowed_parameters
+                        .iter()
+                        .map(|(key, value)| {
+                            (
+                                key.to_lowercase(),
+                                value.clone(),
+                            )
+                        })
+                        .collect();
+                    path_config.allowed_parameters = allowed_parameters;
+
+                    let denied_parameters: HashMap<String, Vec<Value>> = path_config
+                        .denied_parameters
+                        .iter()
+                        .map(|(key, value)| {
+                            (
+                                key.to_lowercase(),
+                                value.clone(),
+                            )
+                        })
+                        .collect();
+                    path_config.denied_parameters = denied_parameters;
+
+                    if let Some(existing_path) = policy_config.path.get_mut(&path_str) {
+                        // Collect new required parameters to be added
+                        let new_params: Vec<String> = path_config
+                            .required_parameters
+                            .into_iter()
+                            .filter(|x| !existing_path.required_parameters.contains(x))
+                            .collect();
+
+                        // Extend required_parameters with the new parameters
+                        existing_path.required_parameters.extend(new_params);
+
+                        // Merge allowed_parameters
+                        for (key, mut value) in path_config.allowed_parameters {
+                            if let Some(dst_vec) = existing_path.allowed_parameters.get_mut(&key) {
+                                if value.is_empty() {
+                                    dst_vec.clear();
+                                } else if !dst_vec.is_empty() {
+                                    dst_vec.append(&mut value);
+                                }
+                            } else {
+                                existing_path.allowed_parameters.insert(key.to_lowercase(), value);
+                            }
+                        }
+
+                        // Merge denied_parameters
+                        for (key, mut value) in path_config.denied_parameters {
+                            if let Some(dst_vec) = existing_path.denied_parameters.get_mut(&key) {
+                                if value.is_empty() {
+                                    dst_vec.clear();
+                                } else if !dst_vec.is_empty() {
+                                    dst_vec.append(&mut value);
+                                }
+                            } else {
+                                existing_path.denied_parameters.insert(key.to_lowercase(), value);
+                            }
+                        }
+                    } else {
+                        policy_config.path.insert(path_str, path_config);
+                    }
+                }
+            }
+        }
+
+        Ok(policy_config)
+    }
+
+    fn init(&mut self, policy_config: &PolicyConfig) -> Result<(), RvError> {
+        for (path, pc) in policy_config.path.iter() {
             let mut rules = PolicyPathRules::default();
             rules.path = ensure_no_leading_slash(&path);
             rules.capabilities = pc.capabilities.clone();
@@ -236,6 +337,36 @@ impl FromStr for Policy {
                 }
             }
 
+            if let Some(old_path_policy) = pc.policy {
+                match old_path_policy {
+                    OldPathPolicy::Deny => {
+                        rules.capabilities = vec![Capability::Deny];
+                    }
+                    OldPathPolicy::Read => {
+                        rules.capabilities.extend(vec![Capability::Read, Capability::List]);
+                    }
+                    OldPathPolicy::Write => {
+                        rules.capabilities.extend(vec![
+                            Capability::Read,
+                            Capability::List,
+                            Capability::Create,
+                            Capability::Update,
+                            Capability::Delete,
+                        ]);
+                    }
+                    OldPathPolicy::Sudo => {
+                        rules.capabilities.extend(vec![
+                            Capability::Read,
+                            Capability::List,
+                            Capability::Create,
+                            Capability::Update,
+                            Capability::Delete,
+                            Capability::Sudo,
+                        ]);
+                    }
+                }
+            }
+
             let permissions = &mut rules.permissions;
             permissions.capabilities_bitmap = rules.capabilities.iter().fold(0u32, |acc, cap| acc | cap.to_bits());
             if permissions.capabilities_bitmap & Capability::Deny.to_bits() != 0 {
@@ -244,47 +375,16 @@ impl FromStr for Policy {
                 rules.capabilities = vec![Capability::Deny];
             }
 
-            for (param_key, param_value) in pc.allowed_parameters.iter() {
-                if !param_value.is_array() {
-                    return Err(rv_error_string!(&format!(
-                        "path {}: invalid allowed_parameters: {:?} is not an array",
-                        path, param_value
-                    )));
-                }
-
-                permissions.allowed_parameters.insert(param_key.to_lowercase(), param_value.clone());
-            }
-
-            for (param_key, param_value) in pc.denied_parameters.iter() {
-                if !param_value.is_array() {
-                    return Err(rv_error_string!(&format!(
-                        "path {}: invalid denied_parameters: {:?} is not an array",
-                        path, param_value
-                    )));
-                }
-
-                permissions.denied_parameters.insert(param_key.to_lowercase(), param_value.clone());
-            }
-
             permissions.min_wrapping_ttl = pc.min_wrapping_ttl;
             permissions.max_wrapping_ttl = pc.max_wrapping_ttl;
+
+            permissions.allowed_parameters = pc.allowed_parameters.clone();
+            permissions.denied_parameters = pc.denied_parameters.clone();
             permissions.required_parameters = pc.required_parameters.clone();
 
-            policy.paths.push(rules);
+            self.paths.push(rules);
         }
 
-        Ok(policy)
-    }
-}
-
-impl Policy {
-    /// Dummy method to input sentinel policy data; currently does nothing.
-    pub fn input_sentinel_policy_data(&mut self, _req: &Request) -> Result<(), RvError> {
-        Ok(())
-    }
-
-    /// Dummy method to add sentinel policy data; currently does nothing.
-    pub fn add_sentinel_policy_data(&self, _resp: &Response) -> Result<(), RvError> {
         Ok(())
     }
 }
@@ -372,9 +472,8 @@ impl Permissions {
                 }
 
                 for (param_key, param_value) in req.data_iter() {
-                    if let Some(denied_param) = self.denied_parameters.get(param_key.to_lowercase().as_str()) {
-                        let denied_array = denied_param.as_array().unwrap();
-                        if denied_array.contains(param_value) {
+                    if let Some(denied_parameters) = self.denied_parameters.get(param_key.to_lowercase().as_str()) {
+                        if denied_parameters.glob_contains(param_value) {
                             return Ok(ret);
                         }
                     }
@@ -389,9 +488,8 @@ impl Permissions {
                 }
 
                 for (param_key, param_value) in req.data_iter() {
-                    if let Some(allowed_param) = self.allowed_parameters.get(param_key.to_lowercase().as_str()) {
-                        let allowed_array = allowed_param.as_array().unwrap();
-                        if !allowed_array.contains(param_value) {
+                    if let Some(allowed_parameters) = self.allowed_parameters.get(param_key.to_lowercase().as_str()) {
+                        if !allowed_parameters.glob_contains(param_value) {
                             return Ok(ret);
                         }
                     } else if !allowed_all {
@@ -445,11 +543,39 @@ impl Permissions {
         }
 
         if !other.allowed_parameters.is_empty() {
-            merge_map(&mut self.allowed_parameters, &other.allowed_parameters);
+            if self.allowed_parameters.is_empty() {
+                self.allowed_parameters = other.allowed_parameters.clone();
+            } else {
+                for (key, value) in other.allowed_parameters.iter() {
+                    if let Some(dst_vec) = self.allowed_parameters.get_mut(key) {
+                        if value.is_empty() {
+                            dst_vec.clear();
+                        } else if !dst_vec.is_empty() {
+                            dst_vec.extend(value.iter().cloned());
+                        }
+                    } else {
+                        self.allowed_parameters.insert(key.clone(), value.clone());
+                    }
+                }
+            }
         }
 
         if !other.denied_parameters.is_empty() {
-            merge_map(&mut self.denied_parameters, &other.denied_parameters);
+            if self.denied_parameters.is_empty() {
+                self.denied_parameters = other.denied_parameters.clone();
+            } else {
+                for (key, value) in other.denied_parameters.iter() {
+                    if let Some(dst_vec) = self.denied_parameters.get_mut(key) {
+                        if value.is_empty() {
+                            dst_vec.clear();
+                        } else if !dst_vec.is_empty() {
+                            dst_vec.extend(value.iter().cloned());
+                        }
+                    } else {
+                        self.denied_parameters.insert(key.clone(), value.clone());
+                    }
+                }
+            }
         }
 
         if !other.required_parameters.is_empty() {
@@ -463,9 +589,9 @@ impl Permissions {
         Ok(())
     }
 
-    pub fn add_granting_policy_to_map(&mut self, policy: &Policy) -> Result<(), RvError> {
+    pub fn add_granting_policy_to_map(&mut self, policy: &Policy, capabilities_bitmap: u32) -> Result<(), RvError> {
         for cap in Capability::iter() {
-            if cap.to_bits() & self.capabilities_bitmap == 0 {
+            if cap.to_bits() & capabilities_bitmap == 0 {
                 continue;
             }
 
@@ -520,75 +646,6 @@ pub fn to_granting_capabilities(value: u32) -> Vec<String> {
     }
 
     ret
-}
-
-/// Merges two `Map<String, Value>` structures.
-///
-/// This function merges the contents of two `Map<String, Value>` structures. If a key exists in both
-/// maps, the values are combined. If a key exists in only one map, it is added to the destination map.
-/// If a key's value is an empty array, it is removed from the destination map.
-///
-/// # Arguments
-///
-///  * `dst` - The destination map to which the source map will be merged.
-///  * `src` - The source map whose contents will be merged into the destination map.
-///
-/// # Examples
-///
-/// ```
-/// use serde_json::{json, Map, Value};
-/// use rusty_vault::modules::policy::policy::merge_map;
-///
-/// let mut dst: Map<String, Value> = serde_json::Map::new();
-/// dst.insert("key1".to_string(), Value::Array(vec![Value::String("a".to_string())]));
-/// dst.insert("key2".to_string(), Value::Array(vec![]));
-/// dst.insert("key3".to_string(), Value::Array(vec![Value::String("b".to_string())]));
-///
-/// let mut src: Map<String, Value> = serde_json::Map::new();
-/// src.insert("key1".to_string(), Value::Array(vec![Value::String("c".to_string())]));
-/// src.insert("key3".to_string(), Value::Array(vec![]));
-/// src.insert("key4".to_string(), Value::Array(vec![Value::String("d".to_string())]));
-///
-/// merge_map(&mut dst, &src);
-///
-/// assert_eq!(
-///     Value::Object(dst),
-///     json!({
-///         "key1": ["a", "c"],
-///         "key2": [],
-///         "key4": ["d"]
-///     })
-/// );
-/// ```
-pub fn merge_map(dst: &mut Map<String, Value>, src: &Map<String, Value>) {
-    if dst.is_empty() {
-        *dst = src.clone();
-    } else {
-        for (key, value) in src.iter() {
-            let src_arr = value.as_array().unwrap_or(&Vec::new()).clone();
-
-            if src_arr.is_empty() {
-                dst.remove(key.as_str());
-                continue;
-            }
-
-            let mut new_arr: Vec<Value> = Vec::new();
-
-            if let Some(found) = dst.get(key.as_str()) {
-                if let Some(found_arr) = found.as_array() {
-                    if found_arr.is_empty() {
-                        dst.remove(key.as_str());
-                        continue;
-                    }
-                    new_arr.extend(found_arr.clone());
-                }
-            }
-
-            new_arr.extend(src_arr);
-
-            dst.insert(key.clone(), Value::Array(new_arr));
-        }
-    }
 }
 
 #[cfg(test)]
