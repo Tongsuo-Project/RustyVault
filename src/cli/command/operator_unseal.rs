@@ -1,19 +1,21 @@
 use std::io::{self, Write};
 
-use rpassword::read_password;
 use clap::Parser;
 use derive_more::Deref;
+use rpassword::read_password;
 use sysexits::ExitCode;
 
 use crate::{
-    errors::RvError,
     cli::command::{self, CommandExecutor},
-    EXIT_CODE_INSUFFICIENT_PARAMS,
-    EXIT_CODE_OK,
+    errors::RvError,
+    EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_OK,
 };
 
 #[derive(Parser, Deref)]
-#[command(author, version, about = r#"Provide a portion of the root key to unseal a RustyVault server.
+#[command(
+    author,
+    version,
+    about = r#"Provide a portion of the root key to unseal a RustyVault server.
 RustyVault starts in a sealed state. It cannot perform operations until it is unsealed.
 This command accepts a portion of the root key (an "unseal key").
 
@@ -25,13 +27,10 @@ not recommended as the unseal key will be available in your history:
 Instead, run the command with no arguments and it will prompt for the key:
 
   $ rvault operator unseal
-  Key (will be hidden): 05ce1abc1f913de5407c86869bb298e5645748e01bdfd14c7ac43c05c4bc204b01"#)]
+  Key (will be hidden): 05ce1abc1f913de5407c86869bb298e5645748e01bdfd14c7ac43c05c4bc204b01"#
+)]
 pub struct Unseal {
-    #[arg(
-        next_line_help = false,
-        value_name = "KEY",
-        help = r#"A portion of the root key to unseal a Vault server."#
-    )]
+    #[arg(next_line_help = false, value_name = "KEY", help = r#"A portion of the root key to unseal a Vault server."#)]
     unseal_key: Option<String>,
 
     #[deref]

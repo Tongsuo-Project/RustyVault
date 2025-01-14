@@ -3,15 +3,17 @@ use derive_more::Deref;
 use sysexits::ExitCode;
 
 use crate::{
-    rv_error_string,
-    errors::RvError,
     cli::command::{self, CommandExecutor},
+    errors::RvError,
     http::sys::InitRequest,
-    EXIT_CODE_OK,
+    rv_error_string, EXIT_CODE_OK,
 };
 
 #[derive(Parser, Deref)]
-#[command(author, version, about = r#"Initializes a RustyVault server. Initialization is the process by which RustyVault's storage
+#[command(
+    author,
+    version,
+    about = r#"Initializes a RustyVault server. Initialization is the process by which RustyVault's storage
 backend is prepared to receive data. Since RustyVault servers share the same storage backend
 in HA mode, you only need to initialize one RustyVault to initialize the storage backend.
 
@@ -30,7 +32,8 @@ Initialize, but specify key-shares and key-threshold:
 
   $ rvault operator init \
       -key-shares=3 \
-      -key-threshold=2"#)]
+      -key-threshold=2"#
+)]
 pub struct Init {
     #[arg(
         long,
@@ -79,10 +82,7 @@ impl CommandExecutor for Init {
         let client = self.client()?;
         let sys = client.sys();
 
-        let init_req = InitRequest {
-            secret_shares: self.key_shares,
-            secret_threshold: self.key_threshold,
-        };
+        let init_req = InitRequest { secret_shares: self.key_shares, secret_threshold: self.key_threshold };
 
         match sys.init(&init_req) {
             Ok(ret) => {

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use serde::{Deserialize, Serialize};
 use derive_more::{Deref, DerefMut};
+use serde::{Deserialize, Serialize};
 
 use super::{UserPassBackend, UserPassBackendInner};
 use crate::{

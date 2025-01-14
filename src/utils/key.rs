@@ -87,7 +87,7 @@ impl KeyBundle {
                 let ec_group = EcGroup::from_curve_name(curve_name)?;
                 let ec_key = EcKey::generate(&ec_group)?;
                 PKey::from_ec_key(ec_key)?.private_key_to_pem_pkcs8()?
-            },
+            }
             #[cfg(feature = "crypto_adaptor_tongsuo")]
             "sm2" => {
                 self.bits = 256;
@@ -118,7 +118,7 @@ impl KeyBundle {
                 let mut key = vec![0u8; key_bits as usize / 8];
                 rand_bytes(&mut key)?;
                 key
-            },
+            }
             _ => return Err(RvError::ErrPkiKeyTypeInvalid),
         };
 

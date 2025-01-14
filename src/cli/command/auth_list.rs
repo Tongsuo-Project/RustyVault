@@ -3,11 +3,16 @@ use derive_more::Deref;
 use ureq::json;
 
 use crate::{
-    api::sys::MountOutput, cli::command::{self, format::table_data_add_header, CommandExecutor}, errors::RvError
+    api::sys::MountOutput,
+    cli::command::{self, format::table_data_add_header, CommandExecutor},
+    errors::RvError,
 };
 
 #[derive(Parser, Deref)]
-#[command(author, version, about = r#"Lists the enabled auth methods on the RustyVault server. This command also outputs
+#[command(
+    author,
+    version,
+    about = r#"Lists the enabled auth methods on the RustyVault server. This command also outputs
 information about the method including configuration and human-friendly descriptions.
 A TTL of "system" indicates that the system default is in use.
 
@@ -17,7 +22,8 @@ List all enabled auth methods:
 
 List all enabled auth methods with detailed output:
 
-    $ rvault auth list -detailed"#)]
+    $ rvault auth list -detailed"#
+)]
 pub struct List {
     #[deref]
     #[command(flatten, next_help_heading = "HTTP Options")]
@@ -50,8 +56,8 @@ impl CommandExecutor for List {
                             &mount_output.logical_type,
                             &mount_output.accessor,
                             &mount_output.description,
-                            &mount_output.plugin_version]
-                        ));
+                            &mount_output.plugin_version
+                        ]));
                     }
 
                     let data = if self.output.is_format_table() {

@@ -1,7 +1,10 @@
 use clap::Parser;
 use derive_more::Deref;
 
-use crate::{errors::RvError, cli::command::{self, CommandExecutor}};
+use crate::{
+    cli::command::{self, CommandExecutor},
+    errors::RvError,
+};
 
 #[derive(Parser, Deref)]
 #[command(
@@ -18,10 +21,7 @@ For a full list of examples and paths, please see the documentation that corresp
 to the secret engine in use. Not all engines support listing."#
 )]
 pub struct List {
-    #[arg(
-        next_line_help = false,
-        value_name = "PATH",
-    )]
+    #[arg(next_line_help = false, value_name = "PATH")]
     path: String,
 
     #[deref]

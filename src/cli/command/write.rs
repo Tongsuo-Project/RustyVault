@@ -1,7 +1,11 @@
 use clap::Parser;
 use derive_more::Deref;
 
-use crate::{errors::RvError, utils::kv_builder::KvPairParse, cli::command::{self, CommandExecutor}};
+use crate::{
+    cli::command::{self, CommandExecutor},
+    errors::RvError,
+    utils::kv_builder::KvPairParse,
+};
 
 #[derive(Parser, Deref)]
 #[command(
@@ -23,13 +27,7 @@ Upload an AWS IAM policy from a file on disk:
   $ rvault write aws/roles/ops policy=@policy.json"#
 )]
 pub struct Write {
-    #[arg(
-        index = 1,
-        required = true,
-        next_line_help = false,
-        value_name = "PATH",
-        help = r#"The path of secret."#
-    )]
+    #[arg(index = 1, required = true, next_line_help = false, value_name = "PATH", help = r#"The path of secret."#)]
     path: String,
 
     #[clap(

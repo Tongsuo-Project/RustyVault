@@ -2,10 +2,7 @@ use derive_more::Deref;
 use serde_json::{Map, Value};
 
 use super::{Client, HttpResponse};
-
-use crate::{
-    errors::RvError,
-};
+use crate::errors::RvError;
 
 #[derive(Deref)]
 pub struct Logical<'a> {
@@ -15,9 +12,7 @@ pub struct Logical<'a> {
 
 impl Client {
     pub fn logical(&self) -> Logical {
-        Logical {
-            client: self
-        }
+        Logical { client: self }
     }
 }
 

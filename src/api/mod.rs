@@ -2,11 +2,11 @@
 
 use serde_json::Value;
 
+pub mod auth;
 pub mod client;
-pub mod sys;
 pub mod logical;
 pub mod secret;
-pub mod auth;
+pub mod sys;
 
 pub use client::Client;
 

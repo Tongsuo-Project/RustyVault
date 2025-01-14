@@ -1,11 +1,14 @@
 //! This is the Tongsuo adaptor.
 
-use crate::errors::RvError;
-use crate::modules::crypto::{AEADCipher, AESKeySize, BlockCipher, CipherMode, AES};
-use openssl::symm::{Cipher, Crypter, Mode, encrypt, encrypt_aead, decrypt, decrypt_aead};
-use openssl::rand::rand_priv_bytes;
-use crate::modules::crypto::SM4;
-use crate::modules::crypto::crypto_adaptors::common;
+use openssl::{
+    rand::rand_priv_bytes,
+    symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher, Crypter, Mode},
+};
+
+use crate::{
+    errors::RvError,
+    modules::crypto::{crypto_adaptors::common, AEADCipher, AESKeySize, BlockCipher, CipherMode, AES, SM4},
+};
 
 pub struct AdaptorCTX {
     ctx: Crypter,
@@ -46,13 +49,11 @@ impl BlockCipher for AES {
         common_aes_encrypt!(self, plaintext);
     }
 
-    fn encrypt_update(&mut self, plaintext: Vec<u8>, ciphertext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn encrypt_update(&mut self, plaintext: Vec<u8>, ciphertext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_encrypt_update!(self, plaintext, ciphertext);
     }
 
-    fn encrypt_final(&mut self, ciphertext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn encrypt_final(&mut self, ciphertext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_encrypt_final!(self, ciphertext);
     }
 
@@ -60,13 +61,11 @@ impl BlockCipher for AES {
         common_aes_decrypt!(self, ciphertext);
     }
 
-    fn decrypt_update(&mut self, ciphertext: Vec<u8>, plaintext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn decrypt_update(&mut self, ciphertext: Vec<u8>, plaintext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_decrypt_update!(self, ciphertext, plaintext);
     }
 
-    fn decrypt_final(&mut self, plaintext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn decrypt_final(&mut self, plaintext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_decrypt_final!(self, plaintext);
     }
 }
@@ -111,7 +110,7 @@ impl SM4 {
                 (Some(x), Some(y)) => {
                     sm4_key = x.clone();
                     sm4_iv = y.clone();
-                },
+                }
                 _ => return Err(RvError::ErrCryptoCipherInitFailed),
             }
         } else {
@@ -125,16 +124,7 @@ impl SM4 {
             sm4_iv = buf2.to_vec();
         }
 
-        Ok (
-            SM4 {
-                mode: c_mode,
-                key: sm4_key,
-                iv: sm4_iv,
-                aad: None,
-                ctx: None,
-                tag: None,
-            }
-        )
+        Ok(SM4 { mode: c_mode, key: sm4_key, iv: sm4_iv, aad: None, ctx: None, tag: None })
     }
 
     /// This function returns the key and iv vaule stored in one SM4 object.
@@ -150,11 +140,7 @@ impl BlockCipher for SM4 {
     fn encrypt(&mut self, plaintext: &Vec<u8>) -> Result<Vec<u8>, RvError> {
         match self.mode {
             CipherMode::CBC => {
-                let ciphertext = encrypt(
-                    Cipher::sm4_cbc(),
-                    &self.key,
-                    Some(&self.iv),
-                    plaintext)?;
+                let ciphertext = encrypt(Cipher::sm4_cbc(), &self.key, Some(&self.iv), plaintext)?;
                 return Ok(ciphertext.to_vec());
             }
             CipherMode::GCM => {
@@ -166,8 +152,8 @@ impl BlockCipher for SM4 {
                     Some(&self.iv),
                     &self.aad.clone().unwrap(),
                     plaintext,
-                    tag
-                    )?;
+                    tag,
+                )?;
                 self.tag = Some(tag.to_vec());
                 return Ok(ciphertext.to_vec());
             }
@@ -175,8 +161,7 @@ impl BlockCipher for SM4 {
         }
     }
 
-    fn encrypt_update(&mut self, plaintext: Vec<u8>, ciphertext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn encrypt_update(&mut self, plaintext: Vec<u8>, ciphertext: &mut Vec<u8>) -> Result<usize, RvError> {
         let cipher;
 
         match self.mode {
@@ -186,17 +171,14 @@ impl BlockCipher for SM4 {
             CipherMode::GCM => {
                 cipher = Cipher::sm4_gcm();
             }
-            _ => { return Err(RvError::ErrCryptoCipherOPNotSupported); }
+            _ => {
+                return Err(RvError::ErrCryptoCipherOPNotSupported);
+            }
         }
 
         if let None = self.ctx {
             // init adaptor ctx if it's not inited.
-            let encrypter = Crypter::new(
-                cipher,
-                Mode::Encrypt,
-                &self.key,
-                Some(&self.iv)
-            )?;
+            let encrypter = Crypter::new(cipher, Mode::Encrypt, &self.key, Some(&self.iv))?;
             let adaptor_ctx = AdaptorCTX { ctx: encrypter, tag_set: false, aad_set: false };
 
             self.ctx = Some(adaptor_ctx);
@@ -221,8 +203,7 @@ impl BlockCipher for SM4 {
         Ok(count)
     }
 
-    fn encrypt_final(&mut self, ciphertext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn encrypt_final(&mut self, ciphertext: &mut Vec<u8>) -> Result<usize, RvError> {
         // Unlike encrypt_update() function, we don't do auto-initialization here.
         if self.ctx.is_none() {
             return Err(RvError::ErrCryptoCipherNotInited);
@@ -249,11 +230,7 @@ impl BlockCipher for SM4 {
     fn decrypt(&mut self, ciphertext: &Vec<u8>) -> Result<Vec<u8>, RvError> {
         match self.mode {
             CipherMode::CBC => {
-                let plaintext = decrypt(
-                    Cipher::sm4_cbc(),
-                    &self.key,
-                    Some(&self.iv),
-                    ciphertext)?;
+                let plaintext = decrypt(Cipher::sm4_cbc(), &self.key, Some(&self.iv), ciphertext)?;
                 return Ok(plaintext.to_vec());
             }
             CipherMode::GCM => {
@@ -264,15 +241,14 @@ impl BlockCipher for SM4 {
                     Some(&self.iv),
                     &self.aad.clone().unwrap(),
                     ciphertext,
-                    &self.tag.clone().unwrap()
-                    )?;
+                    &self.tag.clone().unwrap(),
+                )?;
                 return Ok(plaintext.to_vec());
             }
             _ => Err(RvError::ErrCryptoCipherOPNotSupported),
         }
     }
-    fn decrypt_update(&mut self, ciphertext: Vec<u8>, plaintext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn decrypt_update(&mut self, ciphertext: Vec<u8>, plaintext: &mut Vec<u8>) -> Result<usize, RvError> {
         let cipher;
 
         match self.mode {
@@ -282,17 +258,14 @@ impl BlockCipher for SM4 {
             CipherMode::GCM => {
                 cipher = Cipher::sm4_gcm();
             }
-            _ => { return Err(RvError::ErrCryptoCipherOPNotSupported); }
+            _ => {
+                return Err(RvError::ErrCryptoCipherOPNotSupported);
+            }
         }
 
         if self.ctx.is_none() {
             // init adaptor ctx if it's not inited.
-            let encrypter = Crypter::new(
-                cipher,
-                Mode::Decrypt,
-                &self.key,
-                Some(&self.iv)
-            )?;
+            let encrypter = Crypter::new(cipher, Mode::Decrypt, &self.key, Some(&self.iv))?;
             let adaptor_ctx = AdaptorCTX { ctx: encrypter, tag_set: false, aad_set: false };
 
             self.ctx = Some(adaptor_ctx);
@@ -311,7 +284,9 @@ impl BlockCipher for SM4 {
         // do real jobs.
         // this Crypter::update returns a Result<usize, ErrorStack>, print detailed error if any.
         match self.ctx.as_mut().unwrap().ctx.update(&ciphertext, plaintext) {
-            Ok(count) => { return Ok(count); }
+            Ok(count) => {
+                return Ok(count);
+            }
             Err(err_stack) => {
                 let errs = err_stack.errors();
                 log::error!("{}", errs.len());
@@ -323,8 +298,7 @@ impl BlockCipher for SM4 {
         }
     }
 
-    fn decrypt_final(&mut self, plaintext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn decrypt_final(&mut self, plaintext: &mut Vec<u8>) -> Result<usize, RvError> {
         // Unlike decrypt_update() function, we don't do auto-initialization here.
         if self.ctx.is_none() {
             return Err(RvError::ErrCryptoCipherNotInited);
@@ -344,7 +318,9 @@ impl BlockCipher for SM4 {
         }
 
         match self.ctx.as_mut().unwrap().ctx.finalize(plaintext) {
-            Ok(count) => { return Ok(count); }
+            Ok(count) => {
+                return Ok(count);
+            }
             Err(err_stack) => {
                 let errs = err_stack.errors();
                 log::error!("{}", errs.len());

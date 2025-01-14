@@ -249,24 +249,14 @@ impl Policy {
                     let allowed_parameters: HashMap<String, Vec<Value>> = path_config
                         .allowed_parameters
                         .iter()
-                        .map(|(key, value)| {
-                            (
-                                key.to_lowercase(),
-                                value.clone(),
-                            )
-                        })
+                        .map(|(key, value)| (key.to_lowercase(), value.clone()))
                         .collect();
                     path_config.allowed_parameters = allowed_parameters;
 
                     let denied_parameters: HashMap<String, Vec<Value>> = path_config
                         .denied_parameters
                         .iter()
-                        .map(|(key, value)| {
-                            (
-                                key.to_lowercase(),
-                                value.clone(),
-                            )
-                        })
+                        .map(|(key, value)| (key.to_lowercase(), value.clone()))
                         .collect();
                     path_config.denied_parameters = denied_parameters;
 

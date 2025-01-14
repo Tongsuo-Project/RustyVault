@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     default::Default,
     env, fs,
-    io::{prelude::*},
+    io::prelude::*,
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Barrier, RwLock},
@@ -44,11 +44,13 @@ use ureq::AgentBuilder;
 
 use crate::{
     core::{Core, InitResult, SealConfig},
-    errors::RvError, http,
+    errors::RvError,
+    http,
     logical::{Operation, Request, Response},
     metrics::{manager::MetricsManager, middleware::metrics_midleware, system_metrics::SystemMetrics},
     rv_error_response, rv_error_string,
-    storage::{self, Backend}, utils::cert::Certificate
+    storage::{self, Backend},
+    utils::cert::Certificate,
 };
 
 lazy_static! {

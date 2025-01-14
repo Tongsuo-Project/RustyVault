@@ -1,4 +1,5 @@
-use std::{fs, env, path::Path};
+use std::{env, fs, path::Path};
+
 use toml::Value;
 
 // This is not going to happen any more since we have a default feature definition in Cargo.toml

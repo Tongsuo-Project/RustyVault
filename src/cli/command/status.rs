@@ -1,7 +1,10 @@
 use clap::Parser;
 use derive_more::Deref;
 
-use crate::{errors::RvError, cli::command::{self, CommandExecutor}};
+use crate::{
+    cli::command::{self, CommandExecutor},
+    errors::RvError,
+};
 
 #[derive(Parser, Deref)]
 #[command(

@@ -1,8 +1,9 @@
 //! `MetricManager` holds the Prometheus registry and metrics.
-use crate::metrics::http_metrics::HttpMetrics;
-use crate::metrics::system_metrics::SystemMetrics;
-use prometheus_client::registry::Registry;
 use std::sync::{Arc, Mutex};
+
+use prometheus_client::registry::Registry;
+
+use crate::metrics::{http_metrics::HttpMetrics, system_metrics::SystemMetrics};
 
 #[derive(Clone)]
 pub struct MetricsManager {

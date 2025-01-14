@@ -783,10 +783,7 @@ mod mod_policy_store_tests {
         assert_eq!(root_policy.name, "root");
 
         // Set should fail
-        assert!(policy_store.set_policy(Policy {
-            name: "root".into(),
-            ..Default::default()
-        }).is_err());
+        assert!(policy_store.set_policy(Policy { name: "root".into(), ..Default::default() }).is_err());
 
         // Delete should fail
         assert!(policy_store.delete_policy("root", PolicyType::Acl).is_err());

@@ -625,7 +625,6 @@ impl Handler for TokenStore {
                 }
                 Ok(None) | Err(RvError::ErrHandlerDefault) => continue,
                 Err(e) => return Err(e),
-
             }
         }
 
@@ -706,7 +705,6 @@ impl Handler for TokenStore {
             if auth.ttl > MAX_LEASE_DURATION_SECS {
                 auth.ttl = MAX_LEASE_DURATION_SECS;
             }
-
 
             auth.token_policies = auth.policies.clone();
             sanitize_policies(&mut auth.token_policies, !auth.no_default_policy);

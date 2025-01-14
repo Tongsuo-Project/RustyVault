@@ -10,8 +10,11 @@ use std::{
 
 use actix_tls::accept::openssl::TlsStream;
 use actix_web::{
-    cookie::Cookie, dev::Extensions, http::StatusCode, rt::net::TcpStream, web, HttpRequest, HttpResponse,
-    http::header, ResponseError,
+    cookie::Cookie,
+    dev::Extensions,
+    http::{header, StatusCode},
+    rt::net::TcpStream,
+    web, HttpRequest, HttpResponse, ResponseError,
 };
 use openssl::x509::{X509Ref, X509VerifyResult, X509};
 use serde::Serialize;
@@ -20,8 +23,8 @@ use serde_json::{json, Map, Value};
 use crate::{core::Core, errors::RvError, logical::Request};
 
 pub mod logical;
-pub mod sys;
 pub mod metrics;
+pub mod sys;
 
 pub const AUTH_COOKIE_NAME: &str = "token";
 pub const AUTH_HEADER_NAME: &str = "X-RustyVault-Token";
@@ -137,7 +140,7 @@ pub fn get_token_from_req(req: &HttpRequest) -> Result<String, RvError> {
     } else if let Some(vault_token) = req.headers().get(VAULT_AUTH_HEADER_NAME) {
         return Ok(vault_token.to_str()?.to_string());
     } else if let Some(auth) = req.headers().get(header::AUTHORIZATION) {
-        if let Ok(auth_str) = auth.to_str(){
+        if let Ok(auth_str) = auth.to_str() {
             if auth_str.starts_with("Bearer ") {
                 return Ok(auth_str.trim_start_matches("Bearer ").to_string());
             }

@@ -220,7 +220,12 @@ mod test {
         test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
-    pub async fn test_read_role(core: &Core, token: &str, path: &str, role_name: &str) -> Result<Option<Response>, RvError> {
+    pub async fn test_read_role(
+        core: &Core,
+        token: &str,
+        path: &str,
+        role_name: &str,
+    ) -> Result<Option<Response>, RvError> {
         let resp = test_read_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true).await;
         assert!(resp.is_ok());
         resp
@@ -252,16 +257,20 @@ mod test {
         }
 
         let _ =
-            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), expect, Some(role_data)).await;
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), expect, Some(role_data))
+                .await;
     }
 
     pub async fn test_delete_role(core: &Core, token: &str, path: &str, role_name: &str) {
-        assert!(test_delete_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None).await.is_ok());
+        assert!(test_delete_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None)
+            .await
+            .is_ok());
     }
 
     pub async fn generate_secret_id(core: &Core, token: &str, path: &str, role_name: &str) -> (String, String) {
         let resp =
-            test_write_api(core, token, format!("auth/{}/role/{}/secret-id", path, role_name).as_str(), true, None).await;
+            test_write_api(core, token, format!("auth/{}/role/{}/secret-id", path, role_name).as_str(), true, None)
+                .await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -334,7 +343,8 @@ mod test {
             format!("auth/{}/role/{}/secret-id-accessor/destroy", path, role_name).as_str(),
             true,
             Some(data),
-        ).await;
+        )
+        .await;
         assert!(resp.is_ok());
 
         // Login again using the accessor's corresponding secret ID should fail
@@ -359,7 +369,8 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name).as_str(),
             true,
             Some(data),
-        ).await;
+        )
+        .await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
@@ -384,7 +395,8 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_lowercase()).as_str(),
             true,
             Some(data),
-        ).await;
+        )
+        .await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
@@ -409,7 +421,8 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_uppercase()).as_str(),
             true,
             Some(data),
-        ).await;
+        )
+        .await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
@@ -443,7 +456,8 @@ mod test {
             format!("auth/{}/role/{}/secret-id/destroy", path, mixed_case_name).as_str(),
             true,
             Some(data),
-        ).await;
+        )
+        .await;
         assert!(resp.is_ok());
 
         // Login again using the same secret ID should fail
@@ -466,7 +480,8 @@ mod test {
         .unwrap()
         .clone();
         let resp =
-            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone())).await;
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()))
+                .await;
         assert!(resp.is_ok());
 
         // Get the role field
@@ -494,7 +509,8 @@ mod test {
         data["token_num_uses"] = Value::from(0);
         data["token_type"] = Value::from("batch");
         let resp =
-            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone())).await;
+            test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, Some(data.clone()))
+                .await;
         assert!(resp.is_ok());
 
         // Get the role field
