@@ -28,6 +28,7 @@ pub struct Auth {
     pub policies: Vec<String>,
 
     // token_policies break down the list in policies to help determine where a policy was sourced
+    #[serde(default)]
     pub token_policies: Vec<String>,
 
     // Indicates that the default policy should not be added by core when creating a token.

@@ -27,10 +27,11 @@ pub struct UserEntry {
     pub ttl: Duration,
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub max_ttl: Duration,
-    #[serde(flatten)]
+    #[serde(flatten, default)]
     #[deref]
     #[deref_mut]
     pub token_params: TokenParams,
+    #[serde(default)]
     pub bound_cidrs: Vec<SockAddrMarshaler>,
 }
 
