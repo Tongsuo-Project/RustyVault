@@ -57,6 +57,13 @@ struct RemountRequest {
     to: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PolicyRequest {
+    #[serde(default)]
+    name: String,
+    policy: String,
+}
+
 fn response_seal_status(core: web::Data<Arc<RwLock<Core>>>) -> Result<HttpResponse, RvError> {
     let core = core.read()?;
 
@@ -259,6 +266,74 @@ async fn sys_auth_disable_request_handler(
     handle_request(core, &mut r).await
 }
 
+async fn sys_list_policies_request_handler(
+    req: HttpRequest,
+    core: web::Data<Arc<RwLock<Core>>>,
+) -> Result<HttpResponse, RvError> {
+    let mut r = request_auth(&req);
+    r.path = "sys/policy".to_string();
+    r.operation = Operation::List;
+
+    handle_request(core, &mut r).await
+}
+
+async fn sys_read_policy_request_handler(
+    req: HttpRequest,
+    name: web::Path<String>,
+    core: web::Data<Arc<RwLock<Core>>>,
+) -> Result<HttpResponse, RvError> {
+    let policy_name = name.into_inner();
+
+    let mut r = request_auth(&req);
+    r.path = "sys/policy/".to_owned() + policy_name.as_str();
+    r.operation = Operation::Read;
+
+    if policy_name.is_empty() {
+        r.operation = Operation::List;
+    }
+
+    handle_request(core, &mut r).await
+}
+
+async fn sys_write_policy_request_handler(
+    req: HttpRequest,
+    name: web::Path<String>,
+    mut body: web::Bytes,
+    core: web::Data<Arc<RwLock<Core>>>,
+) -> Result<HttpResponse, RvError> {
+    let _test = serde_json::from_slice::<PolicyRequest>(&body)?;
+    let payload = serde_json::from_slice(&body)?;
+    body.clear();
+    let policy_name = name.into_inner();
+    if policy_name.is_empty() {
+        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    }
+
+    let mut r = request_auth(&req);
+    r.path = "sys/policy/".to_owned() + policy_name.as_str();
+    r.operation = Operation::Write;
+    r.body = Some(payload);
+
+    handle_request(core, &mut r).await
+}
+
+async fn sys_delete_policy_request_handler(
+    req: HttpRequest,
+    name: web::Path<String>,
+    core: web::Data<Arc<RwLock<Core>>>,
+) -> Result<HttpResponse, RvError> {
+    let policy_name = name.into_inner();
+    if policy_name.is_empty() {
+        return Ok(response_error(StatusCode::NOT_FOUND, ""));
+    }
+
+    let mut r = request_auth(&req);
+    r.path = "sys/policy/".to_owned() + policy_name.as_str();
+    r.operation = Operation::Delete;
+
+    handle_request(core, &mut r).await
+}
+
 pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/v1/sys")
@@ -297,6 +372,13 @@ pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
                     .route(web::get().to(sys_list_auth_mounts_request_handler))
                     .route(web::post().to(sys_auth_enable_request_handler))
                     .route(web::delete().to(sys_auth_disable_request_handler)),
+            )
+            .service(web::resource("/policy").route(web::get().to(sys_list_policies_request_handler)))
+            .service(
+                web::resource("/policy/{name:.*}")
+                    .route(web::get().to(sys_read_policy_request_handler))
+                    .route(web::post().to(sys_write_policy_request_handler))
+                    .route(web::delete().to(sys_delete_policy_request_handler)),
             ),
     );
 }

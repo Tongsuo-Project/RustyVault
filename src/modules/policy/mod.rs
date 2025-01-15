@@ -139,6 +139,7 @@ impl Module for PolicyModule {
 
 #[cfg(test)]
 mod mod_policy_tests {
+    use policy_store::DEFAULT_POLICY;
     use serde_json::json;
 
     use super::*;
@@ -146,7 +147,7 @@ mod mod_policy_tests {
         logical::{Operation, Request},
         test_utils::{
             test_delete_api, test_list_api, test_mount_api, test_mount_auth_api, test_read_api, test_rusty_vault_init,
-            test_write_api,
+            test_write_api, TestHttpServer,
         },
     };
 
@@ -224,8 +225,8 @@ mod mod_policy_tests {
     }
 
     #[tokio::test]
-    async fn test_policy_http_api() {
-        let (root_token, core) = test_rusty_vault_init("test_policy_http_api");
+    async fn test_policy_curd_api() {
+        let (root_token, core) = test_rusty_vault_init("test_policy_curd_api");
         let core = core.read().unwrap();
 
         let policy1_name = "policy1";
@@ -273,6 +274,61 @@ mod mod_policy_tests {
         let policies = policies.unwrap().unwrap().data.unwrap();
         assert_eq!(policies["keys"], json!(["default", "root"]));
         assert_eq!(policies["policies"], json!(["default", "root"]));
+    }
+
+    #[tokio::test]
+    async fn test_policy_http_api() {
+        let mut test_http_server = TestHttpServer::new("test_policy_http_api", true);
+
+        // set token
+        test_http_server.token = test_http_server.root_token.clone();
+
+        // List policies
+        let ret = test_http_server.read("sys/policy", None);
+        assert!(ret.is_ok());
+        assert_eq!(ret.unwrap().1, json!({"keys": ["default", "root"], "policies": ["default", "root"]}));
+
+        // Read default policy
+        let ret = test_http_server.read("sys/policy/default", None);
+        assert!(ret.is_ok());
+        assert_eq!(ret.unwrap().1, json!({"name": "default", "rules": DEFAULT_POLICY}));
+
+        // Write policy1
+        let policy1_hcl = r#"
+            path "path1/" {
+                capabilities = ["read"]
+            }
+        "#;
+        let data = json!({
+            "policy": policy1_hcl,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let ret = test_http_server.write("sys/policy/policy1", Some(data), None);
+        assert!(ret.is_ok());
+
+        // Read policy1
+        let ret = test_http_server.read("sys/policy/policy1", None);
+        assert!(ret.is_ok());
+        assert_eq!(ret.unwrap().1, json!({"name": "policy1", "rules": policy1_hcl.trim()}));
+
+        // List policies again
+        let ret = test_http_server.read("sys/policy", None);
+        assert!(ret.is_ok());
+        assert_eq!(
+            ret.unwrap().1,
+            json!({"keys": ["default", "policy1", "root"], "policies": ["default", "policy1", "root"]})
+        );
+
+        // Delete policy1
+        let ret = test_http_server.delete("sys/policy/policy1", None, None);
+        assert!(ret.is_ok());
+
+        // List policies again
+        let ret = test_http_server.read("sys/policy", None);
+        assert!(ret.is_ok());
+        assert_eq!(ret.unwrap().1, json!({"keys": ["default", "root"], "policies": ["default", "root"]}));
     }
 
     #[tokio::test]

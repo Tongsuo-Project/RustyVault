@@ -57,7 +57,7 @@ const POLICY_CACHE_SIZE: usize = 1024;
 
 // DEFAULT_POLICY_NAME is the name of the default policy
 const DEFAULT_POLICY_NAME: &str = "default";
-static DEFAULT_POLICY: &str = r#"
+pub static DEFAULT_POLICY: &str = r#"
 # Allow tokens to look up their own properties
 path "auth/token/lookup-self" {
     capabilities = ["read"]
