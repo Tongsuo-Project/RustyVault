@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::lease::Lease;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize, Deref, DerefMut)]
 pub struct Auth {
     #[deref]
     #[deref_mut]

@@ -227,8 +227,8 @@ mod test {
         println!("wait 7s");
         std::thread::sleep(Duration::from_secs(7));
         let test_client_token = login_auth.client_token.clone();
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", false).await;
-        println!("test mounts resp: {:?}", resp);
+        let resp = test_read_api(&core, &test_client_token, "auth/token/lookup-self", false).await;
+        println!("test lookup-self resp: {:?}", resp);
 
         // mount userpass auth to path: auth/testpass
         test_mount_auth_api(&core, &root_token, "userpass", "testpass").await;
@@ -237,8 +237,8 @@ mod test {
         let login_auth = resp.unwrap().unwrap().auth.unwrap();
         let test_client_token = login_auth.client_token.clone();
         println!("test_client_token: {}", test_client_token);
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", true).await;
-        println!("test mounts resp: {:?}", resp);
+        let resp = test_read_api(&core, &test_client_token, "auth/token/lookup-self", true).await;
+        println!("test lookup-self resp: {:?}", resp);
         assert!(resp.unwrap().is_some());
     }
 }

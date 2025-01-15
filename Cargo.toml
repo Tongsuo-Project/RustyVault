@@ -75,6 +75,9 @@ sysinfo = "0.31.4"
 prettytable = "0.10"
 rpassword = "7.3"
 async-trait = "0.1"
+stretto = "0.8"
+itertools = "0.14"
+priority-queue = "2.1"
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }

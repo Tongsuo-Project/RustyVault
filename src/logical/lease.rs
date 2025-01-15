@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 use better_default::Default;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize)]
 pub struct Lease {
     #[serde(rename = "lease")]
     pub ttl: Duration,

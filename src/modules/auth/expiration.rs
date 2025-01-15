@@ -1,13 +1,15 @@
 use std::{
+    cmp::Reverse,
     collections::HashMap,
+    hash::{Hash, Hasher},
     path::PathBuf,
-    sync::{Arc, RwLock},
-    time::{Duration, SystemTime},
+    sync::{Arc, RwLock, Weak},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use better_default::Default;
-use delay_timer::prelude::*;
-use derive_more::Deref;
+use delay_timer::prelude::{DelayTimer, DelayTimerBuilder, TaskBuilder};
+use priority_queue::PriorityQueue;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -30,8 +32,8 @@ pub const MIN_REVOKE_DELAY_SECS: Duration = Duration::from_secs(5);
 pub const MAX_LEASE_DURATION_SECS: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 pub const DEFAULT_LEASE_DURATION_SECS: Duration = MAX_LEASE_DURATION_SECS;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct LeaseEntry {
+#[derive(Eq, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+struct OldLeaseEntry {
     #[serde(default)]
     pub lease_id: String,
     pub client_token: String,
@@ -39,37 +41,56 @@ struct LeaseEntry {
     pub data: Option<HashMap<String, Value>>,
     pub secret: Option<SecretData>,
     pub auth: Option<Auth>,
+    #[default(SystemTime::now())]
     #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
     pub issue_time: SystemTime,
+    #[default(SystemTime::now())]
     #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
     pub expire_time: SystemTime,
 }
 
-#[derive(Default)]
-pub struct ExpirationTask {
-    pub last_task_id: u64,
-    pub task_id_map: HashMap<String, u64>,
-    pub task_id_remove_pending: Vec<u64>,
-    pub task_timer: DelayTimer,
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct LeaseEntry {
+    #[serde(default)]
+    pub lease_id: String,
+    pub client_token: String,
+    pub path: String,
+    pub data: Map<String, Value>,
+    pub secret: Option<SecretData>,
+    pub auth: Option<Auth>,
+    #[default(SystemTime::now())]
+    #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    pub issue_time: SystemTime,
+    #[default(SystemTime::now())]
+    #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    pub expire_time: SystemTime,
 }
 
-#[derive(Default)]
-pub struct ExpirationManagerInner {
-    pub router: Option<Arc<Router>>,
-    pub id_view: Option<Arc<BarrierView>>,
-    pub token_view: Option<Arc<BarrierView>>,
-    #[default(Arc::new(RwLock::new(None)))]
-    pub token_store: Arc<RwLock<Option<Arc<TokenStore>>>>,
-    #[default(RwLock::new(ExpirationTask::default()))]
-    pub task: RwLock<ExpirationTask>,
-}
-
-#[derive(Default, Deref)]
 pub struct ExpirationManager {
-    #[deref]
-    #[default(Arc::new(ExpirationManagerInner::default()))]
-    pub inner: Arc<ExpirationManagerInner>,
+    pub self_ptr: Weak<Self>,
+    pub router: Arc<Router>,
+    pub id_view: Arc<BarrierView>,
+    pub token_view: Arc<BarrierView>,
+    pub token_store: RwLock<Weak<TokenStore>>,
+    queue: Arc<RwLock<PriorityQueue<Arc<LeaseEntry>, Reverse<u64>>>>,
+    task_timer: DelayTimer,
 }
+
+impl Hash for LeaseEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.lease_id.hash(state);
+        self.client_token.hash(state);
+        self.path.hash(state);
+    }
+}
+
+impl PartialEq for LeaseEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.lease_id == other.lease_id && self.client_token == other.client_token && self.path == other.path
+    }
+}
+
+impl Eq for LeaseEntry {}
 
 impl LeaseEntry {
     fn renewable(&self) -> bool {
@@ -90,78 +111,6 @@ impl LeaseEntry {
     }
 }
 
-impl ExpirationTask {
-    fn add_task<F: Fn() -> U + 'static + Send, U: std::future::Future + 'static + Send>(
-        &mut self,
-        lease_id: &str,
-        ttl: u64,
-        routine: F,
-    ) -> Result<(), RvError> {
-        self.clean_finish_task()?;
-
-        self.last_task_id += 1;
-        let mut task_builder = TaskBuilder::default();
-
-        let task = task_builder
-            .set_task_id(self.last_task_id)
-            .set_frequency_once_by_seconds(ttl)
-            .spawn_async_routine(routine)?;
-
-        self.task_timer.add_task(task)?;
-        self.task_id_map.insert(lease_id.to_string(), self.last_task_id);
-
-        log::debug!("add task, lease_id: {}, task_id: {}, ttl: {}", lease_id, self.last_task_id, ttl);
-
-        Ok(())
-    }
-
-    fn update_task<F: Fn() -> U + 'static + Send, U: std::future::Future + 'static + Send>(
-        &mut self,
-        lease_id: &str,
-        ttl: u64,
-        routine: F,
-    ) -> Result<(), RvError> {
-        let task_id = self.task_id_map.get(lease_id);
-        log::debug!("update task, lease_id: {}, ttl: {}", lease_id, ttl);
-        if task_id.is_none() && ttl > 0 {
-            return self.add_task(lease_id, ttl, routine);
-        }
-
-        if task_id.is_some() {
-            self.remove_task(lease_id)?;
-            if ttl > 0 {
-                return self.add_task(lease_id, ttl, routine);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn remove_task(&mut self, lease_id: &str) -> Result<(), RvError> {
-        log::debug!("remove task, lease_id: {}", lease_id);
-        if let Some(task_id) = self.task_id_map.remove(lease_id) {
-            self.task_id_remove_pending.push(task_id);
-        }
-        Ok(())
-    }
-
-    fn clean_finish_task(&mut self) -> Result<(), RvError> {
-        for task_id in self.task_id_remove_pending.iter() {
-            log::debug!("clean finish task, task_id: {}", *task_id);
-            self.task_timer.remove_task(*task_id)?;
-        }
-        self.task_id_remove_pending.clear();
-        Ok(())
-    }
-}
-
-impl Drop for ExpirationTask {
-    fn drop(&mut self) {
-        log::debug!("expiration task timer stopping!");
-        let _ = self.task_timer.stop_delay_timer();
-    }
-}
-
 impl ExpirationManager {
     pub fn new(core: &Core) -> Result<ExpirationManager, RvError> {
         if core.system_view.is_none() {
@@ -171,49 +120,54 @@ impl ExpirationManager {
         let id_view = core.system_view.as_ref().unwrap().new_sub_view(LEASE_VIEW_PREFIX);
         let token_view = core.system_view.as_ref().unwrap().new_sub_view(TOKEN_VIEW_PREFIX);
 
-        let mut inner = ExpirationManagerInner::default();
-        inner.router = Some(Arc::clone(&core.router));
-        inner.id_view = Some(Arc::new(id_view));
-        inner.token_view = Some(Arc::new(token_view));
-
-        let expiration = ExpirationManager { inner: Arc::new(inner) };
+        let expiration = ExpirationManager {
+            self_ptr: Weak::new(),
+            router: Arc::clone(&core.router),
+            id_view: Arc::new(id_view),
+            token_view: Arc::new(token_view),
+            token_store: RwLock::new(Weak::new()),
+            queue: Arc::new(RwLock::new(PriorityQueue::new())),
+            task_timer: DelayTimerBuilder::default().build(),
+        };
 
         Ok(expiration)
     }
 
-    pub fn cleanup(&self) -> Result<(), RvError> {
-        Ok(())
+    pub fn wrap(self) -> Arc<Self> {
+        let mut wrap_self = Arc::new(self);
+        let weak_self = Arc::downgrade(&wrap_self);
+        unsafe {
+            let ptr_self = Arc::into_raw(wrap_self) as *mut Self;
+            (*ptr_self).self_ptr = weak_self;
+            wrap_self = Arc::from_raw(ptr_self);
+        }
+
+        wrap_self
     }
 
-    pub fn set_token_store(&self, ts: Arc<TokenStore>) -> Result<(), RvError> {
+    pub fn set_token_store(&self, ts: &Arc<TokenStore>) -> Result<(), RvError> {
         let mut token_store = self.token_store.write()?;
-        *token_store = Some(ts);
+        *token_store = Arc::downgrade(ts);
         Ok(())
     }
 
     pub fn restore(&self) -> Result<(), RvError> {
-        if self.id_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let id_view = self.id_view.as_ref().unwrap();
-        let existing = id_view.get_keys()?;
+        let existing = self.id_view.get_keys()?;
 
         for lease_id in existing {
-            let le = self.load_entry(&lease_id)?;
+            let le = self.load_lease_entry(&lease_id)?;
             if le.is_none() {
                 continue;
             }
-            let le = le.unwrap();
 
-            self.add_task(&le)?
+            self.register_lease_entry(Arc::new(le.unwrap()))?;
         }
 
         Ok(())
     }
 
     pub fn renew(&self, lease_id: &str, increment: Duration) -> Result<Option<Response>, RvError> {
-        let le = self.load_entry(&lease_id)?;
+        let le = self.load_lease_entry(&lease_id)?;
         if le.is_none() {
             return Err(RvError::ErrLeaseNotFound);
         }
@@ -224,7 +178,7 @@ impl ExpirationManager {
             return Err(RvError::ErrLeaseNotRenewable);
         }
 
-        let resp = self.renew_entry(&le, increment)?;
+        let resp = self.renew_secret_lease_entry(&le, increment)?;
         if resp.is_none() {
             return Ok(None);
         }
@@ -234,32 +188,24 @@ impl ExpirationManager {
             return Ok(Some(resp));
         }
 
-        let ttl = resp.secret.as_ref().unwrap().ttl().as_secs();
         resp.secret.as_mut().unwrap().lease_id = lease_id.to_string();
 
-        le.data = resp.data.clone().map(|serde_map| serde_map.into_iter().collect());
+        le.data = resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new());
         le.expire_time = resp.secret.as_ref().unwrap().expiration_time();
         le.secret = resp.secret.clone();
 
-        self.persist_entry(&le)?;
-
-        self.update_task(&le, ttl)?;
+        self.persist_lease_entry(&le)?;
+        self.register_lease_entry(Arc::new(le))?;
 
         Ok(Some(resp))
     }
 
     pub fn renew_token(&self, source: &str, token: &str, increment: Duration) -> Result<Option<Auth>, RvError> {
-        let token_store = self.token_store.read()?;
-        if token_store.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let token_store = token_store.as_ref().unwrap();
-
+        let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
         let src = PathBuf::from(source);
         let lease_id = src.join(token_store.salt_id(token)).to_string_lossy().to_string();
 
-        let le = self.load_entry(&lease_id)?;
+        let le = self.load_lease_entry(&lease_id)?;
         if le.is_none() {
             return Err(RvError::ErrLeaseNotFound);
         }
@@ -270,7 +216,7 @@ impl ExpirationManager {
             return Err(RvError::ErrLeaseNotRenewable);
         }
 
-        let resp = self.renew_auth_entry(&le, increment)?;
+        let resp = self.renew_auth_lease_entry(&le, increment)?;
         if resp.is_none() {
             return Ok(None);
         }
@@ -285,8 +231,6 @@ impl ExpirationManager {
             return Ok(Some(auth));
         }
 
-        let ttl = auth.ttl().as_secs();
-
         auth.client_token = token.to_string();
         auth.increment = Duration::from_secs(0);
         auth.issue_time = Some(SystemTime::now());
@@ -294,9 +238,8 @@ impl ExpirationManager {
         le.expire_time = auth.expiration_time();
         le.auth = Some(auth.clone());
 
-        self.persist_entry(&le)?;
-
-        self.update_task(&le, ttl)?;
+        self.persist_lease_entry(&le)?;
+        self.register_lease_entry(Arc::new(le))?;
 
         Ok(Some(auth))
     }
@@ -318,34 +261,28 @@ impl ExpirationManager {
             let lease_id = path.join(generate_uuid()).to_string_lossy().to_string();
 
             let le = LeaseEntry {
-                lease_id,
+                lease_id: lease_id.clone(),
                 client_token: req.client_token.clone(),
                 path: req.path.clone(),
-                data: resp.data.clone().map(|serde_map| serde_map.into_iter().collect()),
+                data: resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new()),
                 secret: Some(secret.clone()),
-                auth: None,
                 issue_time: now,
                 expire_time: secret.expiration_time(),
+                ..Default::default()
             };
 
-            self.persist_entry(&le)?;
+            self.persist_lease_entry(&le)?;
             self.index_by_token(&le.client_token, &le.lease_id)?;
-            self.update_task(&le, secret.ttl().as_secs())?;
+            self.register_lease_entry(Arc::new(le))?;
 
-            secret.lease_id = le.lease_id;
+            secret.lease_id = lease_id;
         }
 
         Ok(())
     }
 
     pub fn register_auth(&self, source: &str, auth: &mut Auth) -> Result<(), RvError> {
-        let token_store = self.token_store.read()?;
-        if token_store.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let token_store = token_store.as_ref().unwrap();
-
+        let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
         let src = PathBuf::from(source);
         let lease_id = src.join(token_store.salt_id(&auth.client_token)).to_string_lossy().to_string();
 
@@ -356,251 +293,20 @@ impl ExpirationManager {
             lease_id,
             client_token: auth.client_token.clone(),
             path: source.to_string(),
-            data: None,
-            secret: None,
             auth: Some(auth.clone()),
             issue_time: now,
             expire_time: auth.expiration_time(),
+            ..Default::default()
         };
 
-        self.persist_entry(&le)?;
-        self.update_task(&le, auth.ttl().as_secs())?;
+        self.persist_lease_entry(&le)?;
+        self.register_lease_entry(Arc::new(le))?;
 
         Ok(())
-    }
-
-    fn add_task(&self, entry: &LeaseEntry) -> Result<(), RvError> {
-        let lease_id = entry.lease_id.clone();
-        let now = SystemTime::now();
-        let mut expire_time = MIN_REVOKE_DELAY_SECS;
-        if entry.expire_time > now {
-            expire_time = entry.expire_time.duration_since(now)?;
-        }
-
-        let expiration = Arc::clone(&self.inner);
-
-        let mut task = self.task.write()?;
-
-        let rt = move || {
-            let expiration_ref = Arc::clone(&expiration);
-            let id = lease_id.clone();
-            async move {
-                expiration_ref.expire_id(&id);
-            }
-        };
-
-        task.add_task(&entry.lease_id, expire_time.as_secs(), rt)
-    }
-
-    fn update_task(&self, entry: &LeaseEntry, expire_secs: u64) -> Result<(), RvError> {
-        let lease_id = entry.lease_id.clone();
-
-        let expiration = Arc::clone(&self.inner);
-
-        let mut task = self.task.write()?;
-
-        let rt = move || {
-            let expiration_ref = Arc::clone(&expiration);
-            let id = lease_id.clone();
-            async move {
-                expiration_ref.expire_id(&id);
-            }
-        };
-
-        task.update_task(&entry.lease_id, expire_secs, rt)
-    }
-}
-
-impl ExpirationManagerInner {
-    fn expire_id(&self, lease_id: &str) {
-        for i in 0..MAX_REVOKE_ATTEMPTS {
-            let ret = self.revoke(lease_id);
-            if ret.is_ok() {
-                return;
-            }
-
-            log::error!("expire: failed to revoke {}, err: {}", lease_id, ret.unwrap_err());
-            std::thread::sleep(Duration::from_secs((1 << i) * REVOKE_RETRY_SECS.as_secs()));
-        }
-
-        log::error!("expire: maximum revoke attempts for '{}' reached", lease_id);
-    }
-
-    fn load_entry(&self, lease_id: &str) -> Result<Option<LeaseEntry>, RvError> {
-        if self.id_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let id_view = self.id_view.as_ref().unwrap();
-
-        let raw = id_view.get(lease_id)?;
-        if raw.is_none() {
-            return Ok(None);
-        }
-
-        let le: LeaseEntry = serde_json::from_slice(raw.unwrap().value.as_slice())?;
-
-        Ok(Some(le))
-    }
-
-    fn persist_entry(&self, le: &LeaseEntry) -> Result<(), RvError> {
-        if self.id_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let id_view = self.id_view.as_ref().unwrap();
-
-        let value = serde_json::to_string(&le)?;
-
-        let entry = StorageEntry { key: le.lease_id.clone(), value: value.as_bytes().to_vec() };
-
-        id_view.put(&entry)
-    }
-
-    fn delete_entry(&self, lease_id: &str) -> Result<(), RvError> {
-        if self.id_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let id_view = self.id_view.as_ref().unwrap();
-
-        id_view.delete(lease_id)
-    }
-
-    fn index_by_token(&self, token: &str, lease_id: &str) -> Result<(), RvError> {
-        let token_store = self.token_store.read()?;
-        if token_store.is_none() || self.token_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let token_store = token_store.as_ref().unwrap();
-
-        let token_view = self.token_view.as_ref().unwrap();
-
-        let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
-
-        let entry = StorageEntry { key, value: lease_id.as_bytes().to_owned() };
-
-        token_view.put(&entry)
-    }
-
-    fn lookup_by_token(&self, token: &str) -> Result<Vec<String>, RvError> {
-        let token_store = self.token_store.read()?;
-        if token_store.is_none() || self.token_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let token_store = token_store.as_ref().unwrap();
-
-        let token_view = self.token_view.as_ref().unwrap();
-        let prefix = format!("{}/", token_store.salt_id(token));
-        let sub_keys = token_view.list(&prefix)?;
-
-        let mut ret: Vec<String> = Vec::new();
-
-        for sub in sub_keys.iter() {
-            let key = format!("{}{}", prefix, sub);
-            let raw = token_view.get(&key)?;
-            if raw.is_none() {
-                continue;
-            }
-
-            let lease_id = String::from_utf8_lossy(&raw.unwrap().value).to_string();
-            ret.push(lease_id);
-        }
-
-        Ok(ret)
-    }
-
-    fn revoke_entry(&self, le: &LeaseEntry) -> Result<(), RvError> {
-        let token_store = self.token_store.read()?;
-        if token_store.is_none() || self.router.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let token_store = token_store.as_ref().unwrap();
-
-        if le.auth.is_some() {
-            return token_store.revoke_tree(&le.auth.as_ref().unwrap().client_token);
-        }
-
-        let mut secret: Option<SecretData> = None;
-        if le.secret.is_some() {
-            secret = Some(le.secret.as_ref().unwrap().clone());
-        }
-
-        let mut data: Option<Map<String, Value>> = None;
-        if le.data.is_some() {
-            data = Some(Map::from_iter(le.data.as_ref().unwrap().iter().map(|(k, v)| (k.clone(), v.clone()))));
-        }
-
-        let mut req = Request::new_revoke_request(&le.path, secret, data);
-        let ret = self.router.as_ref().unwrap().handle_request(&mut req);
-        if ret.is_err() {
-            log::error!("failed to revoke entry: {:?}, err: {}", le, ret.unwrap_err());
-        }
-
-        Ok(())
-    }
-
-    fn renew_entry(&self, le: &LeaseEntry, increment: Duration) -> Result<Option<Response>, RvError> {
-        if self.router.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let mut secret: Option<SecretData> = None;
-        if le.secret.is_some() {
-            let mut s = le.secret.as_ref().unwrap().clone();
-            s.lease_id = "".to_string();
-            s.increment = increment;
-            s.issue_time = Some(le.issue_time);
-            secret = Some(s);
-        }
-
-        let mut data: Option<Map<String, Value>> = None;
-        if le.data.is_some() {
-            data = Some(Map::from_iter(le.data.as_ref().unwrap().iter().map(|(k, v)| (k.clone(), v.clone()))));
-        }
-
-        let mut req = Request::new_renew_request(&le.path, secret, data);
-        let ret = self.router.as_ref().unwrap().handle_request(&mut req);
-        if ret.is_err() {
-            log::error!("failed to renew entry: {}", ret.as_ref().unwrap_err());
-        }
-
-        ret
-    }
-
-    fn renew_auth_entry(&self, le: &LeaseEntry, increment: Duration) -> Result<Option<Response>, RvError> {
-        if self.router.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
-        let mut auth: Option<Auth> = None;
-        if le.auth.is_some() {
-            let mut au = le.auth.as_ref().unwrap().clone();
-            au.client_token = "".to_string();
-            au.increment = increment;
-            au.issue_time = Some(le.issue_time);
-            auth = Some(au);
-        }
-
-        let mut req = Request::new_renew_auth_request(&le.path, auth, None);
-        let ret = self.router.as_ref().unwrap().handle_request(&mut req);
-        if ret.is_err() {
-            log::error!("failed to renew_auth entry: {}", ret.as_ref().unwrap_err());
-        }
-
-        return ret;
-    }
-
-    fn delete_task(&self, lease_id: &str) -> Result<(), RvError> {
-        let mut task = self.task.write()?;
-        task.remove_task(lease_id)
     }
 
     pub fn revoke(&self, lease_id: &str) -> Result<(), RvError> {
-        let le = self.load_entry(lease_id)?;
+        let le = self.load_lease_entry(lease_id)?;
         if le.is_none() {
             return Ok(());
         }
@@ -609,26 +315,20 @@ impl ExpirationManagerInner {
 
         log::debug!("revoke lease_id: {}", &le.lease_id);
 
-        self.revoke_entry(&le)?;
-        self.delete_entry(lease_id)?;
+        self.revoke_lease_entry(&le)?;
+        self.delete_lease_entry(lease_id)?;
         self.index_by_token(&le.client_token, &le.lease_id)?;
-        self.delete_task(&le.lease_id)?;
 
         Ok(())
     }
 
     pub fn revoke_prefix(&self, prefix: &str) -> Result<(), RvError> {
-        if self.id_view.is_none() {
-            return Err(RvError::ErrBarrierSealed);
-        }
-
         let mut prefix = prefix.to_string();
         if !prefix.ends_with("!") {
             prefix += "/";
         }
 
-        let id_view = self.id_view.as_ref().unwrap();
-        let sub = id_view.new_sub_view(&prefix);
+        let sub = self.id_view.new_sub_view(&prefix);
         let existing = sub.get_keys()?;
         for suffix in existing.iter() {
             let lease_id = format!("{}{}", prefix, suffix);
@@ -645,5 +345,196 @@ impl ExpirationManagerInner {
         }
 
         Ok(())
+    }
+
+    pub fn start_check_expired_lease_entries(&self) {
+        let mut task_builder = TaskBuilder::default();
+
+        let queue = Arc::clone(&self.queue);
+        let expiration = Arc::clone(&self.self_ptr.upgrade().unwrap());
+
+        let timer_check = move || {
+            let queue_cloned = Arc::clone(&queue);
+            let expiration_cloned = Arc::clone(&expiration);
+            async move {
+                let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0);
+                let expired = {
+                    let queue_locked = queue_cloned.read().unwrap();
+
+                    queue_locked.peek().map(|(_le, Reverse(priority))| *priority < now).unwrap_or(false)
+                };
+
+                if !expired {
+                    return;
+                }
+
+                let mut queue_write_locked = queue_cloned.write().unwrap();
+                loop {
+                    if let Some((le, Reverse(priority))) = queue_write_locked.peek() {
+                        if *priority > now {
+                            return;
+                        }
+
+                        if expiration_cloned.revoke(&le.lease_id).is_err() {
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
+
+                    let _le = queue_write_locked.pop();
+                }
+            }
+        };
+
+        let task =
+            task_builder.set_task_id(2).set_frequency_repeated_by_seconds(1).spawn_async_routine(timer_check).unwrap();
+        let _ = self.task_timer.add_task(task);
+    }
+
+    fn register_lease_entry(&self, le: Arc<LeaseEntry>) -> Result<(), RvError> {
+        let priority = le.expire_time.duration_since(UNIX_EPOCH)?.as_secs();
+        let mut queue_locked = self.queue.write()?;
+        queue_locked.push(le, Reverse(priority));
+        Ok(())
+    }
+
+    fn load_lease_entry(&self, lease_id: &str) -> Result<Option<LeaseEntry>, RvError> {
+        let raw = self.id_view.get(lease_id)?;
+        if raw.is_none() {
+            return Ok(None);
+        }
+
+        if let Ok(le) = serde_json::from_slice::<LeaseEntry>(raw.clone().unwrap().value.as_slice()) {
+            return Ok(Some(le));
+        }
+
+        // Because the data field type of LeaseEntry has changed, it is necessary to convert OldLeaseEntry to LeaseEntry
+        // and update the data in its storage.
+        if let Ok(ole) = serde_json::from_slice::<OldLeaseEntry>(raw.unwrap().value.as_slice()) {
+            let le = LeaseEntry {
+                lease_id: ole.lease_id.clone(),
+                client_token: ole.client_token.clone(),
+                path: ole.path.clone(),
+                data: ole.data.clone().map(|serde_map| serde_map.into_iter().collect()).unwrap_or(Map::new()),
+                secret: ole.secret.clone(),
+                auth: ole.auth.clone(),
+                issue_time: ole.issue_time.clone(),
+                expire_time: ole.expire_time.clone(),
+            };
+            self.persist_lease_entry(&le)?;
+            return Ok(Some(le));
+        }
+
+        Ok(None)
+    }
+
+    fn persist_lease_entry(&self, le: &LeaseEntry) -> Result<(), RvError> {
+        let value = serde_json::to_string(&le)?;
+
+        let entry = StorageEntry { key: le.lease_id.clone(), value: value.as_bytes().to_vec() };
+
+        self.id_view.put(&entry)
+    }
+
+    fn delete_lease_entry(&self, lease_id: &str) -> Result<(), RvError> {
+        self.id_view.delete(lease_id)
+    }
+
+    fn index_by_token(&self, token: &str, lease_id: &str) -> Result<(), RvError> {
+        let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
+        let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
+        let entry = StorageEntry { key, value: lease_id.as_bytes().to_owned() };
+        self.token_view.put(&entry)
+    }
+
+    fn lookup_by_token(&self, token: &str) -> Result<Vec<String>, RvError> {
+        let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
+        let prefix = format!("{}/", token_store.salt_id(token));
+        let sub_keys = self.token_view.list(&prefix)?;
+
+        let mut ret: Vec<String> = Vec::new();
+
+        for sub in sub_keys.iter() {
+            let key = format!("{}{}", prefix, sub);
+            let raw = self.token_view.get(&key)?;
+            if raw.is_none() {
+                continue;
+            }
+
+            let lease_id = String::from_utf8_lossy(&raw.unwrap().value).to_string();
+            ret.push(lease_id);
+        }
+
+        Ok(ret)
+    }
+
+    fn revoke_lease_entry(&self, le: &LeaseEntry) -> Result<(), RvError> {
+        let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
+
+        if le.auth.is_some() {
+            return token_store.revoke_tree(&le.auth.as_ref().unwrap().client_token);
+        }
+
+        let mut secret: Option<SecretData> = None;
+        if le.secret.is_some() {
+            secret = Some(le.secret.as_ref().unwrap().clone());
+        }
+
+        let mut data: Option<Map<String, Value>> = None;
+        if !le.data.is_empty() {
+            data = Some(le.data.clone());
+        }
+
+        let mut req = Request::new_revoke_request(&le.path, secret, data);
+        let ret = self.router.handle_request(&mut req);
+        if ret.is_err() {
+            log::error!("failed to revoke entry: {:?}, err: {}", le, ret.unwrap_err());
+        }
+
+        Ok(())
+    }
+
+    fn renew_secret_lease_entry(&self, le: &LeaseEntry, increment: Duration) -> Result<Option<Response>, RvError> {
+        let mut secret: Option<SecretData> = None;
+        if le.secret.is_some() {
+            let mut s = le.secret.as_ref().unwrap().clone();
+            s.lease_id = "".to_string();
+            s.increment = increment;
+            s.issue_time = Some(le.issue_time);
+            secret = Some(s);
+        }
+
+        let mut data: Option<Map<String, Value>> = None;
+        if !le.data.is_empty() {
+            data = Some(le.data.clone());
+        }
+
+        let mut req = Request::new_renew_request(&le.path, secret, data);
+        let ret = self.router.handle_request(&mut req);
+        if ret.is_err() {
+            log::error!("failed to renew entry: {}", ret.as_ref().unwrap_err());
+        }
+
+        ret
+    }
+
+    fn renew_auth_lease_entry(&self, le: &LeaseEntry, increment: Duration) -> Result<Option<Response>, RvError> {
+        let mut auth: Option<Auth> = None;
+        if le.auth.is_some() {
+            let mut au = le.auth.as_ref().unwrap().clone();
+            au.client_token = "".to_string();
+            au.increment = increment;
+            au.issue_time = Some(le.issue_time);
+            auth = Some(au);
+        }
+
+        let mut req = Request::new_renew_auth_request(&le.path, auth, None);
+        let ret = self.router.handle_request(&mut req);
+        if ret.is_err() {
+            log::error!("failed to renew_auth entry: {}", ret.as_ref().unwrap_err());
+        }
+
+        return ret;
     }
 }
