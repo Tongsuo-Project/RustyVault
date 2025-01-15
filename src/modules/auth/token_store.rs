@@ -1,11 +1,10 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, Weak},
     time::Duration,
 };
 
 use async_trait::async_trait;
-use derive_more::Deref;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -78,58 +77,68 @@ pub struct TokenEntry {
     pub ttl: u64,
 }
 
-#[derive(Default)]
-pub struct TokenStoreInner {
+pub struct TokenStore {
+    pub self_ptr: Weak<Self>,
     pub router: Arc<Router>,
     pub view: Option<Arc<dyn Storage + Send + Sync>>,
     pub salt: String,
     pub expiration: Arc<ExpirationManager>,
-}
-
-#[derive(Default, Deref)]
-pub struct TokenStore {
-    #[deref]
-    pub inner: Arc<TokenStoreInner>,
     pub auth_handlers: Arc<RwLock<Vec<Arc<dyn AuthHandler>>>>,
 }
 
 impl TokenStore {
+    pub fn wrap(self) -> Arc<Self> {
+        let mut wrap_self = Arc::new(self);
+        let weak_self = Arc::downgrade(&wrap_self);
+        unsafe {
+            let ptr_self = Arc::into_raw(wrap_self) as *mut Self;
+            (*ptr_self).self_ptr = weak_self;
+            wrap_self = Arc::from_raw(ptr_self);
+        }
+
+        wrap_self
+    }
+
     pub fn new(core: &Core, expiration: Arc<ExpirationManager>) -> Result<TokenStore, RvError> {
         if core.system_view.is_none() {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let mut inner = TokenStoreInner::default();
-
         let view = core.system_view.as_ref().unwrap().new_sub_view(TOKEN_SUB_PATH);
         let salt = view.get(TOKEN_SALT_LOCATION)?;
 
+        let mut token_store = TokenStore {
+            self_ptr: Weak::new(),
+            router: core.router.clone(),
+            view: None,
+            salt: String::new(),
+            auth_handlers: Arc::clone(&core.auth_handlers),
+            expiration,
+        };
+
         if salt.is_some() {
-            inner.salt = String::from_utf8_lossy(&salt.unwrap().value).to_string();
+            token_store.salt = String::from_utf8_lossy(&salt.unwrap().value).to_string();
         }
 
-        if inner.salt.as_str() == "" {
-            inner.salt = generate_uuid();
-            let raw = StorageEntry { key: TOKEN_SALT_LOCATION.to_string(), value: inner.salt.as_bytes().to_vec() };
+        if token_store.salt.is_empty() {
+            token_store.salt = generate_uuid();
+            let raw =
+                StorageEntry { key: TOKEN_SALT_LOCATION.to_string(), value: token_store.salt.as_bytes().to_vec() };
             view.put(&raw)?;
         }
 
-        inner.router = Arc::clone(&core.router);
-        inner.view = Some(Arc::new(view));
-        inner.expiration = expiration;
-
-        let token_store = TokenStore { inner: Arc::new(inner), auth_handlers: Arc::clone(&core.auth_handlers) };
+        token_store.view = Some(Arc::new(view));
 
         Ok(token_store)
     }
 
     pub fn new_backend(&self) -> LogicalBackend {
-        let ts_inner_arc1 = Arc::clone(&self.inner);
-        let ts_inner_arc2 = Arc::clone(&self.inner);
-        let ts_inner_arc3 = Arc::clone(&self.inner);
-        let ts_inner_arc4 = Arc::clone(&self.inner);
-        let ts_inner_arc5 = Arc::clone(&self.inner);
-        let ts_inner_arc6 = Arc::clone(&self.inner);
+        let ts_inner_arc1 = self.self_ptr.upgrade().unwrap().clone();
+        let ts_inner_arc2 = self.self_ptr.upgrade().unwrap().clone();
+        let ts_inner_arc3 = self.self_ptr.upgrade().unwrap().clone();
+        let ts_inner_arc4 = self.self_ptr.upgrade().unwrap().clone();
+        let ts_inner_arc5 = self.self_ptr.upgrade().unwrap().clone();
+        let ts_inner_arc6 = self.self_ptr.upgrade().unwrap().clone();
 
         let backend = new_logical_backend!({
             paths: [
@@ -216,9 +225,7 @@ impl TokenStore {
 
         backend
     }
-}
 
-impl TokenStoreInner {
     pub fn salt_id(&self, id: &str) -> String {
         let salted_id = format!("{}{}", self.salt, id);
         sha1(salted_id.as_bytes())

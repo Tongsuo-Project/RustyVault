@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::lease::Lease;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize, Deref, DerefMut)]
 pub struct Auth {
     #[deref]
     #[deref_mut]
@@ -47,7 +47,7 @@ pub struct Auth {
     pub policy_results: Option<PolicyResults>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize)]
 pub struct PolicyResults {
     pub allowed: bool,
     pub granting_policies: Vec<PolicyInfo>,

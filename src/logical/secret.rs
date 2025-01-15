@@ -9,7 +9,7 @@ use crate::errors::RvError;
 
 type SecretOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize, Deref, DerefMut)]
 pub struct SecretData {
     #[deref]
     #[deref_mut]
