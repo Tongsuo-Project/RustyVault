@@ -174,9 +174,9 @@ TODO
 "#;
 
 lazy_static! {
-    static ref IMMUTABLE_POLICIES: Vec<&'static str> =
+    pub static ref IMMUTABLE_POLICIES: Vec<&'static str> =
         vec!["root", RESPONSE_WRAPPING_POLICY_NAME, CONTROL_GROUP_POLICY_NAME,];
-    static ref NON_ASSIGNABLE_POLICIES: Vec<&'static str> =
+    pub static ref NON_ASSIGNABLE_POLICIES: Vec<&'static str> =
         vec![RESPONSE_WRAPPING_POLICY_NAME, CONTROL_GROUP_POLICY_NAME,];
 }
 
