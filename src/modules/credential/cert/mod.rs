@@ -153,10 +153,8 @@ mod test {
 
     use super::*;
     use crate::{
-        test_utils::{
-            TestHttpServer, TestTlsClientAuth, new_test_cert, new_test_cert_ext, new_test_crl,
-        },
-        modules::auth::expiration::MAX_LEASE_DURATION_SECS,
+        modules::auth::expiration::DEFAULT_LEASE_DURATION_SECS,
+        test_utils::{new_test_cert, new_test_cert_ext, new_test_crl, TestHttpServer, TestTlsClientAuth},
     };
 
     #[derive(Default)]
@@ -588,8 +586,9 @@ mod test {
 
         test_http_server.test_write_cert_no_lease("web", &ca_cert, "foo");
 
-        let (_, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
-        assert_eq!(resp["auth"]["lease_duration"], MAX_LEASE_DURATION_SECS.as_secs());
+        let (_, resp) =
+            test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
+        assert_eq!(resp["auth"]["lease_duration"], DEFAULT_LEASE_DURATION_SECS.as_secs());
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
 
         test_http_server.test_write_crl(&ca_cert, &ca_cert, &ca_key);
@@ -600,8 +599,9 @@ mod test {
 
         test_http_server.test_delete_crl();
 
-        let (_, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
-        assert_eq!(resp["auth"]["lease_duration"], MAX_LEASE_DURATION_SECS.as_secs());
+        let (_, resp) =
+            test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
+        assert_eq!(resp["auth"]["lease_duration"], DEFAULT_LEASE_DURATION_SECS.as_secs());
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
     }
 

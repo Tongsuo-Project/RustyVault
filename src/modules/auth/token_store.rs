@@ -1,3 +1,8 @@
+//! This module implements a token storage system for managing token creation, lookup,
+//! revocation, and renewal. The system supports various operations and provides the
+//! logical backend interface through the `TokenStore` struct. Additionally, it implements
+//! the `Handler` trait to provide authentication and authorization functionality at
+//! different stages of request handling, such as pre-routing and post-routing.
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock, Weak},
@@ -5,6 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use better_default::Default;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -65,8 +71,10 @@ struct TokenReqData {
     renewable: bool,
 }
 
+/// Data structure representing a stored token entry.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TokenEntry {
+    #[default(generate_uuid())]
     pub id: String,
     pub parent: String,
     pub policies: Vec<String>,
@@ -77,6 +85,7 @@ pub struct TokenEntry {
     pub ttl: u64,
 }
 
+/// Manages the storage and handling of tokens.
 pub struct TokenStore {
     pub self_ptr: Weak<Self>,
     pub router: Arc<Router>,
@@ -87,6 +96,7 @@ pub struct TokenStore {
 }
 
 impl TokenStore {
+    /// Wraps the `TokenStore` instance in an `Arc` and sets its weak pointer reference.
     pub fn wrap(self) -> Arc<Self> {
         let mut wrap_self = Arc::new(self);
         let weak_self = Arc::downgrade(&wrap_self);
@@ -99,6 +109,7 @@ impl TokenStore {
         wrap_self
     }
 
+    /// Creates a new `TokenStore` and initializes it with the necessary components.
     pub fn new(core: &Core, expiration: Arc<ExpirationManager>) -> Result<TokenStore, RvError> {
         if core.system_view.is_none() {
             return Err(RvError::ErrBarrierSealed);
@@ -132,6 +143,7 @@ impl TokenStore {
         Ok(token_store)
     }
 
+    /// Creates a new logical backend for token operations.
     pub fn new_backend(&self) -> LogicalBackend {
         let ts_inner_arc1 = self.self_ptr.upgrade().unwrap().clone();
         let ts_inner_arc2 = self.self_ptr.upgrade().unwrap().clone();
@@ -226,11 +238,13 @@ impl TokenStore {
         backend
     }
 
+    /// Returns a salted hash of a token ID.
     pub fn salt_id(&self, id: &str) -> String {
         let salted_id = format!("{}{}", self.salt, id);
         sha1(salted_id.as_bytes())
     }
 
+    /// Generates a root token with 'root' policy.
     pub fn root_token(&self) -> Result<TokenEntry, RvError> {
         let mut te = TokenEntry {
             policies: vec!["root".to_string()],
@@ -244,6 +258,7 @@ impl TokenStore {
         Ok(te)
     }
 
+    /// Creates a token entry in the storage.
     pub fn create(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
         if self.view.is_none() {
             return Err(RvError::ErrModuleNotInit);
@@ -251,7 +266,7 @@ impl TokenStore {
 
         let view = self.view.as_ref().unwrap();
 
-        if entry.id.as_str() == "" {
+        if entry.id.is_empty() {
             entry.id = generate_uuid();
         }
 
@@ -259,7 +274,7 @@ impl TokenStore {
 
         let value = serde_json::to_string(&entry)?;
 
-        if entry.parent.as_str() != "" {
+        if !entry.parent.is_empty() {
             let parent = self.lookup(&entry.parent)?;
             if parent.is_none() {
                 return Err(RvError::ErrAuthTokenNotFound);
@@ -277,6 +292,7 @@ impl TokenStore {
         view.put(&entry)
     }
 
+    /// Uses the token and decrements its use count.
     pub fn use_token(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
         if self.view.is_none() {
             return Err(RvError::ErrModuleNotInit);
@@ -303,8 +319,9 @@ impl TokenStore {
         view.put(&entry)
     }
 
+    /// Checks the validity of a token and returns the associated authentication data.
     pub fn check_token(&self, _path: &str, token: &str) -> Result<Option<Auth>, RvError> {
-        if token == "" {
+        if token.is_empty() {
             return Err(RvError::ErrRequestClientTokenMissing);
         }
 
@@ -329,8 +346,9 @@ impl TokenStore {
         Ok(Some(auth))
     }
 
+    /// Looks up the token entry with the given ID.
     pub fn lookup(&self, id: &str) -> Result<Option<TokenEntry>, RvError> {
-        if id == "" {
+        if id.is_empty() {
             return Err(RvError::ErrAuthTokenIdInvalid);
         }
 
@@ -356,7 +374,7 @@ impl TokenStore {
     }
 
     pub fn revoke(&self, id: &str) -> Result<(), RvError> {
-        if id == "" {
+        if id.is_empty() {
             return Err(RvError::ErrAuthTokenIdInvalid);
         }
 
@@ -389,8 +407,15 @@ impl TokenStore {
         Ok(())
     }
 
+    /// Revokes the token with the given ID and all its child tokens.
+    ///
+    /// # Arguments
+    /// - id: The ID of the token to revoke.
+    ///
+    /// # Returns
+    /// - Result<(), RvError>: Ok(()) if successful, or an error if not.
     pub fn revoke_tree(&self, id: &str) -> Result<(), RvError> {
-        if id == "" {
+        if id.is_empty() {
             return Err(RvError::ErrAuthTokenIdInvalid);
         }
 
@@ -435,31 +460,32 @@ impl TokenStore {
 
         let mut te = TokenEntry {
             parent: req.client_token.clone(),
-            path: "auth/token/create".to_string(),
+            path: "auth/token/create".into(),
             meta: data.meta.clone(),
-            display_name: "token".to_string(),
+            display_name: "token".into(),
             num_uses: data.num_uses,
             ..TokenEntry::default()
         };
 
-        let renewable = data.renewable;
+        let mut renewable = data.renewable;
 
-        if data.display_name.as_str() != "" {
+        if !data.display_name.is_empty() {
             let mut full = format!("token-{}", data.display_name);
             full = DISPLAY_NAME_SANITIZE.replace_all(&full, "-").to_string();
             full = full.trim_end_matches('-').to_string();
             te.display_name = full;
         }
 
-        if data.id.as_str() != "" {
+        if !data.id.is_empty() {
             if !is_root {
                 return Err(RvError::ErrRequestInvalid);
             }
             te.id = data.id.clone();
         }
 
-        if data.policies.len() == 0 {
+        if data.policies.is_empty() {
             data.policies = parent.policies.clone();
+            sanitize_policies(&mut data.policies, false);
         }
 
         if !is_root && !is_str_subset(&data.policies, &parent.policies) {
@@ -468,19 +494,39 @@ impl TokenStore {
 
         te.policies = data.policies.clone();
 
+        if te.policies.contains(&"root".into()) {
+            if !parent.policies.contains(&"root".into()) {
+                return Err(rv_error_response!("root tokens may not be created without parent token being root"));
+            }
+
+            // TODO: batch tokens cannot be root tokens
+        }
+
         if data.no_parent {
             if !is_root {
                 return Err(RvError::ErrRequestInvalid);
             }
-            te.parent = "".to_string();
+            te.parent = "".into();
         }
 
-        if data.ttl.as_str() != "" {
+        if !data.ttl.is_empty() {
             let dur = parse_duration(&data.ttl)?;
             te.ttl = dur.as_secs();
-        } else if data.lease.as_str() != "" {
+        } else if !data.lease.is_empty() {
             let dur = parse_duration(&data.lease)?;
             te.ttl = dur.as_secs();
+        }
+
+        if data.no_parent {
+            // TODO: Only allow an orphan token if the client has sudo policy
+            te.parent.clear();
+        }
+
+        if te.ttl == 0 {
+            if parent.ttl != 0 {
+                return Err(rv_error_response!("expiring root tokens cannot create non-expiring root tokens"));
+            }
+            renewable = false;
         }
 
         self.create(&mut te)?;
@@ -499,25 +545,23 @@ impl TokenStore {
     }
 
     pub fn handle_revoke_tree(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let id = req.get_data("token")?;
-        let id = id.as_str().unwrap();
-        if id == "" {
+        let id = req.get_data_as_str("token")?;
+        if id.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        self.revoke_tree(id)?;
+        self.revoke_tree(&id)?;
 
         Ok(None)
     }
 
     pub fn handle_revoke_orphan(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let id = req.get_data("token")?;
-        let id = id.as_str().unwrap();
-        if id == "" {
+        let id = req.get_data_as_str("token")?;
+        if id.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        self.revoke(id)?;
+        self.revoke(&id)?;
 
         Ok(None)
     }
@@ -541,17 +585,16 @@ impl TokenStore {
 
     pub fn handle_lookup(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         log::debug!("lookup token");
-        let id = req.get_data("token")?;
-        let mut id = id.as_str().unwrap();
-        if id == "" {
-            id = &req.client_token;
+        let mut id = req.get_data_as_str("token")?;
+        if id.is_empty() {
+            id = req.client_token.clone();
         }
 
-        if id == "" {
+        if id.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let te = self.lookup(id)?;
+        let te = self.lookup(&id)?;
         if te.is_none() {
             return Ok(None);
         }
@@ -577,9 +620,8 @@ impl TokenStore {
     }
 
     pub fn handle_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let id = req.get_data("token")?;
-        let id = id.as_str().unwrap();
-        if id == "" {
+        let id = req.get_data_as_str("token")?;
+        if id.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -606,6 +648,11 @@ impl Handler for TokenStore {
         "auth_token".to_string()
     }
 
+    /// Process the request before routing. If the module has registered the pre_auth phase, execute it.
+    /// It can handle custom tokens. If pre_auth returns Auth, skip the default check_token operation.
+    /// If pre_auth returns None or is not registered, perform the default check_token operation.
+    /// After check_token, there's the post_auth phase where the registered post_auth function of the
+    /// module runs. For example, the policy module does ACL checks in the post_auth phase.
     async fn pre_route(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         let is_unauth_path = self.router.is_unauth_path(&req.path)?;
         if is_unauth_path {
@@ -656,6 +703,8 @@ impl Handler for TokenStore {
         Ok(None)
     }
 
+    /// Handles post-routing logic after routing a request. The main operation here is the expiration
+    /// time management of secrets and tokens.
     async fn post_route(&self, req: &mut Request, resp: &mut Option<Response>) -> Result<(), RvError> {
         if resp.is_none() {
             return Ok(());
@@ -733,5 +782,168 @@ impl Handler for TokenStore {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod mod_token_store_tests {
+    use super::*;
+    use crate::{
+        context::Context,
+        logical::{Backend, Request, Response, Secret},
+        test_utils::test_rusty_vault_init,
+    };
+
+    macro_rules! new_token_store {
+        () => {{
+            let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
+            println!("test_rusty_vault_init, name: {}", name);
+            let (_, core) = test_rusty_vault_init(&name);
+            let core = core.read().unwrap();
+
+            let expiration = ExpirationManager::new(&core).unwrap().wrap();
+            let token_store = TokenStore::new(&core, expiration.clone()).unwrap().wrap();
+
+            expiration.set_token_store(&token_store).unwrap();
+
+            token_store
+        }};
+    }
+
+    pub struct MockBackend(());
+
+    impl Backend for MockBackend {
+        fn init(&mut self) -> Result<(), RvError> {
+            Ok(())
+        }
+        fn setup(&self, _key: &str) -> Result<(), RvError> {
+            Ok(())
+        }
+        fn cleanup(&self) -> Result<(), RvError> {
+            Ok(())
+        }
+        fn get_unauth_paths(&self) -> Option<Arc<Vec<String>>> {
+            None
+        }
+        fn get_root_paths(&self) -> Option<Arc<Vec<String>>> {
+            None
+        }
+        fn get_ctx(&self) -> Option<Arc<Context>> {
+            None
+        }
+        fn handle_request(&self, _req: &mut Request) -> Result<Option<Response>, RvError> {
+            Ok(None)
+        }
+        fn secret(&self, _key: &str) -> Option<&Arc<Secret>> {
+            None
+        }
+    }
+
+    #[test]
+    fn test_token_create_and_lookup() {
+        let token_store = new_token_store!();
+
+        let mut entry = TokenEntry {
+            policies: vec!["default".to_string()],
+            path: "auth/token/create".to_string(),
+            display_name: "test-token".to_string(),
+            ..TokenEntry::default()
+        };
+
+        token_store.create(&mut entry).unwrap();
+
+        let result = token_store.lookup(&entry.id).unwrap();
+        assert!(result.is_some());
+        let looked_up_entry = result.unwrap();
+        assert_eq!(looked_up_entry.id, entry.id);
+        assert_eq!(looked_up_entry.policies, entry.policies);
+    }
+
+    #[test]
+    fn test_token_revoke() {
+        let token_store = new_token_store!();
+
+        let mut entry = TokenEntry {
+            policies: vec!["default".to_string()],
+            path: "auth/token/create".to_string(),
+            display_name: "test-token".to_string(),
+            ..TokenEntry::default()
+        };
+
+        token_store.create(&mut entry).unwrap();
+
+        token_store.revoke(&entry.id).unwrap();
+
+        let result = token_store.lookup(&entry.id).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_token_revoke_tree() {
+        let token_store = new_token_store!();
+
+        let mut parent_entry = TokenEntry {
+            policies: vec!["default".to_string()],
+            path: "auth/token/create".to_string(),
+            display_name: "parent-token".to_string(),
+            ..TokenEntry::default()
+        };
+        token_store.create(&mut parent_entry).unwrap();
+
+        let mut child_entry = TokenEntry {
+            parent: parent_entry.id.clone(),
+            policies: vec!["default".to_string()],
+            path: "auth/token/create".to_string(),
+            display_name: "child-token".to_string(),
+            ..TokenEntry::default()
+        };
+        token_store.create(&mut child_entry).unwrap();
+
+        assert!(token_store.revoke_tree(&parent_entry.id).is_ok());
+
+        let parent_result = token_store.lookup(&parent_entry.id).unwrap();
+        let child_result = token_store.lookup(&child_entry.id).unwrap();
+        assert!(parent_result.is_none());
+        assert!(child_result.is_none());
+    }
+
+    #[test]
+    fn test_token_handle_create_request() {
+        let token_store = new_token_store!();
+        let mock_backend = MockBackend(());
+
+        let mut entry = TokenEntry {
+            policies: vec!["default".to_string()],
+            path: "auth/token/create".to_string(),
+            display_name: "test-token".to_string(),
+            ..TokenEntry::default()
+        };
+
+        token_store.create(&mut entry).unwrap();
+
+        let result = token_store.lookup(&entry.id).unwrap();
+        assert!(result.is_some());
+
+        let mut req = Request {
+            client_token: entry.id.clone(),
+            body: Some(
+                json!({
+                    "policies": ["default"],
+                    "display_name": "test-token",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Request::default()
+        };
+
+        let response = token_store.handle_create(&mock_backend, &mut req).unwrap();
+        assert!(response.is_some());
+        let resp = response.unwrap();
+        assert!(resp.auth.is_some());
+        let auth = resp.auth.unwrap();
+        assert_eq!(auth.display_name, "token-test-token");
+        assert_eq!(auth.policies, vec!["default".to_owned()]);
     }
 }

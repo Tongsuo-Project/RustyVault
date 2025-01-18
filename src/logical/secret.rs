@@ -16,7 +16,7 @@ pub struct SecretData {
     #[serde(flatten)]
     pub lease: Lease,
     pub lease_id: String,
-    #[serde(skip)]
+    #[serde(default)]
     pub internal_data: Map<String, Value>,
 }
 

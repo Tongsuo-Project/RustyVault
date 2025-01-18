@@ -99,7 +99,7 @@ impl Request {
     }
 
     pub fn get_data(&self, key: &str) -> Result<Value, RvError> {
-        if self.storage.is_none() || self.match_path.is_none() {
+        if self.match_path.is_none() {
             return Err(RvError::ErrRequestNotReady);
         }
 
@@ -111,7 +111,7 @@ impl Request {
     }
 
     pub fn get_data_or_default(&self, key: &str) -> Result<Value, RvError> {
-        if self.storage.is_none() || self.match_path.is_none() {
+        if self.match_path.is_none() {
             return Err(RvError::ErrRequestNotReady);
         }
 
@@ -123,7 +123,7 @@ impl Request {
     }
 
     pub fn get_data_or_next(&self, keys: &[&str]) -> Result<Value, RvError> {
-        if self.storage.is_none() || self.match_path.is_none() {
+        if self.match_path.is_none() {
             return Err(RvError::ErrRequestNotReady);
         }
 
@@ -158,6 +158,9 @@ impl Request {
     }
 
     pub fn get_field_default_or_zero(&self, key: &str) -> Result<Value, RvError> {
+        if self.match_path.is_none() {
+            return Err(RvError::ErrRequestNotReady);
+        }
         let field = self.match_path.as_ref().unwrap().get_field(key).ok_or(RvError::ErrRequestNoDataField)?;
         field.get_default()
     }
