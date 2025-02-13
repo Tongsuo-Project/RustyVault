@@ -49,7 +49,7 @@ impl UserPassBackend {
 
         let mut backend = new_logical_backend!({
             unauth_paths: ["login/*"],
-            auth_renew_handler: userpass_backend_ref.renew_path_login,
+            auth_renew_handler: userpass_backend_ref.login_renew,
             help: USERPASS_BACKEND_HELP,
         });
 
@@ -59,12 +59,6 @@ impl UserPassBackend {
         backend.paths.push(Arc::new(self.login_path()));
 
         backend
-    }
-}
-
-impl UserPassBackendInner {
-    pub fn renew_path_login(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
     }
 }
 

@@ -73,7 +73,7 @@ impl CertBackend {
 
         let mut backend = new_logical_backend!({
             unauth_paths: ["login"],
-            auth_renew_handler: cert_backend_ref.renew_path_login,
+            auth_renew_handler: cert_backend_ref.login_renew,
             help: CERT_BACKEND_HELP,
         });
 
@@ -85,12 +85,6 @@ impl CertBackend {
         backend.paths.push(Arc::new(self.login_path()));
 
         backend
-    }
-}
-
-impl CertBackendInner {
-    pub fn renew_path_login(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
     }
 }
 

@@ -38,10 +38,10 @@ impl Lease {
     }
 
     pub fn expiration_time(&self) -> SystemTime {
-        if self.issue_time.is_some() {
-            self.issue_time.unwrap() + self.ttl
-        } else {
+        if self.enabled() {
             SystemTime::now() + self.ttl
+        } else {
+            SystemTime::UNIX_EPOCH
         }
     }
 }

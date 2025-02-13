@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use better_default::Default;
 use serde_json::{Map, Value};
-use tokio::task::JoinHandle;
 
 use super::{Operation, Path};
 use crate::{
@@ -13,7 +12,7 @@ use crate::{
     storage::{Storage, StorageEntry},
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Request {
     pub id: String,
     pub name: String,
@@ -29,7 +28,6 @@ pub struct Request {
     pub connection: Option<Connection>,
     pub secret: Option<SecretData>,
     pub auth: Option<Auth>,
-    pub tasks: Vec<JoinHandle<()>>,
     pub handler: Option<Arc<dyn Handler>>,
     #[default(HandlePhase::PreRoute)]
     pub handle_phase: HandlePhase,
@@ -214,21 +212,5 @@ impl Request {
         }
 
         self.storage.as_ref().unwrap().delete(key)
-    }
-
-    pub fn add_task(&mut self, task: JoinHandle<()>) {
-        self.tasks.push(task);
-    }
-
-    pub fn clear_task(&mut self) {
-        self.tasks.clear();
-    }
-
-    pub async fn wait_task_finish(&mut self) -> Result<(), RvError> {
-        for task in &mut self.tasks {
-            task.await?;
-        }
-
-        Ok(())
     }
 }
