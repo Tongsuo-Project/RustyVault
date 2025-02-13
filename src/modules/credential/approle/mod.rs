@@ -111,7 +111,7 @@ impl AppRoleBackend {
 
         let mut backend = new_logical_backend!({
             unauth_paths: ["login"],
-            auth_renew_handler: approle_backend_ref.renew_path_login,
+            auth_renew_handler: approle_backend_ref.login_renew,
             help: APPROLE_BACKEND_HELP,
         });
 
@@ -137,10 +137,6 @@ impl AppRoleBackendInner {
             secret_id_accessor_locks: Locks::new(),
             tidy_secret_id_cas_guard: AtomicU32::new(0),
         }
-    }
-
-    pub fn renew_path_login(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
     }
 }
 

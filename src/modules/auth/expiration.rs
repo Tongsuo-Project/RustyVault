@@ -6,23 +6,24 @@ use std::{
     cmp::Reverse,
     collections::HashMap,
     hash::{Hash, Hasher},
-    path::PathBuf,
     sync::{Arc, RwLock, Weak},
+    thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use better_default::Default;
-use delay_timer::prelude::{DelayTimer, DelayTimerBuilder, TaskBuilder};
+use crossbeam_channel::{select, tick};
 use priority_queue::PriorityQueue;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use super::TokenStore;
+use super::{token_store::TokenEntry, TokenStore};
 use crate::{
     core::Core,
     errors::RvError,
     logical::{lease::calculate_ttl, Auth, Request, Response, SecretData},
     router::Router,
+    rv_error_string,
     storage::{barrier_view::BarrierView, Storage, StorageEntry},
     utils::{
         deserialize_system_time, generate_uuid, serialize_system_time,
@@ -70,9 +71,11 @@ struct LeaseEntry {
     #[default(SystemTime::now())]
     #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
     pub issue_time: SystemTime,
-    #[default(SystemTime::now())]
+    #[default(SystemTime::UNIX_EPOCH)]
     #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
     pub expire_time: SystemTime,
+    #[serde(default)]
+    pub revoke_err: String,
 }
 
 /// The ExpirationManager is responsible for managing lease entries and their expiration.
@@ -82,8 +85,7 @@ pub struct ExpirationManager {
     pub id_view: Arc<BarrierView>,
     pub token_view: Arc<BarrierView>,
     pub token_store: RwLock<Weak<TokenStore>>,
-    queue: Arc<RwLock<PriorityQueue<Arc<LeaseEntry>, Reverse<u64>>>>,
-    task_timer: DelayTimer,
+    queue: Arc<RwLock<PriorityQueue<Arc<LeaseEntry>, Reverse<u128>>>>,
 }
 
 impl Hash for LeaseEntry {
@@ -107,20 +109,24 @@ impl Eq for LeaseEntry {}
 impl LeaseEntry {
     /// Checks if the lease entry is renewable.
     fn renewable(&self) -> bool {
-        let now = SystemTime::now();
-        if self.expire_time < now {
-            return false;
-        }
+        self.expire_time >= SystemTime::now()
+            && self.secret.as_ref().map_or(true, |s| s.renewable())
+            && self.auth.as_ref().map_or(true, |a| a.renewable())
+    }
 
-        if self.secret.is_some() && !self.secret.as_ref().unwrap().renewable() {
-            return false;
-        }
+    #[allow(dead_code)]
+    fn is_non_expiring(&self) -> bool {
+        self.auth.as_ref().map_or(false, |a| a.enabled() && a.policies.len() == 1 && a.policies[0] == "root")
+    }
 
-        if self.auth.is_some() && !self.auth.as_ref().unwrap().renewable() {
-            return false;
-        }
+    #[allow(dead_code)]
+    fn is_irrevocable(&self) -> bool {
+        !self.revoke_err.is_empty()
+    }
 
-        true
+    #[allow(dead_code)]
+    fn is_incorrectly_non_expiring(&self) -> bool {
+        self.expire_time == SystemTime::UNIX_EPOCH && !self.is_non_expiring()
     }
 }
 
@@ -141,7 +147,6 @@ impl ExpirationManager {
             token_view: Arc::new(token_view),
             token_store: RwLock::new(Weak::new()),
             queue: Arc::new(RwLock::new(PriorityQueue::new())),
-            task_timer: DelayTimerBuilder::default().build(),
         };
 
         Ok(expiration)
@@ -231,10 +236,14 @@ impl ExpirationManager {
     }
 
     /// Renews a token by the given increment.
-    pub fn renew_token(&self, source: &str, token: &str, increment: Duration) -> Result<Option<Auth>, RvError> {
+    pub fn renew_token(
+        &self,
+        req: &mut Request,
+        te: &TokenEntry,
+        increment: Duration,
+    ) -> Result<Option<Response>, RvError> {
         let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
-        let src = PathBuf::from(source);
-        let lease_id = src.join(token_store.salt_id(token)).to_string_lossy().to_string();
+        let lease_id = format!("{}/{}", te.path, token_store.salt_id(&te.id));
 
         let le = self.load_lease_entry(&lease_id)?;
         if le.is_none() {
@@ -247,7 +256,7 @@ impl ExpirationManager {
             return Err(RvError::ErrLeaseNotRenewable);
         }
 
-        let resp = self.renew_auth_lease_entry(&le, increment)?;
+        let resp = self.renew_auth_lease_entry(req, &le, increment)?;
         if resp.is_none() {
             return Ok(None);
         }
@@ -258,23 +267,18 @@ impl ExpirationManager {
         }
 
         let mut auth = resp.auth.unwrap();
-        if !auth.enabled() {
-            return Ok(Some(auth));
-        }
 
         auth.ttl = calculate_ttl(
             MAX_LEASE_TTL,
             DEFAULT_LEASE_TTL,
             increment,
-            Duration::ZERO,
+            auth.period,
             auth.ttl,
             auth.max_ttl,
-            Duration::ZERO,
+            auth.explicit_max_ttl,
             le.issue_time,
         )?;
-        auth.client_token = token.to_string();
-        //auth.increment = Duration::from_secs(0);
-        auth.issue_time = Some(SystemTime::now());
+        auth.client_token = te.id.clone();
 
         le.expire_time = auth.expiration_time();
         le.auth = Some(auth.clone());
@@ -282,11 +286,11 @@ impl ExpirationManager {
         self.persist_lease_entry(&le)?;
         self.register_lease_entry(Arc::new(le))?;
 
-        Ok(Some(auth))
+        Ok(Some(Response { auth: Some(auth), ..Response::default() }))
     }
 
     /// Registers a secret from a response for lease management.
-    pub fn register_secret(&self, req: &mut Request, resp: &mut Response) -> Result<(), RvError> {
+    pub fn register_secret(&self, req: &mut Request, resp: &mut Response) -> Result<String, RvError> {
         if let Some(secret) = resp.secret.as_mut() {
             if secret.ttl.as_secs() == 0 {
                 secret.ttl = DEFAULT_LEASE_DURATION_SECS;
@@ -299,13 +303,12 @@ impl ExpirationManager {
             let now = SystemTime::now();
             secret.issue_time = Some(now);
 
-            let path = PathBuf::from(&req.path);
-            let lease_id = path.join(generate_uuid()).to_string_lossy().to_string();
+            let lease_id = format!("{}/{}", req.path, generate_uuid());
 
             secret.lease_id = lease_id.clone();
 
             let le = LeaseEntry {
-                lease_id,
+                lease_id: lease_id.clone(),
                 client_token: req.client_token.clone(),
                 path: req.path.clone(),
                 data: resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new()),
@@ -316,21 +319,39 @@ impl ExpirationManager {
             };
 
             self.persist_lease_entry(&le)?;
-            self.index_by_token(&le.client_token, &le.lease_id)?;
+            self.create_index_by_token(&le.client_token, &le.lease_id)?;
 
             secret.ttl = le.expire_time.duration_since(now)?;
 
             self.register_lease_entry(Arc::new(le))?;
+
+            return Ok(lease_id);
         }
 
-        Ok(())
+        Ok("".into())
     }
 
-    /// Registers an authentication lease entry.
-    pub fn register_auth(&self, source: &str, auth: &mut Auth) -> Result<(), RvError> {
+    /// Registers an authentication entry for lease management.
+    pub fn register_auth(&self, te: &TokenEntry, auth: &mut Auth) -> Result<(), RvError> {
+        if te.ttl == 0
+            && auth.expiration_time() == SystemTime::UNIX_EPOCH
+            && (te.policies.len() != 1 || te.policies[0] != "root")
+        {
+            return Err(rv_error_string!("refusing to register a lease for a non-root token with no TTL"));
+        }
+
+        if auth.client_token.is_empty() {
+            return Err(rv_error_string!("cannot register an auth lease with an empty token"));
+        }
+
+        if te.path.contains("..") {
+            return Err(rv_error_string!(
+                "cannot register an auth lease with n token entry whose path contains parent references"
+            ));
+        }
+
         let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
-        let src = PathBuf::from(source);
-        let lease_id = src.join(token_store.salt_id(&auth.client_token)).to_string_lossy().to_string();
+        let lease_id = format!("{}/{}", te.path, token_store.salt_id(&auth.client_token));
 
         let now = SystemTime::now();
         auth.issue_time = Some(now);
@@ -338,7 +359,7 @@ impl ExpirationManager {
         let le = LeaseEntry {
             lease_id,
             client_token: auth.client_token.clone(),
-            path: source.to_string(),
+            path: te.path.clone(),
             auth: Some(auth.clone()),
             issue_time: now,
             expire_time: auth.expiration_time(),
@@ -352,19 +373,27 @@ impl ExpirationManager {
     }
 
     /// Revokes a lease entry by its lease ID.
-    pub fn revoke_lease_id(&self, lease_id: &str) -> Result<(), RvError> {
+    pub fn revoke_lease_id(&self, lease_id: &str, register_lease_entry: bool) -> Result<(), RvError> {
         let le = self.load_lease_entry(lease_id)?;
         if le.is_none() {
             return Ok(());
         }
 
-        let le = le.unwrap();
+        let mut le = le.unwrap();
 
         log::debug!("revoke lease_id: {}", &le.lease_id);
 
         self.revoke_lease_entry(&le)?;
         self.delete_lease_entry(lease_id)?;
-        self.index_by_token(&le.client_token, &le.lease_id)?;
+
+        if le.secret.is_some() {
+            self.remove_index_by_token(&le.client_token, &le.lease_id)?;
+        }
+
+        if register_lease_entry {
+            le.expire_time = SystemTime::UNIX_EPOCH;
+            self.register_lease_entry(Arc::new(le))?;
+        }
 
         Ok(())
     }
@@ -372,7 +401,7 @@ impl ExpirationManager {
     /// Revokes all lease entries with a given prefix.
     pub fn revoke_prefix(&self, prefix: &str) -> Result<(), RvError> {
         let mut prefix = prefix.to_string();
-        if !prefix.ends_with("!") {
+        if !prefix.ends_with("/") {
             prefix += "/";
         }
 
@@ -380,71 +409,93 @@ impl ExpirationManager {
         let existing = sub.get_keys()?;
         for suffix in existing.iter() {
             let lease_id = format!("{}{}", prefix, suffix);
-            self.revoke_lease_id(&lease_id)?;
+            self.revoke_lease_id(&lease_id, true)?;
         }
 
         Ok(())
     }
 
     /// Revokes all lease entries associated with a given token.
-    pub fn revoke_by_token(&self, token: &str) -> Result<(), RvError> {
-        let existing = self.lookup_by_token(token)?;
+    pub fn revoke_by_token(&self, te: &TokenEntry) -> Result<(), RvError> {
+        let existing = self.lookup_by_token(&te.id)?;
         for lease_id in existing.iter() {
-            self.revoke_lease_id(&lease_id)?;
+            self.revoke_lease_id(&lease_id, true)?;
         }
 
         Ok(())
     }
 
+    /// Get the value of lease_count.
+    pub fn get_lease_count(&self) -> usize {
+        self.queue.read().map(|queue| queue.len()).unwrap_or(0)
+    }
+
     /// Starts a background task to check for and handle expired lease entries.
     pub fn start_check_expired_lease_entries(&self) {
-        let mut task_builder = TaskBuilder::default();
-
         let queue = Arc::clone(&self.queue);
         let expiration = Arc::clone(&self.self_ptr.upgrade().unwrap());
 
-        let timer_check = move || {
+        let ticker = tick(Duration::from_millis(200));
+        thread::spawn(move || {
             let queue_cloned = Arc::clone(&queue);
             let expiration_cloned = Arc::clone(&expiration);
-            async move {
-                let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0);
-                let expired = {
-                    let queue_locked = queue_cloned.read().unwrap();
+            loop {
+                select! {
+                    recv(ticker) -> _ => {
+                        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_millis()).unwrap_or(0);
+                        let expired = {
+                            let queue_locked = queue_cloned.read().unwrap();
+                            queue_locked.peek().map(|(_le, Reverse(priority))| *priority < now).unwrap_or(false)
+                        };
 
-                    queue_locked.peek().map(|(_le, Reverse(priority))| *priority < now).unwrap_or(false)
-                };
-
-                if !expired {
-                    return;
-                }
-
-                let mut queue_write_locked = queue_cloned.write().unwrap();
-                loop {
-                    if let Some((le, Reverse(priority))) = queue_write_locked.peek() {
-                        if *priority > now {
-                            return;
+                        if !expired {
+                            continue;
                         }
 
-                        if expiration_cloned.revoke_lease_id(&le.lease_id).is_err() {
-                            return;
+                        let mut queue_write_locked = queue_cloned.write().unwrap();
+                        loop {
+                            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_millis()).unwrap_or(0);
+                            if let Some((le, Reverse(priority))) = queue_write_locked.peek() {
+                                if *priority > now {
+                                    break;
+                                }
+
+                                if *priority != 0 {
+                                    if let Err(e) = expiration_cloned.revoke_lease_id(&le.lease_id, false) {
+                                        log::warn!(
+                                            "check_expired_lease_entries call revoke_lease_id err: {:?}, lease_id: {}, now: \
+                                             {}, priority: {}, expire_time: {:?}",
+                                            e,
+                                            le.lease_id,
+                                            now,
+                                            *priority,
+                                            le.expire_time
+                                        );
+                                        break;
+                                    }
+                                }
+                            } else {
+                                break;
+                            }
+
+                            let _le = queue_write_locked.pop();
                         }
-                    } else {
-                        return;
                     }
-
-                    let _le = queue_write_locked.pop();
                 }
             }
-        };
+        });
+    }
 
-        let task =
-            task_builder.set_task_id(2).set_frequency_repeated_by_seconds(1).spawn_async_routine(timer_check).unwrap();
-        let _ = self.task_timer.add_task(task);
+    /// Stops the background task that checks for expired lease entries.
+    pub fn stop_check_expired_lease_entries(&self) -> Result<(), RvError> {
+        let mut queue_write_locked = self.queue.write()?;
+        queue_write_locked.clear();
+        Ok(())
     }
 
     /// Registers a lease entry in the priority queue for expiration tracking.
     fn register_lease_entry(&self, le: Arc<LeaseEntry>) -> Result<(), RvError> {
-        let priority = le.expire_time.duration_since(UNIX_EPOCH)?.as_secs();
+        let priority = le.expire_time.duration_since(UNIX_EPOCH)?.as_millis();
         let mut queue_locked = self.queue.write()?;
         queue_locked.push(le, Reverse(priority));
         Ok(())
@@ -473,6 +524,7 @@ impl ExpirationManager {
                 auth: ole.auth.clone(),
                 issue_time: ole.issue_time.clone(),
                 expire_time: ole.expire_time.clone(),
+                ..Default::default()
             };
             self.persist_lease_entry(&le)?;
             return Ok(Some(le));
@@ -495,12 +547,27 @@ impl ExpirationManager {
         self.id_view.delete(lease_id)
     }
 
-    /// Indexes a lease entry by the associated token for easy lookup.
-    fn index_by_token(&self, token: &str, lease_id: &str) -> Result<(), RvError> {
+    /// Creates an index in the token view using the provided token and lease ID.
+    fn create_index_by_token(&self, token: &str, lease_id: &str) -> Result<(), RvError> {
         let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
         let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
         let entry = StorageEntry { key, value: lease_id.as_bytes().to_owned() };
         self.token_view.put(&entry)
+    }
+
+    /// Removes an index from the token view based on the provided token and lease ID.
+    fn remove_index_by_token(&self, token: &str, lease_id: &str) -> Result<(), RvError> {
+        let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
+        let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
+        self.token_view.delete(&key)
+    }
+
+    /// Retrieves an index from the token view based on the provided token and lease ID.
+    #[allow(dead_code)]
+    fn index_by_token(&self, token: &str, lease_id: &str) -> Result<Option<StorageEntry>, RvError> {
+        let token_store = self.token_store.read()?.upgrade().ok_or(RvError::ErrBarrierSealed)?;
+        let key = format!("{}/{}", token_store.salt_id(token), token_store.salt_id(lease_id));
+        self.token_view.get(&key)
     }
 
     /// Looks up lease entries associated with a specific token.
@@ -578,11 +645,20 @@ impl ExpirationManager {
     }
 
     /// Renews an authentication lease entry with a specified increment duration.
-    fn renew_auth_lease_entry(&self, le: &LeaseEntry, increment: Duration) -> Result<Option<Response>, RvError> {
+    fn renew_auth_lease_entry(
+        &self,
+        _req: &mut Request,
+        le: &LeaseEntry,
+        increment: Duration,
+    ) -> Result<Option<Response>, RvError> {
         let mut auth: Option<Auth> = None;
         if le.auth.is_some() {
             let mut au = le.auth.as_ref().unwrap().clone();
-            au.client_token = "".to_string();
+            if le.path.starts_with("auth/token/") {
+                au.client_token = le.client_token.clone();
+            } else {
+                au.client_token = "".to_string();
+            }
             au.increment = increment;
             au.issue_time = Some(le.issue_time);
             auth = Some(au);
@@ -599,7 +675,7 @@ impl ExpirationManager {
 }
 
 #[cfg(test)]
-mod mode_expiration_tests {
+mod mod_expiration_tests {
     use std::{sync::Mutex, thread::sleep};
 
     use serde_json::json;
@@ -607,14 +683,14 @@ mod mode_expiration_tests {
     use super::*;
     use crate::{
         context::Context,
-        logical::{Backend, Field, FieldType, LogicalBackend, Operation, Path, PathOperation, Secret},
+        logical::{Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Secret},
         mount::{MountEntry, MOUNT_TABLE_TYPE},
         new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path,
         new_path_internal, new_secret, new_secret_internal,
-        test_utils::test_rusty_vault_init,
+        test_utils::{test_rusty_vault_init, NoopBackend},
     };
 
-    macro_rules! new_expiration_manager {
+    macro_rules! mock_expiration_manager {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
             println!("test_rusty_vault_init, name: {}", name);
@@ -642,7 +718,7 @@ mod mode_expiration_tests {
 
     #[test]
     fn test_secret_expiration() {
-        let (core, expiration, _token_store) = new_expiration_manager!();
+        let (core, expiration, _token_store) = mock_expiration_manager!();
         let core = core.read().unwrap();
         let new_now: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
         let new_now_cloned = new_now.clone();
@@ -788,5 +864,1228 @@ mod mode_expiration_tests {
     fn test_auth_expiration() {
         // TODO
         println!("TODO");
+    }
+
+    #[test]
+    fn test_persist_and_load_lease_entry() {
+        let (_core, expiration, _token_store) = mock_expiration_manager!();
+
+        let le = LeaseEntry {
+            lease_id: generate_uuid(),
+            client_token: generate_uuid(),
+            path: "test/kk".into(),
+            expire_time: SystemTime::now() + Duration::from_secs(3600), // 1 hour from now
+            ..Default::default()
+        };
+
+        expiration.persist_lease_entry(&le).unwrap();
+        let loaded = expiration.load_lease_entry(&le.lease_id).unwrap();
+        assert!(loaded.is_some());
+        assert_eq!(loaded, Some(le));
+    }
+
+    #[test]
+    fn test_expiration_total_lease_count() {
+        let (_core, expiration, _token_store) = mock_expiration_manager!();
+
+        let n: usize = 100;
+        for i in 0..n {
+            let le = LeaseEntry {
+                lease_id: format!("lease-{}", i),
+                client_token: format!("client_token-{}", i),
+                path: format!("foo/bar/{}", i),
+                expire_time: SystemTime::now() + Duration::from_secs(3600), // 1 hour from now
+                ..Default::default()
+            };
+
+            assert!(expiration.persist_lease_entry(&le).is_ok());
+            assert!(expiration.register_lease_entry(Arc::new(le)).is_ok());
+        }
+
+        let lease_count = expiration.get_lease_count();
+        assert_eq!(n, lease_count);
+
+        let keys = expiration.id_view.get_keys();
+        assert!(keys.is_ok());
+        assert_eq!(keys.unwrap().len(), n);
+
+        let m: usize = 20;
+        for i in 0..m {
+            let le = LeaseEntry {
+                lease_id: format!("new-lease-{}", i),
+                client_token: format!("new-client_token-{}", i),
+                path: format!("new/foo/bar/{}", i),
+                expire_time: SystemTime::now() + Duration::from_secs(5), // 5s from now
+                ..Default::default()
+            };
+
+            assert!(expiration.persist_lease_entry(&le).is_ok());
+            assert!(expiration.register_lease_entry(Arc::new(le)).is_ok());
+        }
+
+        let lease_count = expiration.get_lease_count();
+        assert_eq!(m + n, lease_count);
+
+        let keys = expiration.id_view.get_keys();
+        assert!(keys.is_ok());
+        assert_eq!(keys.unwrap().len(), m + n);
+
+        println!("sleep 7s");
+        sleep(Duration::from_secs(7));
+
+        let lease_count = expiration.get_lease_count();
+        assert_eq!(n, lease_count);
+
+        let keys = expiration.id_view.get_keys();
+        assert!(keys.is_ok());
+        assert_eq!(keys.unwrap().len(), n);
+
+        let m: usize = 30;
+        for i in 0..m {
+            let le = LeaseEntry {
+                lease_id: format!("lease-{}", i),
+                client_token: format!("client_token-{}", i),
+                path: format!("foo/bar/{}", i),
+                expire_time: SystemTime::now() + Duration::from_secs(5), // Marked as expiring in 5 seconds.
+                ..Default::default()
+            };
+
+            assert!(expiration.persist_lease_entry(&le).is_ok());
+            assert!(expiration.register_lease_entry(Arc::new(le)).is_ok());
+        }
+
+        println!("sleep 6s");
+        sleep(Duration::from_secs(6));
+
+        let lease_count = expiration.get_lease_count();
+        assert_eq!(n - m, lease_count);
+
+        let keys = expiration.id_view.get_keys();
+        assert!(keys.is_ok());
+        assert_eq!(keys.unwrap().len(), n - m);
+
+        let k: usize = 30;
+        for i in 50..(50 + k) {
+            let lease_id = format!("lease-{}", i);
+
+            assert!(expiration.revoke_lease_id(&lease_id, true).is_ok());
+        }
+
+        println!("sleep 1s");
+        sleep(Duration::from_secs(1));
+
+        let lease_count = expiration.get_lease_count();
+        assert_eq!(n - m - k, lease_count);
+
+        let keys = expiration.id_view.get_keys();
+        assert!(keys.is_ok());
+        assert_eq!(keys.unwrap().len(), n - m - k);
+    }
+
+    #[test]
+    fn test_expiration_register_and_restore_benchmark() {
+        let (_core, expiration, _token_store) = mock_expiration_manager!();
+
+        let n = 100000;
+        for i in 0..n {
+            let mut secret = SecretData::default();
+            secret.ttl = Duration::from_secs(400);
+            let mut request = Request::new(&format!("secret/{}", i));
+            request.client_token = "root".into();
+
+            let mut response = Response {
+                secret: Some(secret),
+                data: Some(json!({"access_key": "xyz", "secret_key": "abc"}).as_object().unwrap().clone()),
+                ..Default::default()
+            };
+
+            // register secret
+            let result = expiration.register_secret(&mut request, &mut response);
+            assert!(result.is_ok());
+        }
+
+        println!("sleep 2s");
+        sleep(Duration::from_secs(2));
+
+        assert!(expiration.stop_check_expired_lease_entries().is_ok());
+
+        assert!(expiration.restore().is_ok());
+
+        let lease_count = expiration.get_lease_count();
+        assert_eq!(n, lease_count);
+
+        let keys = expiration.id_view.get_keys();
+        assert!(keys.is_ok());
+        let lease_id_vec = keys.unwrap();
+        assert_eq!(lease_id_vec.len(), n);
+        let mut lease_id_prefix_vec: Vec<String> = Vec::with_capacity(n);
+        for i in 0..lease_id_vec.len() {
+            lease_id_prefix_vec.push(format!("secret/{}/", i));
+        }
+        lease_id_prefix_vec.sort();
+        for i in 0..lease_id_vec.len() {
+            assert!(lease_id_vec[i].starts_with(&lease_id_prefix_vec[i]));
+        }
+    }
+
+    #[test]
+    fn test_expiration_register_auth() {
+        let (_core, expiration, token_store) = mock_expiration_manager!();
+        let root = token_store.root_token().unwrap();
+
+        let mut auth = Auth { client_token: root.id.clone(), ..Default::default() };
+        auth.ttl = Duration::from_secs(60 * 60);
+
+        let te = TokenEntry { path: "auth/github/login".into(), ..Default::default() };
+
+        assert!(expiration.register_auth(&te, &mut auth).is_ok());
+
+        let te = TokenEntry { path: "auth/github/../login".into(), ..Default::default() };
+
+        assert!(expiration.register_auth(&te, &mut auth).is_err());
+    }
+
+    #[test]
+    fn test_expiration_register_auth_no_lease() {
+        let (_core, expiration, token_store) = mock_expiration_manager!();
+        let root = token_store.root_token().unwrap();
+
+        let mut auth = Auth { client_token: root.id.clone(), ..Default::default() };
+
+        let mut te = TokenEntry {
+            id: root.id.clone(),
+            path: "auth/github/login".into(),
+            policies: vec!["root".into()],
+            ..Default::default()
+        };
+
+        assert!(expiration.register_auth(&te, &mut auth).is_ok());
+
+        let mut request = Request::new("");
+
+        // Should not be able to renew, no expiration
+        let resp = expiration.renew_token(&mut request, &te, Duration::ZERO);
+        assert_eq!(resp.unwrap_err(), RvError::ErrLeaseNotRenewable);
+
+        // Wait and check token is not invalidated
+        println!("sleep 2s");
+        sleep(Duration::from_secs(2));
+
+        let ret = token_store.lookup(&root.id);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().is_some());
+
+        te.policies[0] = "default".into();
+        assert!(expiration.register_auth(&te, &mut auth).is_err());
+    }
+
+    #[test]
+    fn test_expiration_revoke() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let noop = Arc::new(NoopBackend::default());
+        let me_uuid = generate_uuid();
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut req = Request::new("prod/aws/foo");
+        req.client_token = "foobar".into();
+        let mut resp = Response {
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(60 * 60), ..Default::default() },
+                ..Default::default()
+            }),
+            data: Some(
+                json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Default::default()
+        };
+
+        let ret = expiration.register_secret(&mut req, &mut resp);
+        assert!(ret.is_ok());
+        let id = ret.unwrap();
+
+        assert!(expiration.revoke_lease_id(&id, true).is_ok());
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 1);
+        assert_eq!(req[0].operation, Operation::Revoke);
+    }
+
+    #[test]
+    fn test_expiration_revoke_on_expire() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let noop = Arc::new(NoopBackend::default());
+        let me_uuid = generate_uuid();
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut req = Request::new("prod/aws/foo");
+        req.client_token = "foobar".into();
+        let mut resp = Response {
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
+                ..Default::default()
+            }),
+            data: Some(
+                json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Default::default()
+        };
+
+        let ret = expiration.register_secret(&mut req, &mut resp);
+        assert!(ret.is_ok());
+
+        sleep(Duration::from_millis(1500));
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 1);
+        assert_eq!(req[0].operation, Operation::Revoke);
+    }
+
+    #[test]
+    fn test_expiration_revoke_prefix() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let noop = Arc::new(NoopBackend::default());
+        let me_uuid = generate_uuid();
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let paths = ["prod/aws/foo", "prod/aws/sub/bar", "prod/aws/zip"];
+
+        for path in paths.iter() {
+            let mut req = Request::new(path);
+            req.client_token = "foobar".into();
+            let mut resp = Response {
+                secret: Some(SecretData {
+                    lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
+                    ..Default::default()
+                }),
+                data: Some(
+                    json!({
+                        "access_key": "xyz",
+                        "secret_key": "abcd",
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ),
+                ..Default::default()
+            };
+
+            let ret = expiration.register_secret(&mut req, &mut resp);
+            assert!(ret.is_ok());
+        }
+
+        assert!(expiration.revoke_prefix("prod/aws/").is_ok());
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 3);
+
+        for r in req.iter() {
+            assert_eq!(r.operation, Operation::Revoke);
+        }
+
+        let noop_paths = noop.paths.read().unwrap();
+        let mut paths = noop_paths.clone();
+        paths.sort();
+        let mut expect = vec!["foo".to_string(), "sub/bar".to_string(), "zip".to_string()];
+        expect.sort();
+        assert_eq!(paths, expect);
+    }
+
+    #[test]
+    fn test_expiration_revoke_by_token() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let noop = Arc::new(NoopBackend::default());
+        let me_uuid = generate_uuid();
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let paths = ["prod/aws/foo", "prod/aws/sub/bar", "prod/aws/zip"];
+
+        for path in paths.iter() {
+            let mut req = Request::new(path);
+            req.client_token = "foobar".into();
+            let mut resp = Response {
+                secret: Some(SecretData {
+                    lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
+                    ..Default::default()
+                }),
+                data: Some(
+                    json!({
+                        "access_key": "xyz",
+                        "secret_key": "abcd",
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ),
+                ..Default::default()
+            };
+
+            let ret = expiration.register_secret(&mut req, &mut resp);
+            assert!(ret.is_ok());
+        }
+
+        let te = TokenEntry { id: "foobar".into(), ..Default::default() };
+
+        assert!(expiration.revoke_by_token(&te).is_ok());
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 3);
+
+        for r in req.iter() {
+            assert_eq!(r.operation, Operation::Revoke);
+        }
+
+        let noop_paths = noop.paths.read().unwrap();
+        let mut paths = noop_paths.clone();
+        paths.sort();
+        let mut expect = vec!["foo".to_string(), "sub/bar".to_string(), "zip".to_string()];
+        expect.sort();
+        assert_eq!(paths, expect);
+    }
+
+    #[test]
+    fn test_expiration_renew_token() {
+        let (_core, expiration, token_store) = mock_expiration_manager!();
+        let root = token_store.root_token().unwrap();
+
+        let mut auth = Auth {
+            client_token: root.id.clone(),
+            lease: Lease { ttl: Duration::from_secs(60 * 60), renewable: true, ..Default::default() },
+            ..Default::default()
+        };
+
+        let te = TokenEntry { id: root.id, path: "auth/token/login".into(), ..Default::default() };
+
+        assert!(expiration.register_auth(&te, &mut auth).is_ok());
+
+        let mut req = Request::default();
+
+        let resp = expiration.renew_token(&mut req, &te, Duration::from_secs(0)).unwrap();
+        assert!(resp.is_some());
+        let resp_auth = resp.unwrap().auth;
+        assert!(resp_auth.is_some());
+        assert_eq!(auth.client_token, resp_auth.unwrap().client_token);
+    }
+
+    #[test]
+    fn test_expiration_renew_token_period() {
+        let (_core, expiration, token_store) = mock_expiration_manager!();
+        let mut root = TokenEntry {
+            policies: vec!["root".to_string()],
+            path: "auth/token/root".into(),
+            display_name: "root".into(),
+            creation_time: SystemTime::now(),
+            period: Duration::from_secs(60),
+            ..Default::default()
+        };
+
+        assert!(token_store.create(&mut root).is_ok());
+
+        let mut auth = Auth {
+            client_token: root.id.clone(),
+            lease: Lease { ttl: Duration::from_secs(60 * 60), renewable: true, ..Default::default() },
+            period: Duration::from_secs(60),
+            ..Default::default()
+        };
+
+        let te = TokenEntry { id: root.id, path: "auth/token/login".into(), ..Default::default() };
+
+        assert!(expiration.register_auth(&te, &mut auth).is_ok());
+        assert_eq!(expiration.get_lease_count(), 1);
+
+        let mut req = Request::default();
+
+        let resp = expiration.renew_token(&mut req, &te, Duration::from_secs(0)).unwrap();
+        assert!(resp.is_some());
+        let resp_auth = resp.unwrap().auth;
+        assert!(resp_auth.is_some());
+        let auth = resp_auth.unwrap();
+        assert_eq!(auth.client_token, auth.client_token);
+        assert!(auth.ttl <= Duration::from_secs(60));
+
+        assert_eq!(expiration.get_lease_count(), 1);
+    }
+
+    #[test]
+    fn test_expiration_renew_token_period_backend() {
+        let (core, expiration, token_store) = mock_expiration_manager!();
+        let root = token_store.root_token().unwrap();
+
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let noop = Arc::new(NoopBackend {
+            response: Some(Response {
+                auth: Some(Auth {
+                    lease: Lease { ttl: Duration::from_secs(10), renewable: true, ..Default::default() },
+                    period: Duration::from_secs(5),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            default_lease_ttl: Duration::from_secs(5),
+            max_lease_ttl: Duration::from_secs(5),
+            ..Default::default()
+        });
+        let me_uuid = generate_uuid();
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "auth/foo/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "auth/foo/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut auth = Auth {
+            client_token: root.id.clone(),
+            lease: Lease { ttl: Duration::from_secs(10), renewable: true, ..Default::default() },
+            period: Duration::from_secs(5),
+            ..Default::default()
+        };
+
+        let te = TokenEntry { id: root.id, path: "auth/foo/login".into(), ..Default::default() };
+
+        assert!(expiration.register_auth(&te, &mut auth).is_ok());
+
+        sleep(Duration::from_secs(3));
+
+        let mut req = Request::default();
+
+        let resp = expiration.renew_token(&mut req, &te, Duration::from_secs(0)).unwrap();
+        assert!(resp.is_some());
+        let resp_auth = resp.unwrap().auth;
+        assert!(resp_auth.is_some());
+        let auth = resp_auth.unwrap();
+        assert!(auth.ttl != Duration::ZERO);
+        assert!(auth.ttl <= Duration::from_secs(5));
+
+        sleep(Duration::from_secs(3));
+
+        let mut req = Request::default();
+
+        let resp = expiration.renew_token(&mut req, &te, Duration::from_secs(0)).unwrap();
+        assert!(resp.is_some());
+        let resp_auth = resp.unwrap().auth;
+        assert!(resp_auth.is_some());
+        let auth = resp_auth.unwrap();
+        assert!(auth.ttl >= Duration::from_secs(4));
+        assert!(auth.ttl <= Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_expiration_renew_token_not_renewable() {
+        let (_core, expiration, token_store) = mock_expiration_manager!();
+        let root = token_store.root_token().unwrap();
+
+        let mut auth = Auth {
+            client_token: root.id.clone(),
+            lease: Lease { ttl: Duration::from_secs(60 * 60), renewable: false, ..Default::default() },
+            ..Default::default()
+        };
+
+        let te = TokenEntry { id: root.id.clone(), path: "auth/foo/login".into(), ..Default::default() };
+
+        assert!(expiration.register_auth(&te, &mut auth).is_ok());
+
+        let mut req = Request::default();
+
+        let te = TokenEntry { id: root.id, path: "auth/foo/login".into(), ..Default::default() };
+
+        let resp = expiration.renew_token(&mut req, &te, Duration::from_secs(0));
+        assert!(resp.is_err());
+        assert_eq!(resp.unwrap_err(), RvError::ErrLeaseNotRenewable);
+    }
+
+    #[test]
+    fn test_expiration_renew() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let me_uuid = generate_uuid();
+        let noop = Arc::new(NoopBackend {
+            response: Some(Response {
+                secret: Some(SecretData {
+                    lease: Lease { ttl: Duration::from_secs(10), ..Default::default() },
+                    ..Default::default()
+                }),
+                data: Some(
+                    json!({
+                        "access_key": "123",
+                        "secret_key": "abcd",
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut req = Request::new("prod/aws/foo");
+        req.client_token = "foobar".into();
+        let mut resp = Response {
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(1), renewable: true, ..Default::default() },
+                ..Default::default()
+            }),
+            data: Some(
+                json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Default::default()
+        };
+
+        let ret = expiration.register_secret(&mut req, &mut resp);
+        assert!(ret.is_ok());
+        let id = ret.unwrap();
+
+        let mut resp = expiration.renew(&id, Duration::ZERO).unwrap().unwrap();
+        let mut secret = resp.secret.clone().unwrap();
+        secret.lease_id.clear();
+        resp.secret = Some(secret);
+        assert_eq!(Some(resp), noop.response);
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 1);
+        assert_eq!(req[0].operation, Operation::Renew);
+    }
+
+    #[test]
+    fn test_expiration_renew_not_renewable() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let me_uuid = generate_uuid();
+        let noop = Arc::new(NoopBackend::default());
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut req = Request::new("prod/aws/foo");
+        req.client_token = "foobar".into();
+        let mut resp = Response {
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(1), renewable: false, ..Default::default() },
+                ..Default::default()
+            }),
+            data: Some(
+                json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Default::default()
+        };
+
+        let ret = expiration.register_secret(&mut req, &mut resp);
+        assert!(ret.is_ok());
+        let id = ret.unwrap();
+
+        let resp = expiration.renew(&id, Duration::ZERO);
+        assert!(resp.is_err());
+        assert_eq!(resp.unwrap_err(), RvError::ErrLeaseNotRenewable);
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 0);
+    }
+
+    #[test]
+    fn test_expiration_renew_revoke_on_expire() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let me_uuid = generate_uuid();
+        let noop = Arc::new(NoopBackend {
+            response: Some(Response {
+                secret: Some(SecretData {
+                    lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
+                    ..Default::default()
+                }),
+                data: Some(
+                    json!({
+                        "access_key": "123",
+                        "secret_key": "abcd",
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut req = Request::new("prod/aws/foo");
+        req.client_token = "foobar".into();
+        let mut resp = Response {
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(1), renewable: true, ..Default::default() },
+                ..Default::default()
+            }),
+            data: Some(
+                json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Default::default()
+        };
+
+        let ret = expiration.register_secret(&mut req, &mut resp);
+        assert!(ret.is_ok());
+        let id = ret.unwrap();
+
+        let resp = expiration.renew(&id, Duration::ZERO);
+        assert!(resp.is_ok());
+
+        sleep(Duration::from_millis(1500));
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 2);
+        assert_eq!(req[1].operation, Operation::Revoke);
+    }
+
+    #[test]
+    fn test_expiration_renew_final_second() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let me_uuid = generate_uuid();
+        let noop = Arc::new(NoopBackend {
+            response: Some(Response {
+                secret: Some(SecretData {
+                    lease: Lease { ttl: Duration::from_secs(2), max_ttl: Duration::from_secs(2), ..Default::default() },
+                    ..Default::default()
+                }),
+                data: Some(
+                    json!({
+                        "access_key": "123",
+                        "secret_key": "abcd",
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut req = Request::new("prod/aws/foo");
+        req.client_token = "foobar".into();
+        let mut resp = Response {
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(2), renewable: true, ..Default::default() },
+                ..Default::default()
+            }),
+            data: Some(
+                json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Default::default()
+        };
+
+        let ret = expiration.register_secret(&mut req, &mut resp);
+        assert!(ret.is_ok());
+        let id = ret.unwrap();
+
+        let mut le = expiration.load_lease_entry(&id).unwrap().unwrap();
+        le.auth = Some(Auth { lease: Lease { renewable: true, ..Default::default() }, ..Default::default() });
+
+        assert!(expiration.persist_lease_entry(&le).is_ok());
+
+        sleep(Duration::from_secs(1));
+
+        let resp = expiration.renew(&id, Duration::ZERO);
+        assert!(resp.is_ok());
+
+        assert_eq!(expiration.get_lease_count(), 1);
+    }
+
+    #[test]
+    fn test_expiration_renew_final_second_lease() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let me_uuid = generate_uuid();
+        let noop = Arc::new(NoopBackend::default());
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "prod/aws/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "prod/aws/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut req = Request::new("prod/aws/foo");
+        req.client_token = "foobar".into();
+        let mut resp = Response {
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(2), renewable: true, ..Default::default() },
+                ..Default::default()
+            }),
+            data: Some(
+                json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+            ..Default::default()
+        };
+
+        let ret = expiration.register_secret(&mut req, &mut resp);
+        assert!(ret.is_ok());
+        let id = ret.unwrap();
+
+        let mut le = expiration.load_lease_entry(&id).unwrap().unwrap();
+        le.auth = Some(Auth { lease: Lease { renewable: true, ..Default::default() }, ..Default::default() });
+
+        assert!(expiration.persist_lease_entry(&le).is_ok());
+
+        sleep(Duration::from_secs(1));
+
+        let resp = expiration.renew(&id, Duration::ZERO);
+        assert!(resp.is_ok());
+
+        assert_eq!(expiration.get_lease_count(), 1);
+    }
+
+    #[test]
+    fn test_expiration_revoke_entry() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let noop = Arc::new(NoopBackend::default());
+        let me_uuid = generate_uuid();
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "foo/bar/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "foo/bar/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let le = LeaseEntry {
+            lease_id: "foo/bar/1234".into(),
+            path: "foo/bar/".into(),
+            issue_time: SystemTime::now(),
+            expire_time: SystemTime::now(),
+            data: json!({
+                "testing": true
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(60), ..Default::default() },
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert!(expiration.revoke_lease_entry(&le).is_ok());
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 1);
+        assert_eq!(req[0].operation, Operation::Revoke);
+        assert_eq!(req[0].data, Some(le.data));
+    }
+
+    #[test]
+    fn test_expiration_revoke_entry_token() {
+        let (_core, expiration, token_store) = mock_expiration_manager!();
+        let root = token_store.root_token().unwrap();
+
+        let le = LeaseEntry {
+            client_token: root.id.clone(),
+            lease_id: "foo/bar/1234".into(),
+            path: "foo/bar/".into(),
+            issue_time: SystemTime::now(),
+            expire_time: SystemTime::now() + Duration::from_secs(60),
+            auth: Some(Auth {
+                client_token: root.id.clone(),
+                lease: Lease { ttl: Duration::from_secs(60), ..Default::default() },
+                ..Default::default()
+            }),
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(60), ..Default::default() },
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert!(expiration.persist_lease_entry(&le).is_ok());
+
+        assert!(expiration.create_index_by_token(&le.client_token, &le.lease_id).is_ok());
+
+        let index_entry = expiration.index_by_token(&le.client_token, &le.lease_id).unwrap();
+        assert!(index_entry.is_some());
+
+        assert!(expiration.revoke_lease_entry(&le).is_ok());
+
+        let index_entry = expiration.index_by_token(&le.client_token, &le.lease_id).unwrap();
+        assert!(index_entry.is_none());
+
+        let te = token_store.lookup(&le.client_token);
+        assert!(te.is_ok());
+        assert!(te.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_expiration_renew_entry() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "logical/");
+        let me_uuid = generate_uuid();
+        let noop = Arc::new(NoopBackend {
+            response: Some(Response {
+                secret: Some(SecretData {
+                    lease: Lease { ttl: Duration::from_secs(60 * 60), renewable: true, ..Default::default() },
+                    ..Default::default()
+                }),
+                data: Some(
+                    json!({
+                        "access_key": "123",
+                        "secret_key": "abcd",
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "foo/bar/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "foo/bar/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let le = LeaseEntry {
+            lease_id: "foo/bar/1234".into(),
+            path: "foo/bar/".into(),
+            issue_time: SystemTime::now(),
+            expire_time: SystemTime::now(),
+            data: json!({
+                "testing": true
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(60), ..Default::default() },
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let resp = expiration.renew_secret_lease_entry(&le, Duration::ZERO);
+        assert!(resp.is_ok());
+
+        let resp = resp.unwrap();
+        assert!(resp.is_some());
+
+        let mut resp = resp.unwrap();
+        let mut secret = resp.secret.clone().unwrap();
+        secret.lease_id.clear();
+        resp.secret = Some(secret);
+        assert_eq!(Some(resp), noop.response);
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 1);
+        assert_eq!(req[0].operation, Operation::Renew);
+        assert_eq!(req[0].data, Some(le.data));
+    }
+
+    #[test]
+    fn test_expiration_renew_auth_entry() {
+        let (core, expiration, _token_store) = mock_expiration_manager!();
+        let core = core.read().unwrap();
+        let view = BarrierView::new(core.barrier.clone(), "auth/");
+        let me_uuid = generate_uuid();
+        let noop = Arc::new(NoopBackend {
+            response: Some(Response {
+                auth: Some(Auth {
+                    lease: Lease { ttl: Duration::from_secs(60 * 60), renewable: true, ..Default::default() },
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+
+        assert!(expiration
+            .router
+            .mount(
+                noop.clone(),
+                "auth/foo/",
+                Arc::new(RwLock::new(MountEntry {
+                    path: "auth/foo/".into(),
+                    logical_type: "noop".into(),
+                    uuid: me_uuid.clone(),
+                    ..Default::default()
+                })),
+                view
+            )
+            .is_ok());
+
+        let mut le_auth_internal_data: HashMap<String, String> = HashMap::new();
+        le_auth_internal_data.insert("MySecret".to_string(), "secret".to_string());
+        let le = LeaseEntry {
+            lease_id: "auth/foo/1234".into(),
+            path: "auth/foo/login".into(),
+            auth: Some(Auth {
+                lease: Lease { ttl: Duration::from_secs(60), renewable: true, ..Default::default() },
+                internal_data: le_auth_internal_data.clone(),
+                ..Default::default()
+            }),
+            issue_time: SystemTime::now(),
+            expire_time: SystemTime::now() + Duration::from_secs(60),
+            ..Default::default()
+        };
+
+        let mut req = Request::new("auth/foo/login");
+        let resp = expiration.renew_auth_lease_entry(&mut req, &le, Duration::ZERO);
+        assert!(resp.is_ok());
+
+        let resp = resp.unwrap();
+        assert!(resp.is_some());
+
+        let resp = resp.unwrap();
+        assert_eq!(Some(resp), noop.response);
+
+        let req = noop.requests.read().unwrap();
+        assert_eq!(req.len(), 1);
+        assert_eq!(req[0].operation, Operation::Renew);
+        assert_eq!(req[0].path, "login");
+        assert_eq!(req[0].auth.clone().unwrap().internal_data, le_auth_internal_data);
+    }
+
+    #[test]
+    fn test_expiration_persist_load_delete() {
+        let (_core, expiration, _token_store) = mock_expiration_manager!();
+
+        let le = LeaseEntry {
+            lease_id: "foo/bar/1234".into(),
+            path: "foo/bar".into(),
+            data: json!({
+                "testing": true
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            secret: Some(SecretData {
+                lease: Lease { ttl: Duration::from_secs(60), ..Default::default() },
+                ..Default::default()
+            }),
+            issue_time: SystemTime::now(),
+            expire_time: SystemTime::now(),
+            ..Default::default()
+        };
+
+        assert!(expiration.persist_lease_entry(&le).is_ok());
+
+        let out = expiration.load_lease_entry("foo/bar/1234");
+        assert!(out.is_ok());
+
+        let out = out.unwrap();
+        assert!(out.is_some());
+
+        let out = out.unwrap();
+        assert_eq!(le, out);
+
+        assert!(expiration.delete_lease_entry("foo/bar/1234").is_ok());
+
+        let out = expiration.load_lease_entry("foo/bar/1234");
+        assert!(out.is_ok());
+
+        let out = out.unwrap();
+        assert!(out.is_none());
     }
 }

@@ -6,7 +6,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock, Weak},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
@@ -27,14 +27,20 @@ use crate::{
     errors::RvError,
     handler::{AuthHandler, HandlePhase, Handler},
     logical::{
-        Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation, Request, Response,
+        lease::calculate_ttl, Auth, Backend, Field, FieldType, Lease, LogicalBackend, Operation, Path, PathOperation,
+        Request, Response,
     },
     modules::policy::policy_store::NON_ASSIGNABLE_POLICIES,
     new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path, new_path_internal,
     router::Router,
-    rv_error_response,
+    rv_error_response, rv_error_string,
     storage::{Storage, StorageEntry},
-    utils::{generate_uuid, is_str_subset, policy::sanitize_policies, sha1},
+    utils::{
+        deserialize_duration, deserialize_system_time, generate_uuid, is_str_subset,
+        policy::sanitize_policies,
+        serialize_duration, serialize_system_time, sha1,
+        token_util::{DEFAULT_LEASE_TTL, MAX_LEASE_TTL},
+    },
 };
 
 const TOKEN_LOOKUP_PREFIX: &str = "id/";
@@ -70,6 +76,10 @@ struct TokenReqData {
     num_uses: u32,
     #[serde(default)]
     renewable: bool,
+    #[serde(default, deserialize_with = "deserialize_duration")]
+    period: Duration,
+    #[serde(default, deserialize_with = "deserialize_duration")]
+    explicit_max_ttl: Duration,
 }
 
 /// Data structure representing a stored token entry.
@@ -84,6 +94,13 @@ pub struct TokenEntry {
     pub display_name: String,
     pub num_uses: u32,
     pub ttl: u64,
+    #[default(SystemTime::now())]
+    #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    pub creation_time: SystemTime,
+    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    pub period: Duration,
+    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    pub explicit_max_ttl: Duration,
 }
 
 /// Manages the storage and handling of tokens.
@@ -152,11 +169,35 @@ impl TokenStore {
         let ts_inner_arc4 = self.self_ptr.upgrade().unwrap().clone();
         let ts_inner_arc5 = self.self_ptr.upgrade().unwrap().clone();
         let ts_inner_arc6 = self.self_ptr.upgrade().unwrap().clone();
+        let ts_inner_arc7 = self.self_ptr.upgrade().unwrap().clone();
 
         let backend = new_logical_backend!({
             paths: [
                 {
                     pattern: "create*",
+                    fields: {
+                        "num_uses": {
+                            field_type: FieldType::Int,
+                            description: "Max number of uses for this token"
+                        },
+                        "period": {
+                            field_type: FieldType::Str,
+                            description: "Renew period"
+                        },
+                        "ttl": {
+                            field_type: FieldType::DurationSecond,
+                            description: "Time to live for this token"
+                        },
+                        "renewable": {
+                            field_type: FieldType::Bool,
+                            default: true,
+                            description: "Allow token to be renewed past its initial TTL up to system/mount maximum TTL"
+                        },
+                        "policies": {
+                            field_type: FieldType::Array,
+                            description: "List of policies for the token"
+                        }
+                    },
                     operations: [
                         {op: Operation::Write, handler: ts_inner_arc1.handle_create}
                     ],
@@ -232,6 +273,7 @@ impl TokenStore {
                     help: "This endpoint will renew the token and prevent expiration."
                 }
             ],
+            auth_renew_handler: ts_inner_arc7.auth_renew,
             root_paths: ["revoke-orphan/*"],
             help: AUTH_TOKEN_HELP,
         });
@@ -287,10 +329,10 @@ impl TokenStore {
             view.put(&entry)?;
         }
 
-        let path = format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id);
-        let entry = StorageEntry { key: path, value: value.as_bytes().to_vec() };
-
-        view.put(&entry)
+        view.put(&StorageEntry {
+            key: format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id),
+            value: value.as_bytes().to_vec(),
+        })
     }
 
     /// Uses the token and decrements its use count.
@@ -405,7 +447,7 @@ impl TokenStore {
                 view.delete(&path)?;
             }
             //Revoke all secrets under this token
-            self.expiration.revoke_by_token(&entry.id)?;
+            self.expiration.revoke_by_token(&entry)?;
         }
 
         Ok(())
@@ -527,6 +569,27 @@ impl TokenStore {
             te.ttl = dur.as_secs();
         }
 
+        te.period = data.period;
+        te.explicit_max_ttl = data.explicit_max_ttl;
+
+        if te.period.as_secs() > 0 || te.ttl > 0 || (te.ttl == 0 && !te.policies.contains(&"root".to_string())) {
+            te.ttl = calculate_ttl(
+                MAX_LEASE_TTL,
+                DEFAULT_LEASE_TTL,
+                Duration::ZERO,
+                te.period,
+                Duration::from_secs(te.ttl),
+                Duration::ZERO,
+                te.explicit_max_ttl,
+                te.creation_time,
+            )?
+            .as_secs();
+        }
+
+        if te.ttl == 0 && te.explicit_max_ttl.as_secs() > 0 {
+            te.ttl = te.explicit_max_ttl.as_secs();
+        }
+
         if data.no_parent {
             // TODO: Only allow an orphan token if the client has sudo policy
             te.parent.clear();
@@ -546,6 +609,8 @@ impl TokenStore {
             client_token: te.id.clone(),
             display_name: te.display_name.clone(),
             policies: te.policies.clone(),
+            period: te.period,
+            explicit_max_ttl: te.explicit_max_ttl,
             metadata: te.meta.clone(),
             ..Default::default()
         };
@@ -613,18 +678,25 @@ impl TokenStore {
 
         let meta = serde_json::to_value(&te.meta)?;
 
-        let data = serde_json::json!({
+        let mut data = serde_json::json!({
             "id": te.id.clone(),
             "policies": te.policies.clone(),
             "path": te.path.clone(),
             "meta": meta,
             "display_name": te.display_name.clone(),
             "num_uses": te.num_uses,
-            "ttl": te.ttl,
+            "ttl": 0,
+            "creation_time": te.creation_time.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+            "creation_ttl": te.ttl,
+            "explicit_max_ttl": te.explicit_max_ttl.as_secs(),
         })
         .as_object()
         .unwrap()
         .clone();
+
+        if te.period.as_secs() > 0 {
+            data.insert("period".to_string(), json!(te.period.as_secs()));
+        }
 
         Ok(Some(Response::data_response(Some(data))))
     }
@@ -635,20 +707,27 @@ impl TokenStore {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let te = self.lookup(&id)?;
-        if te.is_none() {
-            return Err(RvError::ErrRequestInvalid);
-        }
-        let te = te.unwrap();
+        let te = self.lookup(&id)?.ok_or(RvError::ErrRequestInvalid)?;
 
         let increment_raw: i32 = serde_json::from_value(req.get_data("increment")?)?;
         let increment = Duration::from_secs(increment_raw as u64);
 
-        let auth = self.expiration.renew_token(&te.path, &te.id, increment)?;
+        self.expiration.renew_token(req, &te, increment)
+    }
 
-        let resp = Response { auth, ..Response::default() };
+    pub fn auth_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        if req.auth.is_none() {
+            return Err(rv_error_string!("request auth is nil"));
+        }
 
-        Ok(Some(resp))
+        let id = &req.auth.as_ref().unwrap().client_token;
+        let te = self.lookup(id)?.ok_or(rv_error_string!("no token entry found during lookup"))?;
+
+        let auth = req.auth.as_mut().unwrap();
+        auth.period = te.period;
+        auth.explicit_max_ttl = te.explicit_max_ttl;
+
+        Ok(Some(Response { auth: Some(auth.clone()), ..Default::default() }))
     }
 }
 
@@ -769,6 +848,17 @@ impl Handler for TokenStore {
                 auth.ttl = MAX_LEASE_DURATION_SECS;
             }
 
+            let token_ttl = calculate_ttl(
+                MAX_LEASE_TTL,
+                DEFAULT_LEASE_TTL,
+                Duration::ZERO,
+                auth.period,
+                auth.ttl,
+                auth.max_ttl,
+                auth.explicit_max_ttl,
+                SystemTime::now(),
+            )?;
+
             auth.token_policies = auth.policies.clone();
             sanitize_policies(&mut auth.token_policies, !auth.no_default_policy);
 
@@ -784,16 +874,19 @@ impl Handler for TokenStore {
                 path: req.path.clone(),
                 meta: auth.metadata.clone(),
                 display_name: auth.display_name.clone(),
-                ttl: auth.ttl.as_secs(),
+                ttl: token_ttl.as_secs(),
                 policies: auth.token_policies.clone(),
+                explicit_max_ttl: auth.explicit_max_ttl,
+                period: auth.period,
                 ..Default::default()
             };
 
             self.create(&mut te)?;
 
             auth.client_token = te.id.clone();
+            auth.ttl = Duration::from_secs(te.ttl);
 
-            self.expiration.register_auth(&req.path, auth)?;
+            self.expiration.register_auth(&te, auth)?;
 
             auth.policies = all_policies;
         }
@@ -811,7 +904,7 @@ mod mod_token_store_tests {
         test_utils::test_rusty_vault_init,
     };
 
-    macro_rules! new_token_store {
+    macro_rules! mock_token_store {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
             println!("test_rusty_vault_init, name: {}", name);
@@ -858,7 +951,7 @@ mod mod_token_store_tests {
 
     #[test]
     fn test_token_create_and_lookup() {
-        let token_store = new_token_store!();
+        let token_store = mock_token_store!();
 
         let mut entry = TokenEntry {
             policies: vec!["default".to_string()],
@@ -878,7 +971,7 @@ mod mod_token_store_tests {
 
     #[test]
     fn test_token_revoke() {
-        let token_store = new_token_store!();
+        let token_store = mock_token_store!();
 
         let mut entry = TokenEntry {
             policies: vec!["default".to_string()],
@@ -897,7 +990,7 @@ mod mod_token_store_tests {
 
     #[test]
     fn test_token_revoke_tree() {
-        let token_store = new_token_store!();
+        let token_store = mock_token_store!();
 
         let mut parent_entry = TokenEntry {
             policies: vec!["default".to_string()],
@@ -926,7 +1019,7 @@ mod mod_token_store_tests {
 
     #[test]
     fn test_token_handle_create_request() {
-        let token_store = new_token_store!();
+        let token_store = mock_token_store!();
         let mock_backend = MockBackend(());
 
         let mut entry = TokenEntry {

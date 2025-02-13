@@ -63,6 +63,7 @@ impl BarrierView {
                 }
             }
         }
+        keys.sort();
         Ok(keys)
     }
 
