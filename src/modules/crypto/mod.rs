@@ -467,7 +467,6 @@ mod crypto_test {
 
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     use crate::modules::crypto::SM4;
-    use crate::modules::crypto::{AEADCipher, AESKeySize, BlockCipher, CipherMode, AES};
 
     #[test]
     fn test_aes_keygen() {
