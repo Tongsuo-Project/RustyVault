@@ -62,13 +62,6 @@ jobs:
         make install
         popd
     - uses: actions/checkout@v3
-    - name: Configure the Cargo.toml to depend on the tongsuo library.
-      run : |
-        pwd
-        echo '[patch.crates-io]' >> ./Cargo.toml
-        echo 'openssl = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }' >> ./Cargo.toml
-        echo 'openssl-sys = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }' >> ./Cargo.toml
-        cargo update
     - name: Build
       run : |
         export LD_LIBRARY_PATH=${RUNNER_TEMP}/tongsuo/lib
