@@ -8,8 +8,8 @@ use std::{
     sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard},
 };
 
-use thiserror::Error;
 use actix_web::http::StatusCode;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RvError {
@@ -83,25 +83,25 @@ pub enum RvError {
     ErrPhysicalBackendPrefixInvalid,
     #[error("Physical backend key is invalid.")]
     ErrPhysicalBackendKeyInvalid,
-    #[error("Barrier key sanity check failed.")]
+    #[error("RustyVault key sanity check failed.")]
     ErrBarrierKeySanityCheckFailed,
-    #[error("Barrier has been initialized.")]
+    #[error("RustyVault is already initialized.")]
     ErrBarrierAlreadyInit,
-    #[error("Barrier key is invalid.")]
+    #[error("RustyVault unseal key is invalid.")]
     ErrBarrierKeyInvalid,
-    #[error("Barrier is not initialized.")]
+    #[error("RustyVault is not initialized.")]
     ErrBarrierNotInit,
-    #[error("Barrier has been sealed.")]
+    #[error("RustyVault is sealed.")]
     ErrBarrierSealed,
-    #[error("Barrier has been unsealed.")]
+    #[error("RustyVault is unsealed.")]
     ErrBarrierUnsealed,
-    #[error("Barrier unseal failed.")]
+    #[error("RustyVault unseal failed.")]
     ErrBarrierUnsealFailed,
-    #[error("Barrier epoch do not match.")]
+    #[error("RustyVualt barrier epoch do not match.")]
     ErrBarrierEpochMismatch,
-    #[error("Barrier version do not match.")]
+    #[error("RustyVault barrier version do not match.")]
     ErrBarrierVersionMismatch,
-    #[error("Barrier key generation failed.")]
+    #[error("RustyVault barrier key generation failed.")]
     ErrBarrierKeyGenerationFailed,
     #[error("Router mount conflict.")]
     ErrRouterMountConflict,
@@ -137,6 +137,8 @@ pub enum RvError {
     ErrRequestFieldNotFound,
     #[error("Request field is invalid.")]
     ErrRequestFieldInvalid,
+    #[error("Response data is invalid.")]
+    ErrResponseDataInvalid,
     #[error("Handler is default.")]
     ErrHandlerDefault,
     #[error("Module kv data field is missing.")]
@@ -149,6 +151,8 @@ pub enum RvError {
     ErrModuleConflict,
     #[error("Module is not init.")]
     ErrModuleNotInit,
+    #[error("Module is not found.")]
+    ErrModuleNotFound,
     #[error("Auth module is disabled.")]
     ErrAuthModuleDisabled,
     #[error("Auth token is not found.")]
@@ -200,10 +204,15 @@ pub enum RvError {
         #[from]
         source: io::Error,
     },
-    #[error("Some serde error happened, {:?}", .source)]
-    Serde {
+    #[error("Some serde_json error happened, {:?}", .source)]
+    SerdeJson {
         #[from]
         source: serde_json::Error,
+    },
+    #[error("Some serde_yaml error happened, {:?}", .source)]
+    SerdeYaml {
+        #[from]
+        source: serde_yaml::Error,
     },
     #[error("Some openssl error happened, {:?}", .source)]
     OpenSSL {
@@ -249,11 +258,6 @@ pub enum RvError {
     ChronoError {
         #[from]
         source: chrono::ParseError,
-    },
-    #[error("Some delay_timer error happened, {:?}", .source)]
-    TaskError {
-        #[from]
-        source: delay_timer::error::TaskError,
     },
     #[error("Some bcrypt error happened, {:?}", .source)]
     BcryptError {
@@ -302,6 +306,15 @@ pub enum RvError {
     #[error("Some rustls_pemfile error happened")]
     RustlsPemFileError(rustls_pemfile::Error),
 
+    #[error("Some rustls_pki_types error happened")]
+    RustlsPkiTypesPemFileError(rustls::pki_types::pem::Error),
+
+    #[error("Some tokio task error happened")]
+    TokioTaskJoinError {
+        #[from]
+        source: tokio::task::JoinError,
+    },
+
     #[error("Some string utf8 error happened, {:?}", .source)]
     StringUtf8Error {
         #[from]
@@ -335,6 +348,8 @@ pub enum RvError {
     ErrResponse(String),
     #[error("Some error happend, status: {0}, response text: {1}")]
     ErrResponseStatus(u16, String),
+    #[error("{0}")]
+    ErrString(String),
     #[error("Unknown error.")]
     ErrUnknown,
 }
@@ -343,12 +358,19 @@ impl RvError {
     pub fn response_status(&self) -> StatusCode {
         match self {
             RvError::ErrRequestNoData
-                | RvError::ErrRequestNoDataField
-                | RvError::ErrRequestInvalid
-                | RvError::ErrRequestClientTokenMissing
-                | RvError::ErrRequestFieldNotFound
-                | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
+            | RvError::ErrBarrierAlreadyInit
+            | RvError::ErrBarrierKeyInvalid
+            | RvError::ErrBarrierNotInit
+            | RvError::ErrBarrierUnsealed
+            | RvError::ErrBarrierUnsealFailed
+            | RvError::ErrRequestNoDataField
+            | RvError::ErrRequestInvalid
+            | RvError::ErrRequestClientTokenMissing
+            | RvError::ErrRequestFieldNotFound
+            | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
+            RvError::ErrBarrierSealed => StatusCode::SERVICE_UNAVAILABLE,
             RvError::ErrPermissionDenied => StatusCode::FORBIDDEN,
+            RvError::ErrRouterMountNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -402,6 +424,7 @@ impl PartialEq for RvError {
             | (RvError::ErrRequestClientTokenMissing, RvError::ErrRequestClientTokenMissing)
             | (RvError::ErrRequestFieldNotFound, RvError::ErrRequestFieldNotFound)
             | (RvError::ErrRequestFieldInvalid, RvError::ErrRequestFieldInvalid)
+            | (RvError::ErrResponseDataInvalid, RvError::ErrResponseDataInvalid)
             | (RvError::ErrHandlerDefault, RvError::ErrHandlerDefault)
             | (RvError::ErrModuleKvDataFieldMissing, RvError::ErrModuleKvDataFieldMissing)
             | (RvError::ErrRustDowncastFailed, RvError::ErrRustDowncastFailed)
@@ -414,6 +437,7 @@ impl PartialEq for RvError {
             | (RvError::ErrConfigListenerNotFound, RvError::ErrConfigListenerNotFound)
             | (RvError::ErrModuleConflict, RvError::ErrModuleConflict)
             | (RvError::ErrModuleNotInit, RvError::ErrModuleNotInit)
+            | (RvError::ErrModuleNotFound, RvError::ErrModuleNotFound)
             | (RvError::ErrAuthModuleDisabled, RvError::ErrAuthModuleDisabled)
             | (RvError::ErrAuthTokenNotFound, RvError::ErrAuthTokenNotFound)
             | (RvError::ErrAuthTokenIdInvalid, RvError::ErrAuthTokenIdInvalid)
@@ -438,6 +462,9 @@ impl PartialEq for RvError {
             | (RvError::ErrCredentailInvalid, RvError::ErrCredentailInvalid)
             | (RvError::ErrCredentailNotConfig, RvError::ErrCredentailNotConfig)
             | (RvError::ErrUnknown, RvError::ErrUnknown) => true,
+            (RvError::ErrResponse(a), RvError::ErrResponse(b)) => a == b,
+            (RvError::ErrResponseStatus(sa, ta), RvError::ErrResponseStatus(sb, tb)) => sa == sb && ta == tb,
+            (RvError::ErrString(a), RvError::ErrString(b)) => a == b,
             _ => false,
         }
     }
@@ -459,6 +486,19 @@ impl From<rustls_pemfile::Error> for RvError {
     fn from(err: rustls_pemfile::Error) -> Self {
         RvError::RustlsPemFileError(err)
     }
+}
+
+impl From<rustls::pki_types::pem::Error> for RvError {
+    fn from(err: rustls::pki_types::pem::Error) -> Self {
+        RvError::RustlsPkiTypesPemFileError(err)
+    }
+}
+
+#[macro_export]
+macro_rules! rv_error_string {
+    ($message:expr) => {
+        RvError::ErrString($message.to_string())
+    };
 }
 
 #[macro_export]

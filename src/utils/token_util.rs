@@ -10,42 +10,47 @@ use crate::{
     utils::{deserialize_duration, serialize_duration, sock_addr::SockAddrMarshaler},
 };
 
-/*
-const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
-const MAX_LEASE_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
-*/
+// 24h
+pub const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(24 * 60 * 60 as u64);
+// 30d
+pub const MAX_LEASE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60 as u64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenParams {
+    #[serde(default)]
     pub token_type: String,
 
     // The TTL to user for the token
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_ttl: Duration,
 
     // The max TTL to use for the token
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_max_ttl: Duration,
 
     // If set, the token entry will have an explicit maximum TTL set, rather than deferring to role/mount values
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_explicit_max_ttl: Duration,
 
     // If non-zero, tokens created using this role will be able to be renewed forever,
     // but will have a fixed renewal period of this value
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub token_period: Duration,
 
     // If set, core will not automatically add default to the policy list
+    #[serde(default)]
     pub token_no_default_policy: bool,
 
     // The maximum number of times a token issued from this role may be used.
+    #[serde(default)]
     pub token_num_uses: u64,
 
     // The policies to set
+    #[serde(default)]
     pub token_policies: Vec<String>,
 
     // The set of CIDRs that tokens generated using this role will be bound to
+    #[serde(default)]
     pub token_bound_cidrs: Vec<SockAddrMarshaler>,
 }
 
@@ -194,6 +199,7 @@ impl TokenParams {
         auth.ttl = self.token_ttl;
         auth.max_ttl = self.token_max_ttl;
         auth.policies = self.token_policies.clone();
+        auth.no_default_policy = self.token_no_default_policy;
         auth.renewable = true;
     }
 }

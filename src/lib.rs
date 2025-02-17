@@ -24,6 +24,7 @@
 #[cfg(feature = "storage_mysql")]
 extern crate diesel;
 
+pub mod api;
 pub mod cli;
 pub mod context;
 pub mod core;
@@ -31,6 +32,7 @@ pub mod errors;
 pub mod handler;
 pub mod http;
 pub mod logical;
+pub mod metrics;
 pub mod module_manager;
 pub mod modules;
 pub mod mount;
@@ -40,7 +42,6 @@ pub mod schema;
 pub mod shamir;
 pub mod storage;
 pub mod utils;
-pub mod metrics;
 
 #[cfg(test)]
 pub mod test_utils;

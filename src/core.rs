@@ -19,15 +19,16 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::{
-    cli::config::Config,
+    cli::config::{Config, MountEntryHMACLevel},
     errors::RvError,
-    handler::Handler,
+    handler::{AuthHandler, HandlePhase, Handler},
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
     modules::{
         auth::AuthModule,
-        credential::{cert::CertModule, approle::AppRoleModule, userpass::UserPassModule},
+        credential::{approle::AppRoleModule, cert::CertModule, userpass::UserPassModule},
         pki::PkiModule,
+        policy::PolicyModule,
     },
     mount::MountTable,
     router::Router,
@@ -72,10 +73,13 @@ pub struct Core {
     pub mounts: Arc<MountTable>,
     pub router: Arc<Router>,
     pub handlers: RwLock<Vec<Arc<dyn Handler>>>,
+    pub auth_handlers: Arc<RwLock<Vec<Arc<dyn AuthHandler>>>>,
     pub logical_backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
     pub module_manager: ModuleManager,
     pub sealed: bool,
     pub unseal_key_shares: Vec<Vec<u8>>,
+    pub hmac_key: Vec<u8>,
+    pub mount_entry_hmac_level: MountEntryHMACLevel,
 }
 
 impl Default for Core {
@@ -92,22 +96,33 @@ impl Default for Core {
             mounts: Arc::new(MountTable::new()),
             router: Arc::clone(&router),
             handlers: RwLock::new(vec![router]),
+            auth_handlers: Arc::new(RwLock::new(Vec::new())),
             logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
             sealed: true,
             unseal_key_shares: Vec::new(),
+            hmac_key: Vec::new(),
+            mount_entry_hmac_level: MountEntryHMACLevel::None,
         }
     }
 }
 
 impl Core {
-    pub fn config(&mut self, core: Arc<RwLock<Core>>, _config: Option<Config>) -> Result<(), RvError> {
+    pub fn config(&mut self, core: Arc<RwLock<Core>>, config: Option<&Config>) -> Result<(), RvError> {
+        if let Some(conf) = config {
+            self.mount_entry_hmac_level = conf.mount_entry_hmac_level;
+        }
+
         self.module_manager.set_default_modules(Arc::clone(&core))?;
         self.self_ref = Some(Arc::clone(&core));
 
         // add auth_module
-        let auth_module = AuthModule::new(self);
+        let auth_module = AuthModule::new(self)?;
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(auth_module))))?;
+
+        // add policy_module
+        let policy_module = PolicyModule::new(self);
+        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(policy_module))))?;
 
         // add pki_module
         let pki_module = PkiModule::new(self);
@@ -124,6 +139,20 @@ impl Core {
         // add credential module: cert
         let cert_module = CertModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
+
+        let handlers = { self.handlers.read()?.clone() };
+        for handler in handlers.iter() {
+            match handler.post_config(self, config) {
+                Ok(_) => {
+                    continue;
+                }
+                Err(error) => {
+                    if error != RvError::ErrHandlerDefault {
+                        return Err(error);
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
@@ -192,7 +221,7 @@ impl Core {
         if let Some(module) = self.module_manager.get_module("auth") {
             let auth_mod = module.read()?;
             if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                let te = auth_module.token_store.root_token()?;
+                let te = auth_module.token_store.as_ref().unwrap().root_token()?;
                 init_result.root_token = te.id;
             } else {
                 log::error!("downcast auth module failed!");
@@ -252,6 +281,22 @@ impl Core {
     pub fn delete_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
         let mut handlers = self.handlers.write()?;
         handlers.retain(|h| h.name() != handler.name());
+        Ok(())
+    }
+
+    pub fn add_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
+        let mut auth_handlers = self.auth_handlers.write()?;
+        if let Some(_) = auth_handlers.iter().find(|h| h.name() == auth_handler.name()) {
+            return Err(RvError::ErrCoreHandlerExist);
+        }
+
+        auth_handlers.push(auth_handler);
+        Ok(())
+    }
+
+    pub fn delete_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
+        let mut auth_handlers = self.auth_handlers.write()?;
+        auth_handlers.retain(|h| h.name() != auth_handler.name());
         Ok(())
     }
 
@@ -352,7 +397,12 @@ impl Core {
         self.module_manager.setup(self)?;
 
         // Perform initial setup
-        self.mounts.load_or_default(self.barrier.as_storage())?;
+        self.hmac_key = self.barrier.derive_hmac_key()?;
+        self.mounts.load_or_default(
+            self.barrier.as_storage(),
+            Some(&self.hmac_key),
+            self.mount_entry_hmac_level.clone(),
+        )?;
 
         self.setup_mounts()?;
 
@@ -367,7 +417,7 @@ impl Core {
         Ok(())
     }
 
-    pub fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut resp = None;
         let mut err: Option<RvError> = None;
         let handlers = self.handlers.read()?;
@@ -376,66 +426,27 @@ impl Core {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        for handler in handlers.iter() {
-            match handler.pre_route(req) {
-                Ok(res) => {
-                    if res.is_some() {
-                        resp = res;
-                        break;
-                    }
-                }
-                Err(error) => {
-                    if error != RvError::ErrHandlerDefault {
-                        err = Some(error);
-                        break;
-                    }
-                }
-            }
+        match self.handle_pre_route_phase(&handlers, req).await {
+            Ok(ret) => resp = ret,
+            Err(e) => err = Some(e),
         }
 
         if resp.is_none() && err.is_none() {
-            for handler in handlers.iter() {
-                match handler.route(req) {
-                    Ok(res) => {
-                        if res.is_some() {
-                            resp = res;
-                            break;
-                        }
-                    }
-                    Err(error) => {
-                        if error != RvError::ErrHandlerDefault {
-                            err = Some(error);
-                            break;
-                        }
-                    }
-                }
+            match self.handle_route_phase(&handlers, req).await {
+                Ok(ret) => resp = ret,
+                Err(e) => err = Some(e),
             }
 
             if err.is_none() {
-                for handler in handlers.iter() {
-                    match handler.post_route(req, &mut resp) {
-                        Ok(_) => {}
-                        Err(error) => {
-                            if error != RvError::ErrHandlerDefault {
-                                err = Some(error);
-                                break;
-                            }
-                        }
-                    }
+                match self.handle_post_route_phase(&handlers, req, &mut resp).await {
+                    Err(e) => err = Some(e),
+                    _ => {}
                 }
             }
         }
 
-        for handler in handlers.iter() {
-            match handler.log(req, &resp) {
-                Ok(_) => {}
-                Err(error) => {
-                    if error != RvError::ErrHandlerDefault {
-                        err = Some(error);
-                        break;
-                    }
-                }
-            }
+        if err.is_none() {
+            let _ = self.handle_log_phase(&handlers, req, &mut resp).await?;
         }
 
         if err.is_some() {
@@ -443,6 +454,98 @@ impl Core {
         }
 
         Ok(resp)
+    }
+
+    async fn handle_pre_route_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
+        req.handle_phase = HandlePhase::PreRoute;
+        for handler in handlers.iter() {
+            match handler.pre_route(req).await {
+                Ok(Some(res)) => return Ok(Some(res)),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn handle_route_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
+        req.handle_phase = HandlePhase::Route;
+        if let Some(bind_handler) = req.get_handler() {
+            match bind_handler.route(req).await {
+                Ok(res) => return Ok(res),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => {}
+            }
+        }
+
+        for handler in handlers.iter() {
+            match handler.route(req).await {
+                Ok(Some(res)) => return Ok(Some(res)),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn handle_post_route_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+        resp: &mut Option<Response>,
+    ) -> Result<(), RvError> {
+        req.handle_phase = HandlePhase::PostRoute;
+        if let Some(bind_handler) = req.get_handler() {
+            match bind_handler.post_route(req, resp).await {
+                Ok(_) => return Ok(()),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => {}
+            }
+        }
+
+        for handler in handlers.iter() {
+            match handler.post_route(req, resp).await {
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_log_phase(
+        &self,
+        handlers: &Vec<Arc<dyn Handler>>,
+        req: &mut Request,
+        resp: &mut Option<Response>,
+    ) -> Result<(), RvError> {
+        req.handle_phase = HandlePhase::Log;
+        if let Some(bind_handler) = req.get_handler() {
+            match bind_handler.log(req, resp).await {
+                Ok(_) => return Ok(()),
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => {}
+            }
+        }
+
+        for handler in handlers.iter() {
+            match handler.log(req, resp).await {
+                Err(e) if e != RvError::ErrHandlerDefault => return Err(e),
+                _ => continue,
+            }
+        }
+
+        Ok(())
     }
 }
 

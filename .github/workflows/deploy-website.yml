@@ -1,0 +1,58 @@
+name: Deploy to AliCloud OSS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/website.yml'
+      - ".github/workflows/deploy-website.yml"
+      - 'docs/**'
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./docs
+
+jobs:
+  build:
+    name: Build Docusaurus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Build website
+        run: yarn build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: docs/build
+  
+  deploy:
+    name: Deploy to AliCloud OSS
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+        - name: Download build artifacts
+          uses: actions/download-artifact@v4
+          with:
+            name: build-artifacts
+            path: docs/build
+        
+        - uses: YangHanlin/oss-deployment-action@v1
+          with:
+            oss-endpoint: oss-cn-beijing.aliyuncs.com
+            oss-accesskey-id: ${{ secrets.ALIYUN_OSS_ACCESSKEY_ID }}
+            oss-accesskey-secret: ${{ secrets.ALIYUN_OSS_ACCESSKEY_SECRET }}
+            oss-path: oss://rustyvault-doc/
+            local-path: docs/build
+            delete-first: true

@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
+use better_default::Default;
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
 use super::lease::Lease;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize, Deref, DerefMut)]
 pub struct Auth {
     #[deref]
     #[deref_mut]
@@ -26,6 +27,10 @@ pub struct Auth {
     // Policies is the list of policies that the authenticated user is associated with.
     pub policies: Vec<String>,
 
+    // token_policies break down the list in policies to help determine where a policy was sourced
+    #[serde(default)]
+    pub token_policies: Vec<String>,
+
     // Indicates that the default policy should not be added by core when creating a token.
     // The default policy will still be added if it's explicitly defined.
     pub no_default_policy: bool,
@@ -37,4 +42,31 @@ pub struct Auth {
     // Metadata is used to attach arbitrary string-type metadata to an authenticated user.
     // This metadata will be outputted into the audit log.
     pub metadata: HashMap<String, String>,
+
+    // policy_results is the set of policies that grant the token access to the requesting path.
+    pub policy_results: Option<PolicyResults>,
+
+    // period indicates that the token generated using this Auth object should never expire.
+    // The token should be renewed within the duration specified by this period.
+    pub period: Duration,
+
+    // explicit_max_ttl is the max TTL that constrains periodic tokens. For normal tokens,
+    // this value is constrained by the configured max ttl.
+    pub explicit_max_ttl: Duration,
+}
+
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize)]
+pub struct PolicyResults {
+    pub allowed: bool,
+    pub granting_policies: Vec<PolicyInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyInfo {
+    pub name: String,
+    pub namespace_id: String,
+    pub namespace_path: String,
+    #[serde(rename = "type")]
+    #[default("acl".into())]
+    pub policy_type: String,
 }

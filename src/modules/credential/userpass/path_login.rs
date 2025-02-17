@@ -5,7 +5,8 @@ use crate::{
     context::Context,
     errors::RvError,
     logical::{Auth, Backend, Field, FieldType, Lease, Operation, Path, PathOperation, Request, Response},
-    new_fields, new_fields_internal, new_path, new_path_internal,
+    new_fields, new_fields_internal, new_path, new_path_internal, rv_error_string,
+    utils::policy::equivalent_policies,
 };
 
 impl UserPassBackend {
@@ -72,8 +73,40 @@ impl UserPassBackendInner {
             ..Default::default()
         };
         auth.metadata.insert("username".to_string(), username.to_string());
+
+        user.populate_token_auth(&mut auth);
+
         let resp = Response { auth: Some(auth), ..Response::default() };
 
         Ok(Some(resp))
+    }
+
+    pub fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        if req.auth.is_none() {
+            return Err(rv_error_string!("invalid request"));
+        }
+        let mut auth = req.auth.clone().unwrap();
+        let username = auth.metadata.get("username");
+        if username.is_none() {
+            return Ok(None);
+        }
+        let username = username.unwrap();
+
+        let user = self.get_user(req, username.as_str())?;
+        if user.is_none() {
+            return Ok(None);
+        }
+
+        let user = user.unwrap();
+
+        if !equivalent_policies(&user.policies, &auth.policies) {
+            return Err(rv_error_string!("policies have changed, not renewing"));
+        }
+
+        auth.period = user.token_period;
+        auth.ttl = user.token_ttl;
+        auth.max_ttl = user.token_max_ttl;
+
+        Ok(Some(Response { auth: Some(auth), ..Response::default() }))
     }
 }

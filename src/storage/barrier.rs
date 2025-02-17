@@ -20,5 +20,6 @@ pub trait SecurityBarrier: Storage + Send + Sync {
     fn sealed(&self) -> Result<bool, RvError>;
     fn unseal(&self, key: &[u8]) -> Result<(), RvError>;
     fn seal(&self) -> Result<(), RvError>;
+    fn derive_hmac_key(&self) -> Result<Vec<u8>, RvError>;
     fn as_storage(&self) -> &dyn Storage;
 }

@@ -2210,13 +2210,13 @@ mod test {
         },
     };
 
-    #[test]
-    fn test_approle_read_local_secret_ids() {
+    #[tokio::test]
+    async fn test_approle_read_local_secret_ids() {
         let (root_token, core) = test_rusty_vault_init("test_approle_read_local_secret_ids");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         // Create a role
         let data = json!({
@@ -2227,22 +2227,22 @@ mod test {
         .unwrap()
         .clone();
 
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data.clone()));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data.clone())).await;
         assert!(resp.is_ok());
 
         // Get the role field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole/local-secret-ids", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole/local-secret-ids", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["local_secret_ids"].as_bool().unwrap(), data["local_secret_ids"].as_bool().unwrap());
     }
 
-    #[test]
-    fn test_approle_local_non_secret_ids() {
+    #[tokio::test]
+    async fn test_approle_local_non_secret_ids() {
         let (root_token, core) = test_rusty_vault_init("test_approle_local_non_secret_ids");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         // Create a role with local_secret_ids set
         let data = json!({
@@ -2253,7 +2253,7 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(data.clone()));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(data.clone())).await;
         assert!(resp.is_ok());
 
         // Create another role without setting local_secret_ids
@@ -2264,40 +2264,44 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole2", true, Some(data.clone()));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole2", true, Some(data.clone())).await;
         assert!(resp.is_ok());
 
         // Create secret IDs on testrole1
         let len = 10;
         for _i in 0..len {
-            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None).is_ok());
+            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None)
+                .await
+                .is_ok());
         }
 
         // Check the number of secret IDs generated
-        let resp = test_list_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert!(resp_data["keys"].is_array());
         assert_eq!(resp_data["keys"].as_array().unwrap().len(), len);
 
         // Create secret IDs on testrole2
         for _i in 0..len {
-            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true, None).is_ok());
+            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true, None)
+                .await
+                .is_ok());
         }
 
         // Check the number of secret IDs generated
-        let resp = test_list_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert!(resp_data["keys"].is_array());
         assert_eq!(resp_data["keys"].as_array().unwrap().len(), len);
     }
 
-    #[test]
-    fn test_approle_upgrade_secret_id_prefix() {
+    #[tokio::test]
+    async fn test_approle_upgrade_secret_id_prefix() {
         let (root_token, core) = test_rusty_vault_init("test_approle_upgrade_secret_id_prefix");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let module = core.module_manager.get_module("approle").unwrap();
         let approle_mod = module.read().unwrap();
@@ -2327,7 +2331,7 @@ mod test {
         req.operation = Operation::Read;
         req.path = "auth/approle/role/testrole".to_string();
         req.client_token = root_token.to_string();
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
 
         let mock_backend = approle_module.new_backend();
@@ -2337,13 +2341,13 @@ mod test {
         assert!(!resp_data["local_secret_ids"].as_bool().unwrap());
     }
 
-    #[test]
-    fn test_approle_local_secret_id_immutablility() {
+    #[tokio::test]
+    async fn test_approle_local_secret_id_immutablility() {
         let (root_token, core) = test_rusty_vault_init("test_approle_local_secret_id_immutablility");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         // Create a role with local_secret_ids set
         let data = json!({
@@ -2355,20 +2359,20 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data.clone()));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data.clone())).await;
         assert!(resp.is_ok());
 
         // Attempt to modify local_secret_ids should fail
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/testrole", false, Some(data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/testrole", false, Some(data.clone())).await;
     }
 
-    #[test]
-    fn test_approle_upgrade_bound_cidr_list() {
+    #[tokio::test]
+    async fn test_approle_upgrade_bound_cidr_list() {
         let (root_token, core) = test_rusty_vault_init("test_approle_upgrade_bound_cidr_list");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         // Create a role with bound_cidr_list set
         let data = json!({
@@ -2379,11 +2383,11 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data.clone()));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data.clone())).await;
         assert!(resp.is_ok());
 
         // Read the role and check that the bound_cidr_list is set properly
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let expected: Vec<Value> =
@@ -2426,20 +2430,20 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole/secret-id", true, Some(data));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole/secret-id", true, Some(data)).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
         assert_ne!(secret_id, "");
     }
 
-    #[test]
-    fn test_approle_role_name_lower_casing() {
+    #[tokio::test]
+    async fn test_approle_role_name_lower_casing() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_name_lower_casing");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let module = core.module_manager.get_module("approle").unwrap();
         let approle_mod = module.read().unwrap();
@@ -2464,7 +2468,7 @@ mod test {
         req.operation = Operation::Write;
         req.path = "auth/approle/role/testRoleName/secret-id".to_string();
         req.client_token = root_token.to_string();
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
 
         let mock_backend = approle_module.new_backend();
@@ -2485,7 +2489,7 @@ mod test {
         req.path = "auth/approle/login".to_string();
         req.operation = Operation::Write;
         req.body = Some(data);
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.login(&mock_backend, &mut req);
         assert!(resp.is_ok());
@@ -2494,7 +2498,7 @@ mod test {
         req.path = "auth/approle/role/testrolename/secret-id".to_string();
         req.operation = Operation::Write;
         req.body = None;
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.write_role_secret_id(&mock_backend, &mut req);
         assert!(resp.is_ok());
@@ -2512,7 +2516,7 @@ mod test {
         req.path = "auth/approle/login".to_string();
         req.operation = Operation::Write;
         req.body = Some(data);
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.login(&mock_backend, &mut req);
         assert!(resp.is_err());
@@ -2523,7 +2527,7 @@ mod test {
         req.path = "auth/approle/role/testRoleName".to_string();
         req.operation = Operation::Delete;
         req.body = None;
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.delete_role(&mock_backend, &mut req);
         assert!(resp.is_ok());
@@ -2535,22 +2539,22 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testRoleName", true, Some(data));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testRoleName", true, Some(data)).await;
         assert!(resp.is_ok());
 
         // Create secret id with lower cased role name
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrolename/secret-id", true, None);
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrolename/secret-id", true, None).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrolename/role-id", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrolename/role-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let role_id = resp_data["role_id"].as_str().unwrap();
 
         // Login should pass
-        let _ = test_login(&core, "approle", &role_id, &secret_id, true);
+        let _ = test_login(&core, "approle", &role_id, &secret_id, true).await;
 
         // Lookup of secret ID should work in case-insensitive manner
         let data = json!({
@@ -2560,24 +2564,25 @@ mod test {
         .unwrap()
         .clone();
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrolename/secret-id/lookup", true, Some(data));
+            test_write_api(&core, &root_token, "auth/approle/role/testrolename/secret-id/lookup", true, Some(data))
+                .await;
         assert!(resp.is_ok());
 
         // Listing of secret IDs should work in case-insensitive manner
-        let resp = test_list_api(&core, &root_token, "auth/approle/role/testrolename/secret-id", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role/testrolename/secret-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let keys = resp_data["keys"].as_array().unwrap();
         assert_eq!(keys.len(), 1);
     }
 
-    #[test]
-    fn test_approle_role_read_set_index() {
+    #[tokio::test]
+    async fn test_approle_role_read_set_index() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_read_set_index");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let module = core.module_manager.get_module("approle").unwrap();
         let approle_mod = module.read().unwrap();
@@ -2602,7 +2607,7 @@ mod test {
         req.operation = Operation::Read;
         req.path = "auth/approle/role/testrole/role-id".to_string();
         req.client_token = root_token.to_string();
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.read_role_role_id(&mock_backend, &mut req);
         assert!(resp.is_ok());
@@ -2613,7 +2618,7 @@ mod test {
         req.operation = Operation::Write;
         req.path = "auth/approle/role/testrole/role-id".to_string();
         req.client_token = root_token.to_string();
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.delete_role_id(&mut req, &role_id);
         assert!(resp.is_ok());
@@ -2622,7 +2627,7 @@ mod test {
         req.operation = Operation::Read;
         req.path = "auth/approle/role/testrole".to_string();
         req.client_token = root_token.to_string();
-        let _resp = core.handle_request(&mut req);
+        let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.read_role(&mock_backend, &mut req);
         assert!(resp.is_ok());
@@ -2645,19 +2650,19 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole", true, Some(data)).await;
         assert!(resp.is_ok());
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true).await;
         assert!(resp.is_ok());
     }
 
-    #[test]
-    fn test_approle_cidr_subset() {
+    #[tokio::test]
+    async fn test_approle_cidr_subset() {
         let (root_token, core) = test_rusty_vault_init("test_approle_cidr_subset");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let mut role_data = json!({
             "role_id": "role-id-123",
@@ -2667,10 +2672,11 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone()));
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true).await;
         assert!(resp.is_ok());
 
         let mut secret_data = json!({
@@ -2685,25 +2691,27 @@ mod test {
             "auth/approle/role/testrole1/secret-id",
             false,
             Some(secret_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.is_err());
 
         role_data["bound_cidr_list"] = Value::from("192.168.27.29/16,172.245.30.40/24,10.20.30.40/30");
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data));
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data)).await;
         assert!(resp.is_ok());
 
         secret_data["cidr_list"] = Value::from("192.168.27.29/20,172.245.30.40/25,10.20.30.40/32");
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, Some(secret_data));
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, Some(secret_data)).await;
         assert!(resp.is_ok());
     }
 
-    #[test]
-    fn test_approle_token_bound_cidr_subset_32_mask() {
+    #[tokio::test]
+    async fn test_approle_token_bound_cidr_subset_32_mask() {
         let (root_token, core) = test_rusty_vault_init("test_approle_token_bound_cidr_subset_32_mask");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let role_data = json!({
             "role_id": "role-id-123",
@@ -2713,10 +2721,11 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone()));
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/testrole", true).await;
         assert!(resp.is_ok());
 
         let mut secret_data = json!({
@@ -2731,22 +2740,23 @@ mod test {
             "auth/approle/role/testrole1/secret-id",
             true,
             Some(secret_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.is_ok());
 
         secret_data["token_bound_cidrs"] = Value::from("127.0.0.1/24");
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", false, Some(secret_data));
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", false, Some(secret_data)).await;
         assert!(resp.is_err());
     }
 
-    #[test]
-    fn test_approle_role_constraints() {
+    #[tokio::test]
+    async fn test_approle_role_constraints() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_constraints");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         // Set bind_secret_id, which is enabled by default
         let mut role_data = json!({
@@ -2756,31 +2766,34 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone()));
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
         // Set bound_cidr_list alone by explicitly disabling bind_secret_id
         role_data.insert("bind_secret_id".to_string(), Value::from(false));
         role_data.insert("token_bound_cidrs".to_string(), Value::from("0.0.0.0/0"));
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone()));
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", true, Some(role_data.clone())).await;
         assert!(resp.is_ok());
 
         // Remove both constraints
         role_data["bind_secret_id"] = Value::from(false);
         role_data["token_bound_cidrs"] = Value::from("");
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1", false, Some(role_data.clone()));
+        let resp =
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1", false, Some(role_data.clone())).await;
         assert!(resp.is_err());
     }
 
-    #[test]
-    fn test_approle_update_role_id() {
+    #[tokio::test]
+    async fn test_approle_update_role_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_update_role_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "testrole1", "role-id-123", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "testrole1", "role-id-123", "a,b", true).await;
 
         let role_id_data = json!({
             "role_id": "customroleid",
@@ -2789,38 +2802,39 @@ mod test {
         .unwrap()
         .clone();
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone()));
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone()))
+                .await;
         assert!(resp.is_ok());
 
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None);
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
 
         // Login should fail
-        let _ = test_login(&core, "approle", "role-id-123", &secret_id, false);
+        let _ = test_login(&core, "approle", "role-id-123", &secret_id, false).await;
 
         // Login should pass
-        let _ = test_login(&core, "approle", "customroleid", &secret_id, true);
+        let _ = test_login(&core, "approle", "customroleid", &secret_id, true).await;
     }
 
-    #[test]
-    fn test_approle_role_id_uniqueness() {
+    #[tokio::test]
+    async fn test_approle_role_id_uniqueness() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_id_uniqueness");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "testrole1", "role-id-123", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "testrole1", "role-id-123", "a,b", true).await;
 
-        test_write_role(&core, &root_token, "approle", "testrole2", "role-id-123", "a,b", false);
+        test_write_role(&core, &root_token, "approle", "testrole2", "role-id-123", "a,b", false).await;
 
-        test_write_role(&core, &root_token, "approle", "testrole2", "role-id-456", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "testrole2", "role-id-456", "a,b", true).await;
 
-        test_write_role(&core, &root_token, "approle", "testrole2", "role-id-123", "a,b", false);
+        test_write_role(&core, &root_token, "approle", "testrole2", "role-id-123", "a,b", false).await;
 
-        test_write_role(&core, &root_token, "approle", "testrole1", "role-id-456", "a,b", false);
+        test_write_role(&core, &root_token, "approle", "testrole1", "role-id-456", "a,b", false).await;
 
         let mut role_id_data = json!({
             "role_id": "role-id-456",
@@ -2834,7 +2848,8 @@ mod test {
             "auth/approle/role/testrole1/role-id",
             false,
             Some(role_id_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.is_err());
 
         role_id_data["role_id"] = Value::from("role-id-123");
@@ -2844,55 +2859,58 @@ mod test {
             "auth/approle/role/testrole2/role-id",
             false,
             Some(role_id_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.is_err());
 
         role_id_data["role_id"] = Value::from("role-id-2000");
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrole2/role-id", true, Some(role_id_data.clone()));
+            test_write_api(&core, &root_token, "auth/approle/role/testrole2/role-id", true, Some(role_id_data.clone()))
+                .await;
         assert!(resp.is_ok());
 
         role_id_data["role_id"] = Value::from("role-id-1000");
         let resp =
-            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone()));
+            test_write_api(&core, &root_token, "auth/approle/role/testrole1/role-id", true, Some(role_id_data.clone()))
+                .await;
         assert!(resp.is_ok());
     }
 
-    #[test]
-    fn test_approle_role_delete_secret_id() {
+    #[tokio::test]
+    async fn test_approle_role_delete_secret_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_delete_secret_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true).await;
 
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
 
-        let resp = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let keys = resp_data["keys"].as_array().unwrap();
         assert_eq!(keys.len(), 3);
 
-        test_delete_role(&core, &root_token, "approle", "role1");
-        let _ = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id", false);
+        test_delete_role(&core, &root_token, "approle", "role1").await;
+        let _ = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id", false).await;
     }
 
-    #[test]
-    fn test_approle_lookup_and_destroy_role_secret_id() {
+    #[tokio::test]
+    async fn test_approle_lookup_and_destroy_role_secret_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_lookup_and_destroy_role_secret_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true).await;
 
-        let (secret_id, _) = generate_secret_id(&core, &root_token, "approle", "role1");
+        let (secret_id, _) = generate_secret_id(&core, &root_token, "approle", "role1").await;
 
         let secret_id_data = json!({
             "secret_id": secret_id,
@@ -2906,7 +2924,8 @@ mod test {
             "auth/approle/role/role1/secret-id/lookup",
             true,
             Some(secret_id_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.unwrap().unwrap().data.is_some());
 
         let _ = test_delete_api(
@@ -2915,30 +2934,32 @@ mod test {
             "auth/approle/role/role1/secret-id/destroy",
             true,
             Some(secret_id_data.clone()),
-        );
+        )
+        .await;
         let resp = test_write_api(
             &core,
             &root_token,
             "auth/approle/role/role1/secret-id/lookup",
             true,
             Some(secret_id_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.unwrap().is_none());
     }
 
-    #[test]
-    fn test_approle_lookup_and_destroy_role_secret_id_accessor() {
+    #[tokio::test]
+    async fn test_approle_lookup_and_destroy_role_secret_id_accessor() {
         let (root_token, core) = test_rusty_vault_init("test_approle_lookup_and_destroy_role_secret_id_accessor");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true).await;
 
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
 
-        let resp = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let keys = resp_data["keys"].as_array().unwrap();
@@ -2957,7 +2978,8 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/lookup",
             true,
             Some(hmac_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.unwrap().unwrap().data.is_some());
 
         let _ = test_delete_api(
@@ -2966,25 +2988,27 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/destroy",
             true,
             Some(hmac_data.clone()),
-        );
+        )
+        .await;
         let _ = test_write_api(
             &core,
             &root_token,
             "auth/approle/role/role1/secret-id-accessor/lookup",
             false,
             Some(hmac_data.clone()),
-        );
+        )
+        .await;
     }
 
-    #[test]
-    fn test_approle_lookup_role_secret_id_accessor() {
+    #[tokio::test]
+    async fn test_approle_lookup_role_secret_id_accessor() {
         let (root_token, core) = test_rusty_vault_init("test_approle_lookup_role_secret_id_accessor");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true).await;
 
         let hmac_data = json!({
             "secret_id_accessor": "invalid",
@@ -2998,49 +3022,50 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/lookup",
             false,
             Some(hmac_data.clone()),
-        );
+        )
+        .await;
         // TODO: resp should ok
     }
 
-    #[test]
-    fn test_approle_list_role_secret_id() {
+    #[tokio::test]
+    async fn test_approle_list_role_secret_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_list_role_secret_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true);
+        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true).await;
 
         // Create 5 'secret_id's
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
 
-        let resp = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id/", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id/", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let keys = resp_data["keys"].as_array().unwrap();
         assert_eq!(keys.len(), 5);
     }
 
-    #[test]
-    fn test_approle_list_role() {
+    #[tokio::test]
+    async fn test_approle_list_role() {
         let (root_token, core) = test_rusty_vault_init("test_approle_list_role");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true);
-        test_write_role(&core, &root_token, "approle", "role2", "", "c,d", true);
-        test_write_role(&core, &root_token, "approle", "role3", "", "e,f", true);
-        test_write_role(&core, &root_token, "approle", "role4", "", "g,h", true);
-        test_write_role(&core, &root_token, "approle", "role5", "", "i,j", true);
+        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true).await;
+        test_write_role(&core, &root_token, "approle", "role2", "", "c,d", true).await;
+        test_write_role(&core, &root_token, "approle", "role3", "", "e,f", true).await;
+        test_write_role(&core, &root_token, "approle", "role4", "", "g,h", true).await;
+        test_write_role(&core, &root_token, "approle", "role5", "", "i,j", true).await;
 
-        let resp = test_list_api(&core, &root_token, "auth/approle/role", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let mut keys = resp_data["keys"].as_array().unwrap().clone();
@@ -3050,13 +3075,13 @@ mod test {
         assert_eq!(expect.as_array().unwrap().clone(), keys);
     }
 
-    #[test]
-    fn test_approle_role_secret_id_without_fields() {
+    #[tokio::test]
+    async fn test_approle_role_secret_id_without_fields() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_without_fields");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let role_data = json!({
             "policies": "p,q,r,s",
@@ -3068,9 +3093,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(role_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(role_data.clone())).await;
 
-        let resp = test_write_api(&core, &root_token, "auth/approle/role/role1/secret-id", true, None);
+        let resp = test_write_api(&core, &root_token, "auth/approle/role/role1/secret-id", true, None).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -3092,7 +3117,8 @@ mod test {
             "auth/approle/role/role1/custom-secret-id",
             true,
             Some(secret_id_data.clone()),
-        );
+        )
+        .await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -3103,13 +3129,13 @@ mod test {
         assert_eq!(secret_id_num_uses, role_data["secret_id_num_uses"].as_int().unwrap());
     }
 
-    #[test]
-    fn test_approle_role_secret_id_with_valid_fields() {
+    #[tokio::test]
+    async fn test_approle_role_secret_id_with_valid_fields() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_valid_fields");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let role_data = json!({
             "policies": "p,q,r,s",
@@ -3121,7 +3147,7 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(role_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(role_data.clone())).await;
 
         let cases = vec![
             json!({"name": "finite num_uses and ttl", "payload": {"secret_id": "finite", "ttl": 5, "num_uses": 5}}),
@@ -3138,7 +3164,8 @@ mod test {
                 "auth/approle/role/role1/secret-id",
                 true,
                 Some(secret_id_data.clone()),
-            );
+            )
+            .await;
             assert!(resp.is_ok());
             let resp_data = resp.unwrap().unwrap().data.unwrap();
             let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -3154,7 +3181,8 @@ mod test {
                 "auth/approle/role/role1/custom-secret-id",
                 true,
                 Some(secret_id_data.clone()),
-            );
+            )
+            .await;
             assert!(resp.is_ok());
             let resp_data = resp.unwrap().unwrap().data.unwrap();
             let secret_id = resp_data["secret_id"].as_str().unwrap();
@@ -3166,13 +3194,13 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_approle_role_secret_id_with_invalid_fields() {
+    #[tokio::test]
+    async fn test_approle_role_secret_id_with_invalid_fields() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_invalid_fields");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let cases = vec![
             json!({
@@ -3249,7 +3277,8 @@ mod test {
                 format!("auth/approle/role/role{}", i).as_str(),
                 true,
                 Some(role_data.clone()),
-            );
+            )
+            .await;
 
             for tc in case["cases"].as_array().unwrap().iter() {
                 let secret_id_data = tc["payload"].as_object().unwrap().clone();
@@ -3259,7 +3288,8 @@ mod test {
                     format!("auth/approle/role/role{}/secret-id", i).as_str(),
                     false,
                     Some(secret_id_data.clone()),
-                );
+                )
+                .await;
                 if let Err(RvError::ErrResponse(err_text)) = resp {
                     assert_eq!(err_text, tc["expected"].as_str().unwrap());
                 }
@@ -3269,7 +3299,8 @@ mod test {
                     format!("auth/approle/role/role{}/custom-secret-id", i).as_str(),
                     false,
                     Some(secret_id_data.clone()),
-                );
+                )
+                .await;
                 if let Err(RvError::ErrResponse(err_text)) = resp {
                     assert_eq!(err_text, tc["expected"].as_str().unwrap());
                 }
@@ -3277,13 +3308,13 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_approle_role_crud() {
+    #[tokio::test]
+    async fn test_approle_role_crud() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_crud");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let req_data = json!({
             "policies": "p,q,r,s",
@@ -3297,9 +3328,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3333,9 +3364,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3359,7 +3390,7 @@ mod test {
         assert_eq!(expected.as_object().unwrap().clone(), resp_data);
 
         // RU for role_id field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/role-id", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/role-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let role_id = resp_data["role_id"].as_str().unwrap();
@@ -3371,15 +3402,16 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/role-id", true, Some(req_data.clone()));
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/role-id", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/role-id", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/role-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["role_id"].as_str().unwrap(), req_data["role_id"].as_str().unwrap());
 
         // RUD for bind_secret_id field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true).await;
         assert!(resp.is_ok());
 
         let req_data = json!({
@@ -3389,22 +3421,23 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true, Some(req_data.clone()));
+            test_write_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true, Some(req_data.clone()))
+                .await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["bind_secret_id"].as_bool().unwrap(), req_data["bind_secret_id"].as_bool().unwrap());
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/bind-secret-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["bind_secret_id"].as_bool().unwrap(), true);
 
         // RUD for policies field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/policies", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/policies", true).await;
         assert!(resp.is_ok());
 
         let req_data = json!({
@@ -3413,9 +3446,10 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/policies", true, Some(req_data.clone()));
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/policies", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/policies", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/policies", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(
@@ -3427,15 +3461,15 @@ mod test {
             req_data["policies"].as_comma_string_slice().unwrap()
         );
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/policies", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/policies", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/policies", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/policies", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_policies"].as_comma_string_slice().unwrap().len(), 0);
 
         // RUD for secret-id-num-uses field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true).await;
         assert!(resp.is_ok());
 
         let req_data = json!({
@@ -3450,22 +3484,23 @@ mod test {
             "auth/approle/role/role1/secret-id-num-uses",
             true,
             Some(req_data.clone()),
-        );
+        )
+        .await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["secret_id_num_uses"].as_int().unwrap(), req_data["secret_id_num_uses"].as_int().unwrap());
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-num-uses", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["secret_id_num_uses"].as_int().unwrap(), 0);
 
         // RUD for secret_id_ttl field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true).await;
         assert!(resp.is_ok());
 
         let req_data = json!({
@@ -3475,22 +3510,23 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true, Some(req_data.clone()));
+            test_write_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true, Some(req_data.clone()))
+                .await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["secret_id_ttl"].as_int().unwrap(), req_data["secret_id_ttl"].as_int().unwrap());
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["secret_id_ttl"].as_int().unwrap(), 0);
 
         // RUD for token-num-uses field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_num_uses"].as_int().unwrap(), 600);
@@ -3502,22 +3538,23 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true, Some(req_data.clone()));
+            test_write_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true, Some(req_data.clone()))
+                .await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_num_uses"].as_int().unwrap(), req_data["token_num_uses"].as_int().unwrap());
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-num-uses", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_num_uses"].as_int().unwrap(), 0);
 
         // RUD for period field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/period", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/period", true).await;
         assert!(resp.is_ok());
 
         let req_data = json!({
@@ -3526,22 +3563,23 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/period", true, Some(req_data.clone()));
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/period", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/period", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/period", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["period"].as_int().unwrap(), req_data["period"].as_int().unwrap());
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/period", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/period", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/period", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/period", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_period"].as_int().unwrap(), 0);
 
         // RUD for token_ttl field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_ttl"].as_int().unwrap(), 4000);
@@ -3552,22 +3590,23 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true, Some(req_data.clone()));
+        let _ =
+            test_write_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_ttl"].as_int().unwrap(), req_data["token_ttl"].as_int().unwrap());
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_ttl"].as_int().unwrap(), 0);
 
         // RUD for token_max_ttl field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_max_ttl"].as_int().unwrap(), 5000);
@@ -3579,33 +3618,34 @@ mod test {
         .unwrap()
         .clone();
         let _ =
-            test_write_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true, Some(req_data.clone()));
+            test_write_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true, Some(req_data.clone()))
+                .await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_max_ttl"].as_int().unwrap(), req_data["token_max_ttl"].as_int().unwrap());
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-max-ttl", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_max_ttl"].as_int().unwrap(), 0);
 
         // Delete test for role
-        test_delete_role(&core, &root_token, "approle", "role1");
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        test_delete_role(&core, &root_token, "approle", "role1").await;
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         assert!(resp.unwrap().is_none());
     }
 
-    #[test]
-    fn test_approle_role_token_bound_cidrs_crud() {
+    #[tokio::test]
+    async fn test_approle_role_token_bound_cidrs_crud() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_token_bound_cidrs_crud");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let req_data = json!({
             "policies": "p,q,r,s",
@@ -3620,9 +3660,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3655,9 +3695,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3680,7 +3720,7 @@ mod test {
         assert_eq!(expected.as_object().unwrap().clone(), resp_data);
 
         // RUD for secret-id-bound-cidrs field
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(
@@ -3700,9 +3740,10 @@ mod test {
             "auth/approle/role/role1/secret-id-bound-cidrs",
             true,
             Some(req_data.clone()),
-        );
+        )
+        .await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(
@@ -3710,9 +3751,9 @@ mod test {
             req_data["secret_id_bound_cidrs"].as_comma_string_slice().unwrap()
         );
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/secret-id-bound-cidrs", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["secret_id_bound_cidrs"].as_comma_string_slice().unwrap().len(), 0);
@@ -3721,7 +3762,7 @@ mod test {
         let expected = json!({
             "token_bound_cidrs":     ["127.0.0.1", "127.0.0.1/16"],
         });
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(
@@ -3741,9 +3782,10 @@ mod test {
             "auth/approle/role/role1/token-bound-cidrs",
             true,
             Some(req_data.clone()),
-        );
+        )
+        .await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(
@@ -3751,26 +3793,26 @@ mod test {
             req_data["token_bound_cidrs"].as_comma_string_slice().unwrap()
         );
 
-        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true, None);
+        let _ = test_delete_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true, None).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1/token-bound-cidrs", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         assert_eq!(resp_data["token_bound_cidrs"].as_comma_string_slice().unwrap().len(), 0);
 
         // Delete test for role
-        test_delete_role(&core, &root_token, "approle", "role1");
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        test_delete_role(&core, &root_token, "approle", "role1").await;
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         assert!(resp.unwrap().is_none());
     }
 
-    #[test]
-    fn test_approle_role_token_type_crud() {
+    #[tokio::test]
+    async fn test_approle_role_token_type_crud() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_token_type_crud");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let req_data = json!({
             "policies": "p,q,r,s",
@@ -3784,9 +3826,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3820,9 +3862,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3845,18 +3887,18 @@ mod test {
         assert_eq!(expected.as_object().unwrap().clone(), resp_data);
 
         // Delete test for role
-        test_delete_role(&core, &root_token, "approle", "role1");
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        test_delete_role(&core, &root_token, "approle", "role1").await;
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         assert!(resp.unwrap().is_none());
     }
 
-    #[test]
-    fn test_approle_role_token_util_upgrade() {
+    #[tokio::test]
+    async fn test_approle_role_token_util_upgrade() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_token_util_upgrade");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         // token_type missing
         let req_data = json!({
@@ -3870,9 +3912,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3907,9 +3949,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3944,9 +3986,9 @@ mod test {
         .as_object()
         .unwrap()
         .clone();
-        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone()));
+        let _ = test_write_api(&core, &root_token, "auth/approle/role/role1", true, Some(req_data.clone())).await;
 
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         let resp_data = resp.unwrap().unwrap().data.unwrap();
 
         let expected = json!({
@@ -3969,18 +4011,18 @@ mod test {
         assert_eq!(expected.as_object().unwrap().clone(), resp_data);
 
         // Delete test for role
-        test_delete_role(&core, &root_token, "approle", "role1");
-        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true);
+        test_delete_role(&core, &root_token, "approle", "role1").await;
+        let resp = test_read_api(&core, &root_token, "auth/approle/role/role1", true).await;
         assert!(resp.unwrap().is_none());
     }
 
-    #[test]
-    fn test_approle_role_secret_id_with_ttl() {
+    #[tokio::test]
+    async fn test_approle_role_secret_id_with_ttl() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_ttl");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         let mut role_data = json!({
             "policies": "default",
@@ -4005,7 +4047,8 @@ mod test {
                 format!("auth/approle/role/{}", role_name).as_str(),
                 true,
                 Some(role_data.clone()),
-            );
+            )
+            .await;
 
             let resp = test_write_api(
                 &core,
@@ -4013,7 +4056,8 @@ mod test {
                 format!("auth/approle/role/{}/secret-id", role_name).as_str(),
                 true,
                 None,
-            );
+            )
+            .await;
             assert!(resp.is_ok());
             let resp_data = resp.unwrap().unwrap().data.unwrap();
             let secret_id_ttl = resp_data["secret_id_ttl"].as_duration().unwrap();
@@ -4025,24 +4069,24 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_approle_role_secret_id_accessor_cross_delete() {
+    #[tokio::test]
+    async fn test_approle_role_secret_id_accessor_cross_delete() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_accessor_cross_delete");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
-        test_mount_auth_api(&core, &root_token, "approle", "approle");
+        test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
         // Create First Role
-        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true);
-        let _ = generate_secret_id(&core, &root_token, "approle", "role1");
+        test_write_role(&core, &root_token, "approle", "role1", "", "a,b", true).await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role1").await;
 
         // Create Second Role
-        test_write_role(&core, &root_token, "approle", "role2", "", "a,b", true);
-        let _ = generate_secret_id(&core, &root_token, "approle", "role2");
+        test_write_role(&core, &root_token, "approle", "role2", "", "a,b", true).await;
+        let _ = generate_secret_id(&core, &root_token, "approle", "role2").await;
 
         // Get role2 secretID Accessor
-        let resp = test_list_api(&core, &root_token, "auth/approle/role/role2/secret-id", true);
+        let resp = test_list_api(&core, &root_token, "auth/approle/role/role2/secret-id", true).await;
         assert!(resp.is_ok());
         let resp_data = resp.unwrap().unwrap().data.unwrap();
         let keys = resp_data["keys"].as_array().unwrap();
@@ -4063,6 +4107,7 @@ mod test {
             "auth/approle/role/role1/secret-id-accessor/destroy",
             false,
             Some(hmac_data.clone()),
-        );
+        )
+        .await;
     }
 }

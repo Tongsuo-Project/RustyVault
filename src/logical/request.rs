@@ -2,16 +2,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use better_default::Default;
 use serde_json::{Map, Value};
-use tokio::task::JoinHandle;
 
 use super::{Operation, Path};
 use crate::{
+    context::Context,
     errors::RvError,
+    handler::{HandlePhase, Handler},
     logical::{auth::Auth, connection::Connection, secret::SecretData},
     storage::{Storage, StorageEntry},
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Request {
     pub id: String,
     pub name: String,
@@ -27,7 +28,11 @@ pub struct Request {
     pub connection: Option<Connection>,
     pub secret: Option<SecretData>,
     pub auth: Option<Auth>,
-    pub tasks: Vec<JoinHandle<()>>,
+    pub handler: Option<Arc<dyn Handler>>,
+    #[default(HandlePhase::PreRoute)]
+    pub handle_phase: HandlePhase,
+    #[default(Arc::new(Context::new()))]
+    pub ctx: Arc<Context>,
 }
 
 impl Request {
@@ -45,6 +50,14 @@ impl Request {
 
     pub fn new_renew_auth_request(path: &str, auth: Option<Auth>, data: Option<Map<String, Value>>) -> Self {
         Self { operation: Operation::Renew, path: path.to_string(), auth, data, ..Default::default() }
+    }
+
+    pub fn bind_handler(&mut self, handler: Arc<dyn Handler>) {
+        self.handler = Some(handler);
+    }
+
+    pub fn get_handler(&self) -> Option<Arc<dyn Handler>> {
+        self.handler.clone()
     }
 
     fn get_data_raw(&self, key: &str, default: bool) -> Result<Value, RvError> {
@@ -84,7 +97,7 @@ impl Request {
     }
 
     pub fn get_data(&self, key: &str) -> Result<Value, RvError> {
-        if self.storage.is_none() || self.match_path.is_none() {
+        if self.match_path.is_none() {
             return Err(RvError::ErrRequestNotReady);
         }
 
@@ -96,7 +109,7 @@ impl Request {
     }
 
     pub fn get_data_or_default(&self, key: &str) -> Result<Value, RvError> {
-        if self.storage.is_none() || self.match_path.is_none() {
+        if self.match_path.is_none() {
             return Err(RvError::ErrRequestNotReady);
         }
 
@@ -108,7 +121,7 @@ impl Request {
     }
 
     pub fn get_data_or_next(&self, keys: &[&str]) -> Result<Value, RvError> {
-        if self.storage.is_none() || self.match_path.is_none() {
+        if self.match_path.is_none() {
             return Err(RvError::ErrRequestNotReady);
         }
 
@@ -143,8 +156,17 @@ impl Request {
     }
 
     pub fn get_field_default_or_zero(&self, key: &str) -> Result<Value, RvError> {
+        if self.match_path.is_none() {
+            return Err(RvError::ErrRequestNotReady);
+        }
         let field = self.match_path.as_ref().unwrap().get_field(key).ok_or(RvError::ErrRequestNoDataField)?;
         field.get_default()
+    }
+
+    pub fn data_iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        let data_iter = self.data.as_ref().into_iter().flat_map(|m| m.iter());
+        let body_iter = self.body.as_ref().into_iter().flat_map(|m| m.iter());
+        data_iter.chain(body_iter)
     }
 
     //TODO: the sensitive data is still in the memory. Need to totally resolve this in `serde_json` someday.
@@ -196,9 +218,5 @@ impl Request {
         }
 
         self.storage.as_ref().unwrap().delete(key)
-    }
-
-    pub fn add_task(&mut self, task: JoinHandle<()>) {
-        self.tasks.push(task);
     }
 }

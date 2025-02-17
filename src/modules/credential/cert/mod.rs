@@ -2,13 +2,13 @@
 //! either signed by a CA or self-signed. SSL/TLS client certificates are defined as having
 //! an `ExtKeyUsage` extension with the usage set to either `ClientAuth` or `Any`.
 //!
-//! The trusted certificates and CAs are configured directly to the auth method using the 
+//! The trusted certificates and CAs are configured directly to the auth method using the
 //! `certs/` path. This method cannot read trusted certificates from an external source.
 //!
 //! CA certificates are associated with a role; role names and CRL names are normalized
 //! to lower-case.
 //!
-//! Please note that to use this auth method, `tls_disable` and `tls_disable_client_certs` 
+//! Please note that to use this auth method, `tls_disable` and `tls_disable_client_certs`
 //! must be false in the RustyVault configuration. This is because the certificates are
 //! sent through TLS communication itself.
 
@@ -26,6 +26,7 @@ use crate::{
     new_logical_backend, new_logical_backend_internal,
 };
 
+pub mod cli;
 pub mod path_certs;
 pub mod path_config;
 pub mod path_crls;
@@ -72,7 +73,7 @@ impl CertBackend {
 
         let mut backend = new_logical_backend!({
             unauth_paths: ["login"],
-            auth_renew_handler: cert_backend_ref.renew_path_login,
+            auth_renew_handler: cert_backend_ref.login_renew,
             help: CERT_BACKEND_HELP,
         });
 
@@ -84,12 +85,6 @@ impl CertBackend {
         backend.paths.push(Arc::new(self.login_path()));
 
         backend
-    }
-}
-
-impl CertBackendInner {
-    pub fn renew_path_login(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
     }
 }
 
@@ -147,15 +142,14 @@ impl Module for CertModule {
 
 #[cfg(test)]
 mod test {
-    use serde_json::{json, Value, Map};
     use std::time::Duration;
+
+    use serde_json::{json, Map, Value};
 
     use super::*;
     use crate::{
-        test_utils::{
-            TestHttpServer, TestTlsClientAuth, new_test_cert, new_test_cert_ext, new_test_crl,
-        },
-        modules::auth::expiration::MAX_LEASE_DURATION_SECS,
+        modules::auth::expiration::DEFAULT_LEASE_DURATION_SECS,
+        test_utils::{new_test_cert, new_test_cert_ext, new_test_crl, TestHttpServer, TestTlsClientAuth},
     };
 
     #[derive(Default)]
@@ -179,7 +173,15 @@ mod test {
     }
 
     impl TestHttpServer {
-        fn test_write_cert(&self, name: &str, cert: &str, policies: &str, test_data: &Allowed, extra_data: &Map<String, Value>, expect_err: Option<&str>) {
+        fn test_write_cert(
+            &self,
+            name: &str,
+            cert: &str,
+            policies: &str,
+            test_data: &Allowed,
+            extra_data: &Map<String, Value>,
+            expect_err: Option<&str>,
+        ) {
             let mut data = json!({
                 "display_name": name,
                 "policies": policies,
@@ -209,7 +211,7 @@ mod test {
                 Some(err) => {
                     assert_eq!(status, 400);
                     assert_eq!(resp["error"], err);
-                },
+                }
                 _ => {
                     assert!(status == 200 || status == 204);
                 }
@@ -288,11 +290,24 @@ mod test {
             self.read(&format!("auth/{}/certs/{}", &self.mount_path, name), None)
         }
 
-        fn test_login(&self, server_ca: &str, client_cert: &str, client_key: &str, expect_err: Option<&str>) -> Result<(u16, Value), RvError> {
+        fn test_login(
+            &self,
+            server_ca: &str,
+            client_cert: &str,
+            client_key: &str,
+            expect_err: Option<&str>,
+        ) -> Result<(u16, Value), RvError> {
             self.test_login_with_name("", server_ca, client_cert, client_key, expect_err)
         }
 
-        fn test_login_with_name(&self, name: &str, server_ca: &str, client_cert: &str, client_key: &str, expect_err: Option<&str>) -> Result<(u16, Value), RvError> {
+        fn test_login_with_name(
+            &self,
+            name: &str,
+            server_ca: &str,
+            client_cert: &str,
+            client_key: &str,
+            expect_err: Option<&str>,
+        ) -> Result<(u16, Value), RvError> {
             let tls_client_auth = TestTlsClientAuth {
                 ca_pem: server_ca.into(),
                 cert_pem: client_cert.into(),
@@ -313,7 +328,7 @@ mod test {
                     assert!(status == 400 || status == 403);
                     assert_eq!(resp["error"], err);
                     assert!(resp["auth"].is_null());
-                },
+                }
                 _ => {
                     assert!(resp["auth"].is_object());
                     assert_ne!(resp["auth"]["client_token"], "");
@@ -323,7 +338,15 @@ mod test {
             Ok((status, resp))
         }
 
-        fn test_login_with_metadata(&self, name: &str, server_ca: &str, client_cert: &str, client_key: &str, meta_data: &Map<String, Value>, expect_err: Option<&str>) -> Result<(u16, Value), RvError> {
+        fn test_login_with_metadata(
+            &self,
+            name: &str,
+            server_ca: &str,
+            client_cert: &str,
+            client_key: &str,
+            meta_data: &Map<String, Value>,
+            expect_err: Option<&str>,
+        ) -> Result<(u16, Value), RvError> {
             let tls_client_auth = TestTlsClientAuth {
                 ca_pem: server_ca.into(),
                 cert_pem: client_cert.into(),
@@ -344,7 +367,7 @@ mod test {
                     assert_eq!(status, 400);
                     assert_eq!(resp["error"], err);
                     assert!(resp["auth"].is_null());
-                },
+                }
                 _ => {
                     assert!(resp["auth"].is_object());
                     assert_ne!(resp["auth"]["client_token"], "");
@@ -400,16 +423,48 @@ mod test {
 
     #[test]
     fn test_credential_cert_module_permitted_dns_domains_intermediate_ca() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_permitted_dns_domains_intermediate_ca", true);
+        let mut test_http_server =
+            TestHttpServer::new("test_credential_cert_module_permitted_dns_domains_intermediate_ca", true);
 
-        let (intermediate_ca_cert, intermediate_ca_key) = new_test_cert(true, true, true, "inter", Some(".myrv.com"), None, None, None, Some(test_http_server.ca_cert_pem.clone()), Some(test_http_server.ca_key_pem.clone())).unwrap();
+        let (intermediate_ca_cert, intermediate_ca_key) = new_test_cert(
+            true,
+            true,
+            true,
+            "inter",
+            Some(".myrv.com"),
+            None,
+            None,
+            None,
+            Some(test_http_server.ca_cert_pem.clone()),
+            Some(test_http_server.ca_key_pem.clone()),
+        )
+        .unwrap();
 
-        let (leaf_cert, leaf_key) = new_test_cert(false, true, true, "cert.myrv.com", Some("cert.myrv.com"), None, None, Some("10s"), Some(intermediate_ca_cert.clone()), Some(intermediate_ca_key)).unwrap();
+        let (leaf_cert, leaf_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.myrv.com",
+            Some("cert.myrv.com"),
+            None,
+            None,
+            Some("10s"),
+            Some(intermediate_ca_cert.clone()),
+            Some(intermediate_ca_key),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let _ = test_http_server.mount_auth("cert", "cert");
 
-        test_http_server.test_write_cert("myrv-dot-com", &intermediate_ca_cert, "default", &Allowed::default(), &Map::new(), None);
+        test_http_server.test_write_cert(
+            "myrv-dot-com",
+            &intermediate_ca_cert,
+            "default",
+            &Allowed::default(),
+            &Map::new(),
+            None,
+        );
 
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &leaf_cert, &leaf_key, None);
 
@@ -426,13 +481,32 @@ mod test {
 
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
-        let (issued_cert, issued_key) = new_test_cert(false, true, true, "cert.myrv.com", Some("cert.myrv.com"), None, None, Some("5s"), Some(ca_cert.clone()), Some(ca_key)).unwrap();
+        let (issued_cert, issued_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.myrv.com",
+            Some("cert.myrv.com"),
+            None,
+            None,
+            Some("5s"),
+            Some(ca_cert.clone()),
+            Some(ca_key),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("myrv-dot-com", &issued_cert, "default", &Allowed::default(), &Map::new(), None);
+        test_http_server.test_write_cert(
+            "myrv-dot-com",
+            &issued_cert,
+            "default",
+            &Allowed::default(),
+            &Map::new(),
+            None,
+        );
 
         // Login when the certificate is still valid. Login should succeed.
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &issued_cert, &issued_key, None);
@@ -441,7 +515,12 @@ mod test {
         std::thread::sleep(Duration::from_secs(6));
 
         // Login attempt after certificate expiry should fail
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &issued_cert, &issued_key, Some("certificate has expired"));
+        let _ = test_http_server.test_login(
+            &test_http_server.ca_cert_pem,
+            &issued_cert,
+            &issued_key,
+            Some("certificate has expired"),
+        );
     }
 
     #[test]
@@ -450,13 +529,32 @@ mod test {
 
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
-        let (issued_cert, issued_key) = new_test_cert(false, true, true, "cert.myrv.com", Some("cert.myrv.com"), None, None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (issued_cert, issued_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.myrv.com",
+            Some("cert.myrv.com"),
+            None,
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("myrv-dot-com", &issued_cert, "default", &Allowed::default(), &Map::new(), None);
+        test_http_server.test_write_cert(
+            "myrv-dot-com",
+            &issued_cert,
+            "default",
+            &Allowed::default(),
+            &Map::new(),
+            None,
+        );
 
         // Login when the certificate is still valid. Login should succeed.
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &issued_cert, &issued_key, None);
@@ -465,7 +563,12 @@ mod test {
         let _ = test_http_server.test_write_crl(&issued_cert, &ca_cert, &ca_key);
 
         // Login attempt after certificate expiry should fail
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &issued_cert, &issued_key, Some("invalid certificate or no client certificate supplied"));
+        let _ = test_http_server.test_login(
+            &test_http_server.ca_cert_pem,
+            &issued_cert,
+            &issued_key,
+            Some("invalid certificate or no client certificate supplied"),
+        );
     }
 
     #[test]
@@ -474,7 +577,19 @@ mod test {
 
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
-        let (issued_cert, issued_key) = new_test_cert(false, true, true, "cert.myrv.com", Some("cert.myrv.com"), None, None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (issued_cert, issued_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.myrv.com",
+            Some("cert.myrv.com"),
+            None,
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
@@ -493,10 +608,16 @@ mod test {
         test_http_server.test_write_crl(&issued_cert, &ca_cert, &ca_key);
 
         // Attempt login with the revoked certificate should fail.
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &issued_cert, &issued_key, Some("no chain matching all constraints could be found for this login certificate"));
+        let _ = test_http_server.test_login(
+            &test_http_server.ca_cert_pem,
+            &issued_cert,
+            &issued_key,
+            Some("no chain matching all constraints could be found for this login certificate"),
+        );
 
         // Register a different client CA certificate.
-        let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca2", None, None, None, None, None, None).unwrap();
+        let (ca_cert, ca_key) =
+            new_test_cert(true, true, true, "test-ca2", None, None, None, None, None, None).unwrap();
         test_http_server.test_write_cert("cert1", &ca_cert, "abc", &Allowed::default(), &Map::new(), None);
 
         // Test login using a different client CA cert pair.
@@ -506,7 +627,12 @@ mod test {
         test_http_server.test_write_crl(&ca_cert, &ca_cert, &ca_key);
 
         // Attempt login with the revoked ca certificate should fail.
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate"));
+        let _ = test_http_server.test_login(
+            &test_http_server.ca_cert_pem,
+            &ca_cert,
+            &ca_key,
+            Some("no chain matching all constraints could be found for this login certificate"),
+        );
     }
 
     #[test]
@@ -517,10 +643,34 @@ mod test {
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
         // Non CA cert
-        let (non_ca_cert, _) = new_test_cert(false, true, true, "non-ca-cert", Some("non-ca-cert"), None, None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (non_ca_cert, _) = new_test_cert(
+            false,
+            true,
+            true,
+            "non-ca-cert",
+            Some("non-ca-cert"),
+            None,
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // Non CA cert without TLS web client authentication
-        let (non_ca_cert2, _) = new_test_cert(false, false, true, "non-ca-cert2", Some("non-ca-cert2"), None, None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (non_ca_cert2, _) = new_test_cert(
+            false,
+            false,
+            true,
+            "non-ca-cert2",
+            Some("non-ca-cert2"),
+            None,
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
@@ -528,7 +678,14 @@ mod test {
 
         test_http_server.test_write_cert("cert1", &ca_cert, "abc", &Allowed::default(), &Map::new(), None);
         test_http_server.test_write_cert("cert1", &non_ca_cert, "abc", &Allowed::default(), &Map::new(), None);
-        test_http_server.test_write_cert("cert1", &non_ca_cert2, "abc", &Allowed::default(), &Map::new(), Some("nonCA certificates should have TLS client authentication set as an extended key usage"));
+        test_http_server.test_write_cert(
+            "cert1",
+            &non_ca_cert2,
+            "abc",
+            &Allowed::default(),
+            &Map::new(),
+            Some("nonCA certificates should have TLS client authentication set as an extended key usage"),
+        );
     }
 
     #[test]
@@ -538,7 +695,19 @@ mod test {
         // CA cert
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "cert.example.com", Some("cert.example.com"), None, None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.example.com",
+            Some("cert.example.com"),
+            None,
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
@@ -548,28 +717,52 @@ mod test {
 
         // Test a client trusted by a CA
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None);
-        let (_, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
+        let (_, resp) =
+            test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
         assert_eq!(resp["auth"]["lease_duration"], 1000);
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
 
         test_http_server.test_write_cert_lease("web", &ca_cert, "foo");
         test_http_server.test_write_cert_ttl("web", &ca_cert, "foo");
-        let (_, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
+        let (_, resp) =
+            test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
         assert_eq!(resp["auth"]["lease_duration"], 900);
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
 
         test_http_server.test_write_cert_max_ttl("web", &ca_cert, "foo");
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None);
         test_http_server.test_write_cert_no_lease("web", &ca_cert, "foo");
-        let (_, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
+        let (_, resp) =
+            test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
         assert_eq!(resp["auth"]["lease_duration"], 900);
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "*.example.com".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "*.example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "*.invalid.com".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "*.invalid.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -579,7 +772,19 @@ mod test {
         // CA cert
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "cert.example.com", Some("cert.example.com"), None, None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.example.com",
+            Some("cert.example.com"),
+            None,
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
@@ -587,20 +792,29 @@ mod test {
 
         test_http_server.test_write_cert_no_lease("web", &ca_cert, "foo");
 
-        let (_, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
-        assert_eq!(resp["auth"]["lease_duration"], MAX_LEASE_DURATION_SECS.as_secs());
+        let (_, resp) =
+            test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
+        assert_eq!(resp["auth"]["lease_duration"], DEFAULT_LEASE_DURATION_SECS.as_secs());
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
 
         test_http_server.test_write_crl(&ca_cert, &ca_cert, &ca_key);
 
-        let (status, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        let (status, resp) = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
         assert_eq!(status, 400);
         assert!(resp["auth"].is_null());
 
         test_http_server.test_delete_crl();
 
-        let (_, resp) = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
-        assert_eq!(resp["auth"]["lease_duration"], MAX_LEASE_DURATION_SECS.as_secs());
+        let (_, resp) =
+            test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
+        assert_eq!(resp["auth"]["lease_duration"], DEFAULT_LEASE_DURATION_SECS.as_secs());
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
     }
 
@@ -609,7 +823,19 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_basic_single_cert", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert(true, true, true, "example.com", Some("example.com"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) = new_test_cert(
+            true,
+            true,
+            true,
+            "example.com",
+            Some("example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
@@ -619,20 +845,76 @@ mod test {
 
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "invalid".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "invalid".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { common_names: "example.com".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { common_names: "example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { common_names: "invalid".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { common_names: "invalid".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "1.2.3.4:invalid".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "1.2.3.4:invalid".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -640,77 +922,360 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_ext_single_cert", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert_ext(true, true, true, "example.com", Some("example.com"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) = new_test_cert_ext(
+            true,
+            true,
+            true,
+            "example.com",
+            Some("example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "2.1.1.1:A UTF8String Extension".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "2.1.1.1:A UTF8String Extension".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "2.1.1.1:*,2.1.1.2:A UTF8*".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "2.1.1.1:*,2.1.1.2:A UTF8*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "1.2.3.45:*".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "1.2.3.45:*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "2.1.1.1:The Wrong Value".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "2.1.1.1:The Wrong Value".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "2.1.1.1:*,2.1.1.2:The Wrong Value".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "2.1.1.1:*,2.1.1.2:The Wrong Value".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "2.1.1.1:".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "2.1.1.1:".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { ext: "2.1.1.1:,2.1.1.2:*".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { ext: "2.1.1.1:,2.1.1.2:*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "2.1.1.1:A UTF8String Extension".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed {
+                names: "example.com".into(),
+                ext: "2.1.1.1:A UTF8String Extension".into(),
+                ..Default::default()
+            },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "2.1.1.1:*,2.1.1.2:A UTF8*".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "example.com".into(), ext: "2.1.1.1:*,2.1.1.2:A UTF8*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "1.2.3.45:*".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "example.com".into(), ext: "1.2.3.45:*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "2.1.1.1:The Wrong Value".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "example.com".into(), ext: "2.1.1.1:The Wrong Value".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "2.1.1.1:*,2.1.1.2:The Wrong Value".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed {
+                names: "example.com".into(),
+                ext: "2.1.1.1:*,2.1.1.2:The Wrong Value".into(),
+                ..Default::default()
+            },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "invalid".into(), ext: "2.1.1.1:A UTF8String Extension".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "invalid".into(), ext: "2.1.1.1:A UTF8String Extension".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "invalid".into(), ext: "2.1.1.1:*,2.1.1.2:A UTF8*".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "invalid".into(), ext: "2.1.1.1:*,2.1.1.2:A UTF8*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "invalid".into(), ext: "1.2.3.45:*".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "invalid".into(), ext: "1.2.3.45:*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "invalid".into(), ext: "2.1.1.1:The Wrong Value".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "invalid".into(), ext: "2.1.1.1:The Wrong Value".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "invalid".into(), ext: "2.1.1.1:*,2.1.1.2:The Wrong Value".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "invalid".into(), ext: "2.1.1.1:*,2.1.1.2:The Wrong Value".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "hex:2.5.29.17:*87047F000002*".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "example.com".into(), ext: "hex:2.5.29.17:*87047F000002*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "hex:2.5.29.17:*87047F000001*".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "example.com".into(), ext: "hex:2.5.29.17:*87047F000001*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { names: "example.com".into(), ext: "2.5.29.17:*".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "example.com".into(), ext: "2.5.29.17:*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { metadata_ext: "2.1.1.1,1.2.3.45".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login_with_metadata("web", &test_http_server.ca_cert_pem, &ca_cert, &ca_key, json!({"2-1-1-1":"A UTF8String Extension"}).as_object().unwrap(), None).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { metadata_ext: "2.1.1.1,1.2.3.45".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login_with_metadata(
+                "web",
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                json!({"2-1-1-1":"A UTF8String Extension"}).as_object().unwrap(),
+                None,
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { metadata_ext: "1.2.3.45".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login_with_metadata("web", &test_http_server.ca_cert_pem, &ca_cert, &ca_key, &Map::new(), None).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { metadata_ext: "1.2.3.45".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login_with_metadata("web", &test_http_server.ca_cert_pem, &ca_cert, &ca_key, &Map::new(), None)
+            .unwrap();
     }
 
     #[test]
@@ -718,28 +1283,98 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_dns_single_cert", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) =
+            new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None)
+                .unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "example.com", Some("example.com"), Some("127.0.0.1"), None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "example.com",
+            Some("example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { dns: "example.com".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { dns: "example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { dns: "*ample.com".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { dns: "*ample.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { dns: "notincert.com".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { dns: "notincert.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { dns: "abc".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { dns: "abc".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { dns: "*.example.com".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { dns: "*.example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -747,28 +1382,98 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_email_single_cert", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) =
+            new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None)
+                .unwrap();
 
-        let (client_cert, client_key) = new_test_cert_ext(false, true, true, "example.com", Some("example.com"), Some("127.0.0.1"), None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert_ext(
+            false,
+            true,
+            true,
+            "example.com",
+            Some("example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { emails: "valid@example.com".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { emails: "valid@example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { emails: "*@example.com".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { emails: "*@example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { emails: "invalid@notincert.com".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { emails: "invalid@notincert.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { emails: "abc".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { emails: "abc".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { emails: "*.example.com".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { emails: "*.example.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -776,29 +1481,99 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_uri_single_cert", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) =
+            new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None)
+                .unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "example.com", Some("example.com"), Some("127.0.0.1"), Some("spiffe://example.com/host"), None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "example.com",
+            Some("example.com"),
+            Some("127.0.0.1"),
+            Some("spiffe://example.com/host"),
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         println!("mount ret: {:?}", ret);
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { uris: "spiffe://example.com/*".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { uris: "spiffe://example.com/*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { uris: "spiffe://example.com/host".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { uris: "spiffe://example.com/host".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { uris: "spiffe://example.com/invalid".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { uris: "spiffe://example.com/invalid".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { uris: "abc".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { uris: "abc".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { uris: "http://www.google.com".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { uris: "http://www.google.com".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -806,23 +1581,70 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_ou_single_cert", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert_ext(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) = new_test_cert_ext(
+            true,
+            true,
+            true,
+            "localhost",
+            Some("localhost"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { organizational_units: "engineering".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { organizational_units: "engineering".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { organizational_units: "eng*".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { organizational_units: "eng*".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { organizational_units: "engineering,finance".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { organizational_units: "engineering,finance".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, None).unwrap();
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed { organizational_units: "foo".into(), ..Default::default()}, &Map::new(), None);
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &ca_cert, &ca_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed { organizational_units: "foo".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &ca_cert,
+                &ca_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -830,21 +1652,69 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_mixed_constraints", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert_ext(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) = new_test_cert_ext(
+            true,
+            true,
+            true,
+            "localhost",
+            Some("localhost"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "cert.example.com", Some("cert.example.com"), Some("127.0.0.1"), None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.example.com",
+            Some("cert.example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
         test_http_server.test_write_cert("1unconstrained", &ca_cert, "foo", &Allowed::default(), &Map::new(), None);
-        test_http_server.test_write_cert("2matching", &ca_cert, "foo", &Allowed { names: "*.example.com,whatever".into(), ..Default::default()}, &Map::new(), None);
-        test_http_server.test_write_cert("3invalid", &ca_cert, "foo", &Allowed { names: "invalid".into(), ..Default::default()}, &Map::new(), None);
+        test_http_server.test_write_cert(
+            "2matching",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "*.example.com,whatever".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
+        test_http_server.test_write_cert(
+            "3invalid",
+            &ca_cert,
+            "foo",
+            &Allowed { names: "invalid".into(), ..Default::default() },
+            &Map::new(),
+            None,
+        );
 
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
-        let _ = test_http_server.test_login_with_name("2matching", &test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
-        let _ = test_http_server.test_login_with_name("3invalid", &test_http_server.ca_cert_pem, &client_cert, &client_key, Some("no chain matching all constraints could be found for this login certificate")).unwrap();
+        let _ = test_http_server
+            .test_login_with_name("2matching", &test_http_server.ca_cert_pem, &client_cert, &client_key, None)
+            .unwrap();
+        let _ = test_http_server
+            .test_login_with_name(
+                "3invalid",
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("no chain matching all constraints could be found for this login certificate"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -852,15 +1722,46 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_untrusted", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert_ext(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) = new_test_cert_ext(
+            true,
+            true,
+            true,
+            "localhost",
+            Some("localhost"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "cert.example.com", Some("cert.example.com"), Some("127.0.0.1"), None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.example.com",
+            Some("cert.example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("invalid certificate or no client certificate supplied")).unwrap();
+        let _ = test_http_server
+            .test_login(
+                &test_http_server.ca_cert_pem,
+                &client_cert,
+                &client_key,
+                Some("invalid certificate or no client certificate supplied"),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -868,16 +1769,36 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_valid_cidr", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) =
+            new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None)
+                .unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "cert.example.com", Some("cert.example.com"), Some("127.0.0.1"), None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.example.com",
+            Some("cert.example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed::default(),
-                                         json!({"bound_cidrs": ["127.0.0.1", "128.252.0.0/16"]}).as_object().unwrap(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed::default(),
+            json!({"bound_cidrs": ["127.0.0.1", "128.252.0.0/16"]}).as_object().unwrap(),
+            None,
+        );
         let (_, resp) = test_http_server.test_read_cert("web").unwrap();
         assert_eq!(resp["data"]["bound_cidrs"], json!(["127.0.0.1", "128.252.0.0/16"]));
         assert_eq!(resp["data"]["token_bound_cidrs"], json!(["127.0.0.1", "128.252.0.0/16"]));
@@ -889,19 +1810,41 @@ mod test {
         let mut test_http_server = TestHttpServer::new("test_credential_cert_module_invalid_cidr", true);
 
         // CA cert
-        let (ca_cert, ca_key) = new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None).unwrap();
+        let (ca_cert, ca_key) =
+            new_test_cert(true, true, true, "localhost", Some("localhost"), Some("127.0.0.1"), None, None, None, None)
+                .unwrap();
 
-        let (client_cert, client_key) = new_test_cert(false, true, true, "cert.example.com", Some("cert.example.com"), Some("127.0.0.1"), None, None, Some(ca_cert.clone()), Some(ca_key.clone())).unwrap();
+        let (client_cert, client_key) = new_test_cert(
+            false,
+            true,
+            true,
+            "cert.example.com",
+            Some("cert.example.com"),
+            Some("127.0.0.1"),
+            None,
+            None,
+            Some(ca_cert.clone()),
+            Some(ca_key.clone()),
+        )
+        .unwrap();
 
         // mount cert auth to path: auth/cert
         let ret = test_http_server.mount_auth("cert", "cert");
         assert!(ret.is_ok());
 
-        test_http_server.test_write_cert("web", &ca_cert, "foo", &Allowed::default(),
-                                         json!({"bound_cidrs": ["127.0.0.2", "128.252.0.0/16"]}).as_object().unwrap(), None);
+        test_http_server.test_write_cert(
+            "web",
+            &ca_cert,
+            "foo",
+            &Allowed::default(),
+            json!({"bound_cidrs": ["127.0.0.2", "128.252.0.0/16"]}).as_object().unwrap(),
+            None,
+        );
         let (_, resp) = test_http_server.test_read_cert("web").unwrap();
         assert_eq!(resp["data"]["bound_cidrs"], json!(["127.0.0.2", "128.252.0.0/16"]));
         assert_eq!(resp["data"]["token_bound_cidrs"], json!(["127.0.0.2", "128.252.0.0/16"]));
-        let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("Permission denied.")).unwrap();
+        let _ = test_http_server
+            .test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, Some("Permission denied."))
+            .unwrap();
     }
 }

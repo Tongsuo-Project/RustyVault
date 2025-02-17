@@ -1,11 +1,15 @@
 //! Define and implement HTTP metrics and corresponding methods.
 use std::fmt::Write;
 
-use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue, LabelValueEncoder};
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::histogram::{linear_buckets, Histogram};
-use prometheus_client::registry::Registry;
+use prometheus_client::{
+    encoding::{EncodeLabelSet, EncodeLabelValue, LabelValueEncoder},
+    metrics::{
+        counter::Counter,
+        family::Family,
+        histogram::{linear_buckets, Histogram},
+    },
+    registry::Registry,
+};
 
 pub const HTTP_REQUEST_COUNT: &str = "http_request_count";
 pub const HTTP_REQUEST_COUNT_HELP: &str = "Number of HTTP requests received, labeled by method and status";
@@ -72,12 +76,13 @@ impl HttpMetrics {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use rand::Rng;
     use regex::Regex;
     use ureq::json;
 
     use crate::test_utils::TestHttpServer;
-    use std::collections::HashMap;
 
     const PATH: &str = "path";
     const METHOD: &str = "method";

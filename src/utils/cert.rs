@@ -1,4 +1,7 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use better_default::Default;
 use foreign_types::ForeignType;
@@ -21,8 +24,11 @@ use openssl::{
     },
 };
 use openssl_sys::{
-    X509_get_extended_key_usage, X509_get_extension_flags, EXFLAG_XKUSAGE,
-    stack_st_X509, X509_STORE_CTX,
+    stack_st_X509, X509_get_extended_key_usage, X509_get_extension_flags, EXFLAG_XKUSAGE, X509_STORE_CTX,
+};
+use rustls::{
+    client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
+    pki_types::CertificateDer,
 };
 use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::ByteBuf;
@@ -304,15 +310,13 @@ impl Certificate {
     ) -> Result<CertBundle, RvError> {
         let key_bits = self.key_bits;
         let priv_key = match self.key_type.as_str() {
-            "rsa" => {
-                match key_bits {
-                    2048 | 3072 | 4096 => {
-                        let rsa_key = Rsa::generate(key_bits)?;
-                        PKey::from_rsa(rsa_key)?
-                    },
-                    _ => return Err(RvError::ErrPkiKeyBitsInvalid),
+            "rsa" => match key_bits {
+                2048 | 3072 | 4096 => {
+                    let rsa_key = Rsa::generate(key_bits)?;
+                    PKey::from_rsa(rsa_key)?
                 }
-            }
+                _ => return Err(RvError::ErrPkiKeyBitsInvalid),
+            },
             "ec" => {
                 let curve_name = match key_bits {
                     224 => Nid::SECP224R1,
@@ -361,6 +365,47 @@ impl Certificate {
         }
 
         Ok(cert_bundle)
+    }
+}
+
+#[derive(Debug)]
+pub struct DisabledVerifier;
+
+impl ServerCertVerifier for DisabledVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        let provider = rustls::crypto::CryptoProvider::get_default()
+            .cloned()
+            .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
+        provider.signature_verification_algorithms.supported_schemes()
     }
 }
 
