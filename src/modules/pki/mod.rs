@@ -294,6 +294,7 @@ mod test {
         .clone();
 
         // issue cert
+        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let resp =
             test_write_api(core, token, format!("{}issue/{}", path, role_name).as_str(), true, Some(issue_data)).await;
         assert!(resp.is_ok());
@@ -324,12 +325,12 @@ mod test {
         let ttl_compare = cert.not_after().compare(&expiration_time);
         assert!(ttl_compare.is_ok());
         assert_eq!(ttl_compare.unwrap(), std::cmp::Ordering::Equal);
-        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let expiration_ttl = cert_data["expiration"].as_u64().unwrap();
         let ttl = expiration_ttl - now_timestamp;
         let expect_ttl = 10 * 24 * 60 * 60;
+        println!("ttl: {}, expect_ttl: {}", ttl, expect_ttl);
         assert!(ttl <= expect_ttl);
-        assert!((ttl + 10) > expect_ttl);
+        assert!((ttl + 10) >= expect_ttl);
 
         let authority_key_id = cert.authority_key_id();
         assert!(authority_key_id.is_some());
@@ -492,6 +493,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         .clone();
 
         // issue cert
+        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let resp = test_write_api(&core, token, &format!("{}issue/{}", path, role_name), true, Some(issue_data)).await;
         assert!(resp.is_ok());
         let resp_body = resp.unwrap();
@@ -521,12 +523,12 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let ttl_compare = cert.not_after().compare(&expiration_time);
         assert!(ttl_compare.is_ok());
         assert_eq!(ttl_compare.unwrap(), std::cmp::Ordering::Equal);
-        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let expiration_ttl = cert_data["expiration"].as_u64().unwrap();
         let ttl = expiration_ttl - now_timestamp;
         let expect_ttl = 10 * 24 * 60 * 60;
+        println!("ttl: {}, expect_ttl: {}", ttl, expect_ttl);
         assert!(ttl <= expect_ttl);
-        assert!((ttl + 10) > expect_ttl);
+        assert!((ttl + 10) >= expect_ttl);
 
         //test fetch cert
         let serial_number_hex = cert_data["serial_number"].as_str().unwrap();

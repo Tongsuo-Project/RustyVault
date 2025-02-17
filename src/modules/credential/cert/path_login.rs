@@ -25,7 +25,7 @@ use crate::{
     context::Context,
     errors::RvError,
     logical::{Auth, Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
-    new_fields, new_fields_internal, new_path, new_path_internal, rv_error_response, rv_error_response_status,
+    new_fields, new_fields_internal, new_path, new_path_internal, rv_error_response, rv_error_string,
     utils::{
         self,
         cert::{
@@ -33,6 +33,7 @@ use crate::{
         },
         cidr::remote_addr_is_ok,
         ocsp::{self, OcspConfig},
+        policy::equivalent_policies,
         sock_addr::SockAddr,
     },
 };
@@ -141,9 +142,74 @@ impl CertBackendInner {
         Ok(Some(resp))
     }
 
-    pub fn login_renew(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        //TODO
-        return Err(rv_error_response_status!(502, "TODO"));
+    pub fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let config = self.get_config(req)?.ok_or(RvError::ErrCredentailNotConfig)?;
+
+        if req.connection.is_none() {
+            return Err(rv_error_response!("tls connection required"));
+        }
+
+        if req.auth.is_none() {
+            return Err(rv_error_response!("invalid request"));
+        }
+        let mut auth = req.auth.clone().unwrap();
+
+        if !config.disable_binding {
+            let subject_key_id = auth
+                .metadata
+                .get("subject_key_id")
+                .ok_or(rv_error_response!("invalid request, not found subject_key_id"))?;
+            let authority_key_id = auth
+                .metadata
+                .get("authority_key_id")
+                .ok_or(rv_error_response!("invalid request, not found authority_key_id"))?;
+
+            let _matched = self.verify_credentials(req)?;
+
+            let conn = req.connection.as_ref().ok_or(RvError::ErrRequestNotReady)?;
+
+            let client_cert = conn
+                .peer_tls_cert
+                .as_ref()
+                .filter(|cert| !cert.is_empty())
+                .and_then(|cert| cert.first())
+                .ok_or(rv_error_response!("no client certificate found"))?;
+
+            let cert_subject_key_id = client_cert.subject_key_id().map(|asn1_ref| asn1_ref.as_slice()).unwrap_or(b"");
+            let cert_authority_key_id =
+                client_cert.authority_key_id().map(|asn1_ref| asn1_ref.as_slice()).unwrap_or(b"");
+
+            let skid_hex = utils::hex_encode_with_colon(cert_subject_key_id);
+            let akid_hex = utils::hex_encode_with_colon(cert_authority_key_id);
+
+            // Certificate should not only match a registered certificate policy.
+            // Also, the identity of the certificate presented should match the identity of the certificate used during login
+            if *subject_key_id != skid_hex && *authority_key_id != akid_hex {
+                return Err(rv_error_response!(
+                    "client identity during renewal not matching client identity used during login"
+                ));
+            }
+        }
+
+        let cert_name =
+            auth.metadata.get("cert_name").ok_or(rv_error_response!("invalid request, not found cert_name"))?;
+
+        let cert = self.get_cert(req, cert_name.as_str())?;
+        if cert.is_none() {
+            return Ok(None);
+        }
+
+        let cert = cert.unwrap();
+
+        if !equivalent_policies(&cert.policies, &auth.policies) {
+            return Err(rv_error_string!("policies have changed, not renewing"));
+        }
+
+        auth.period = cert.token_period;
+        auth.ttl = cert.token_ttl;
+        auth.max_ttl = cert.token_max_ttl;
+
+        Ok(Some(Response { auth: Some(auth), ..Response::default() }))
     }
 
     fn verify_credentials(&self, req: &Request) -> Result<ParsedCert, RvError> {

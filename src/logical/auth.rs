@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use better_default::Default;
 use derive_more::{Deref, DerefMut};
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::lease::Lease;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Deref, DerefMut)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize, Deref, DerefMut)]
 pub struct Auth {
     #[deref]
     #[deref_mut]
@@ -45,9 +45,17 @@ pub struct Auth {
 
     // policy_results is the set of policies that grant the token access to the requesting path.
     pub policy_results: Option<PolicyResults>,
+
+    // period indicates that the token generated using this Auth object should never expire.
+    // The token should be renewed within the duration specified by this period.
+    pub period: Duration,
+
+    // explicit_max_ttl is the max TTL that constrains periodic tokens. For normal tokens,
+    // this value is constrained by the configured max ttl.
+    pub explicit_max_ttl: Duration,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Default, PartialEq, Serialize, Deserialize)]
 pub struct PolicyResults {
     pub allowed: bool,
     pub granting_policies: Vec<PolicyInfo>,
