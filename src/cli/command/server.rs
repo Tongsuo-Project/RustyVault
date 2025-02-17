@@ -13,17 +13,20 @@ use actix_web::{
 };
 use anyhow::format_err;
 use clap::Parser;
+use derive_more::Deref;
 use openssl::{
     ssl::{SslAcceptor, SslFiletype, SslMethod, SslOptions, SslVerifyMode, SslVersion},
-    x509::{X509, verify::X509VerifyFlags, store::X509StoreBuilder},
+    x509::{store::X509StoreBuilder, verify::X509VerifyFlags, X509},
 };
-use derive_more::Deref;
 use sysexits::ExitCode;
 
 use crate::{
-    cli::{config, command}, core::Core, errors::RvError, http, storage,
-    EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
+    cli::{command, config},
+    core::Core,
+    errors::RvError,
+    http,
     metrics::{manager::MetricsManager, middleware::metrics_midleware},
+    storage, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
 };
 
 pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";
@@ -153,11 +156,7 @@ impl Server {
         let metrics_manager = Arc::new(RwLock::new(MetricsManager::new(config.collection_interval)));
         let system_metrics = Arc::clone(&metrics_manager.read().unwrap().system_metrics);
 
-        let core = Arc::new(RwLock::new(Core {
-            physical: backend,
-            barrier: Arc::new(barrier),
-            ..Default::default()
-        }));
+        let core = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
 
         {
             let mut c = core.write()?;
@@ -205,7 +204,8 @@ impl Server {
 
             if listener.tls_max_version == SslVersion::TLS1_3 {
                 builder.clear_options(SslOptions::NO_TLSV1_3);
-                builder.set_ciphersuites("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256")?;
+                builder
+                    .set_ciphersuites("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256")?;
             }
 
             if !listener.tls_disable_client_certs {

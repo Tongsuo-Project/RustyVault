@@ -1,7 +1,10 @@
 use clap::Parser;
 use derive_more::Deref;
 
-use crate::{errors::RvError, cli::command::{self, CommandExecutor}};
+use crate::{
+    cli::command::{self, CommandExecutor},
+    errors::RvError,
+};
 
 #[derive(Parser, Deref)]
 #[command(
@@ -18,11 +21,7 @@ For a full list of examples and paths, please see the documentation that
 corresponds to the secrets engine in use."#
 )]
 pub struct Read {
-    #[arg(
-        next_line_help = false,
-        value_name = "PATH",
-        help = r#"The path of secret."#
-    )]
+    #[arg(next_line_help = false, value_name = "PATH", help = r#"The path of secret."#)]
     path: String,
 
     #[deref]

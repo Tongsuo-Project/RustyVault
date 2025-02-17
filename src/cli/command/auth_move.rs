@@ -6,8 +6,8 @@ use crate::{
         command::{self, CommandExecutor},
         util,
     },
-    modules::auth::AUTH_ROUTER_PREFIX,
     errors::RvError,
+    modules::auth::AUTH_ROUTER_PREFIX,
 };
 
 #[derive(Parser, Deref)]
@@ -34,13 +34,7 @@ where ns1 and ns2 are child namespaces of the current namespace:
     $ rvault auth move ns1/approle/ ns2/generic/"#
 )]
 pub struct Move {
-    #[arg(
-        index = 1,
-        required = true,
-        next_line_help = false,
-        value_name = "SOURCE",
-        help = r#"The path of source."#
-    )]
+    #[arg(index = 1, required = true, next_line_help = false, value_name = "SOURCE", help = r#"The path of source."#)]
     source: String,
 
     #[arg(

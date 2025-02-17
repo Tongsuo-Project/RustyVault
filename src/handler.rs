@@ -6,12 +6,12 @@
 //! The `Handler` trait should be implemented in other module, such as the `rusty_vault::router`
 //! for instance.
 
-use derive_more::Display;
 use async_trait::async_trait;
+use derive_more::Display;
 
 use crate::{
-    core::Core,
     cli::config::Config,
+    core::Core,
     errors::RvError,
     logical::{request::Request, response::Response, Auth},
 };

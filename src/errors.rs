@@ -8,8 +8,8 @@ use std::{
     sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard},
 };
 
-use thiserror::Error;
 use actix_web::http::StatusCode;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RvError {
@@ -233,11 +233,6 @@ pub enum RvError {
         #[from]
         source: chrono::ParseError,
     },
-    #[error("Some delay_timer error happened, {:?}", .source)]
-    TaskError {
-        #[from]
-        source: delay_timer::error::TaskError,
-    },
     #[error("Some bcrypt error happened, {:?}", .source)]
     BcryptError {
         #[from]
@@ -337,16 +332,16 @@ impl RvError {
     pub fn response_status(&self) -> StatusCode {
         match self {
             RvError::ErrRequestNoData
-                | RvError::ErrBarrierAlreadyInit
-                | RvError::ErrBarrierKeyInvalid
-                | RvError::ErrBarrierNotInit
-                | RvError::ErrBarrierUnsealed
-                | RvError::ErrBarrierUnsealFailed
-                | RvError::ErrRequestNoDataField
-                | RvError::ErrRequestInvalid
-                | RvError::ErrRequestClientTokenMissing
-                | RvError::ErrRequestFieldNotFound
-                | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
+            | RvError::ErrBarrierAlreadyInit
+            | RvError::ErrBarrierKeyInvalid
+            | RvError::ErrBarrierNotInit
+            | RvError::ErrBarrierUnsealed
+            | RvError::ErrBarrierUnsealFailed
+            | RvError::ErrRequestNoDataField
+            | RvError::ErrRequestInvalid
+            | RvError::ErrRequestClientTokenMissing
+            | RvError::ErrRequestFieldNotFound
+            | RvError::ErrRequestFieldInvalid => StatusCode::BAD_REQUEST,
             RvError::ErrBarrierSealed => StatusCode::SERVICE_UNAVAILABLE,
             RvError::ErrPermissionDenied => StatusCode::FORBIDDEN,
             RvError::ErrRouterMountNotFound => StatusCode::NOT_FOUND,

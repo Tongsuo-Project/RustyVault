@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     default::Default,
     env, fs,
-    io::{prelude::*},
+    io::prelude::*,
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Barrier, RwLock},
@@ -44,11 +44,13 @@ use ureq::AgentBuilder;
 
 use crate::{
     core::{Core, InitResult, SealConfig},
-    errors::RvError, http,
-    logical::{Operation, Request, Response},
+    errors::RvError,
+    http,
+    logical::{self, Operation, Request, Response},
     metrics::{manager::MetricsManager, middleware::metrics_midleware, system_metrics::SystemMetrics},
     rv_error_response, rv_error_string,
-    storage::{self, Backend}, utils::cert::Certificate
+    storage::{self, Backend},
+    utils::cert::Certificate,
 };
 
 lazy_static! {
@@ -1134,7 +1136,7 @@ pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     req.operation = Operation::List;
     req.client_token = token.to_string();
     let resp = core.handle_request(&mut req).await;
-    println!("list resp: {:?}", resp);
+    println!("list path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
@@ -1144,7 +1146,7 @@ pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     req.operation = Operation::Read;
     req.client_token = token.to_string();
     let resp = core.handle_request(&mut req).await;
-    println!("read resp: {:?}", resp);
+    println!("read path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
@@ -1162,7 +1164,7 @@ pub async fn test_write_api(
     req.body = data;
 
     let resp = core.handle_request(&mut req).await;
-    println!("write resp: {:?}", resp);
+    println!("write path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
@@ -1179,7 +1181,7 @@ pub async fn test_delete_api(
     req.client_token = token.to_string();
     req.body = data;
     let resp = core.handle_request(&mut req).await;
-    println!("delete resp: {:?}", resp);
+    println!("delete path: {}, resp: {:?}", path, resp);
     assert_eq!(resp.is_ok(), is_ok);
     resp
 }
@@ -1221,4 +1223,95 @@ pub fn get_project_binary_path() -> String {
     binary_path.push(bin_name);
 
     binary_path.into_os_string().into_string().unwrap_or_default()
+}
+
+type BackendTestRequestHandler = dyn Fn(&mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
+
+#[derive(Default)]
+pub struct NoopBackend {
+    pub root: Vec<String>,
+    pub login: Vec<String>,
+    pub paths: RwLock<Vec<String>>,
+    pub requests: RwLock<Vec<Request>>,
+    pub response: Option<Response>,
+    pub request_handler: Option<Arc<BackendTestRequestHandler>>,
+    pub invalidations: Vec<String>,
+    pub default_lease_ttl: Duration,
+    pub max_lease_ttl: Duration,
+    pub rollback_errs: bool,
+}
+
+impl Clone for NoopBackend {
+    fn clone(&self) -> Self {
+        NoopBackend {
+            root: self.root.clone(),
+            login: self.login.clone(),
+            paths: RwLock::new(self.paths.read().unwrap().clone()),
+            requests: RwLock::new(self.requests.read().unwrap().clone()),
+            response: self.response.clone(),
+            request_handler: self.request_handler.clone(),
+            invalidations: self.invalidations.clone(),
+            default_lease_ttl: self.default_lease_ttl.clone(),
+            max_lease_ttl: self.max_lease_ttl.clone(),
+            rollback_errs: self.rollback_errs.clone(),
+        }
+    }
+}
+
+impl logical::Backend for NoopBackend {
+    fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+        if self.rollback_errs && req.operation == Operation::Rollback {
+            return Err(rv_error_string!("no-op backend rollback has erred out"));
+        }
+
+        let resp = self.request_handler.as_ref().map_or(Ok(None), |handler| handler(req))?;
+
+        let mut requests = self.requests.write()?;
+        requests.push(req.clone());
+
+        let mut path = self.paths.write()?;
+        path.push(req.path.clone());
+
+        if req.storage.is_none() {
+            return Err(rv_error_string!("missing view"));
+        }
+
+        if req.path == "panic" {
+            panic!("as you command");
+        }
+
+        if resp.is_some() {
+            return Ok(resp);
+        }
+
+        Ok(self.response.clone())
+    }
+
+    fn cleanup(&self) -> Result<(), RvError> {
+        Ok(())
+    }
+
+    fn get_ctx(&self) -> Option<Arc<crate::context::Context>> {
+        None
+    }
+
+    fn get_root_paths(&self) -> Option<Arc<Vec<String>>> {
+        Some(Arc::new(self.root.clone()))
+    }
+
+    fn get_unauth_paths(&self) -> Option<Arc<Vec<String>>> {
+        Some(Arc::new(self.login.clone()))
+    }
+
+    fn init(&mut self) -> Result<(), RvError> {
+        Ok(())
+    }
+
+    fn setup(&self, _key: &str) -> Result<(), RvError> {
+        Ok(())
+    }
+
+    fn secret(&self, _key: &str) -> Option<&Arc<logical::secret::Secret>> {
+        None
+    }
 }

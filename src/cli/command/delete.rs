@@ -1,7 +1,11 @@
 use clap::Parser;
 use derive_more::Deref;
 
-use crate::{cli::command::{self, CommandExecutor}, errors::RvError, rv_error_string};
+use crate::{
+    cli::command::{self, CommandExecutor},
+    errors::RvError,
+    rv_error_string,
+};
 
 #[derive(Parser, Deref)]
 #[command(
@@ -15,10 +19,7 @@ Remove data in the status secret backend:
   $ vault delete secret/my-secret"#
 )]
 pub struct Delete {
-    #[arg(
-        next_line_help = false,
-        value_name = "PATH",
-    )]
+    #[arg(next_line_help = false, value_name = "PATH")]
     path: String,
 
     #[deref]

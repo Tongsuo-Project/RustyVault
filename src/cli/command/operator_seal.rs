@@ -3,14 +3,16 @@ use derive_more::Deref;
 use sysexits::ExitCode;
 
 use crate::{
-    errors::RvError,
     cli::command::{self, CommandExecutor},
-    EXIT_CODE_INSUFFICIENT_PARAMS,
-    EXIT_CODE_OK,
+    errors::RvError,
+    EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_OK,
 };
 
 #[derive(Parser, Deref)]
-#[command(author, version, about = r#"Seals the RustyVault server. Sealing tells the RustyVault server to stop responding
+#[command(
+    author,
+    version,
+    about = r#"Seals the RustyVault server. Sealing tells the RustyVault server to stop responding
 to any operations until it is unsealed. When sealed, the RustyVault server discards
 its in-memory root key to unlock the data, so it is physically blocked from responding
 to operations unsealed.
@@ -22,7 +24,8 @@ This command does nothing if the RustyVault server is already sealed.
 
 Seal the RustyVault server:
 
-  $ rvault operator seal"#)]
+  $ rvault operator seal"#
+)]
 pub struct Seal {
     #[deref]
     #[command(flatten, next_help_heading = "HTTP Options")]

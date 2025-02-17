@@ -14,6 +14,7 @@ pub mod credential;
 pub mod crypto;
 pub mod kv;
 pub mod pki;
+pub mod policy;
 pub mod system;
 
 pub trait Module: AsAny + Send + Sync {

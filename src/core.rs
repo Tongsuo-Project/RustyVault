@@ -28,6 +28,7 @@ use crate::{
         auth::AuthModule,
         credential::{approle::AppRoleModule, cert::CertModule, userpass::UserPassModule},
         pki::PkiModule,
+        policy::PolicyModule,
     },
     mount::MountTable,
     router::Router,
@@ -116,8 +117,12 @@ impl Core {
         self.self_ref = Some(Arc::clone(&core));
 
         // add auth_module
-        let auth_module = AuthModule::new(self);
+        let auth_module = AuthModule::new(self)?;
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(auth_module))))?;
+
+        // add policy_module
+        let policy_module = PolicyModule::new(self);
+        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(policy_module))))?;
 
         // add pki_module
         let pki_module = PkiModule::new(self);
@@ -135,9 +140,7 @@ impl Core {
         let cert_module = CertModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
 
-        let handlers = {
-            self.handlers.read()?.clone()
-        };
+        let handlers = { self.handlers.read()?.clone() };
         for handler in handlers.iter() {
             match handler.post_config(self, config) {
                 Ok(_) => {
@@ -218,7 +221,7 @@ impl Core {
         if let Some(module) = self.module_manager.get_module("auth") {
             let auth_mod = module.read()?;
             if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                let te = auth_module.token_store.root_token()?;
+                let te = auth_module.token_store.as_ref().unwrap().root_token()?;
                 init_result.root_token = te.id;
             } else {
                 log::error!("downcast auth module failed!");

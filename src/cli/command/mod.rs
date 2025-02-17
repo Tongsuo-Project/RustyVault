@@ -13,6 +13,12 @@ use crate::{
     EXIT_CODE_OK,
 };
 
+pub mod auth;
+pub mod auth_disable;
+pub mod auth_enable;
+pub mod auth_help;
+pub mod auth_list;
+pub mod auth_move;
 pub mod delete;
 pub mod format;
 pub mod list;
@@ -25,12 +31,6 @@ pub mod read;
 pub mod server;
 pub mod status;
 pub mod write;
-pub mod auth;
-pub mod auth_list;
-pub mod auth_enable;
-pub mod auth_disable;
-pub mod auth_move;
-pub mod auth_help;
 
 pub use format::{LogicalOutputOptions, OutputOptions};
 

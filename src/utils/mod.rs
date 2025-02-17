@@ -4,7 +4,7 @@
 use std::time::{Duration, SystemTime};
 
 use chrono::prelude::*;
-use humantime::{format_rfc3339, parse_rfc3339};
+use humantime::{format_rfc3339, parse_duration, parse_rfc3339};
 use openssl::hash::{Hasher, MessageDigest};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Deserializer, Serializer};
@@ -16,6 +16,7 @@ pub mod cidr;
 pub mod crypto;
 pub mod ip_sock_addr;
 pub mod key;
+pub mod kv_builder;
 pub mod locks;
 pub mod ocsp;
 pub mod policy;
@@ -24,7 +25,6 @@ pub mod sock_addr;
 pub mod string;
 pub mod token_util;
 pub mod unix_sock_addr;
-pub mod kv_builder;
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];
@@ -92,8 +92,31 @@ pub fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Erro
 where
     D: serde::Deserializer<'de>,
 {
-    let timestamp = i64::deserialize(deserializer)?;
-    Ok(Duration::from_secs(timestamp as u64))
+    struct DurationVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for DurationVisitor {
+        type Value = Duration;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a number or a string with 's' suffix")
+        }
+
+        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Duration::from_secs(value))
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            parse_duration(value).map_err(serde::de::Error::custom)
+        }
+    }
+
+    deserializer.deserialize_any(DurationVisitor)
 }
 
 pub fn asn1time_to_timestamp(time_str: &str) -> Result<i64, RvError> {

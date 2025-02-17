@@ -1,10 +1,14 @@
 //! This is the OpenSSL adaptor.
 
-use crate::errors::RvError;
-use crate::modules::crypto::{AEADCipher, AESKeySize, BlockCipher, CipherMode, AES};
-use openssl::symm::{Cipher, Crypter, Mode, encrypt, encrypt_aead, decrypt, decrypt_aead};
-use openssl::rand::rand_priv_bytes;
-use crate::modules::crypto::crypto_adaptors::common;
+use openssl::{
+    rand::rand_priv_bytes,
+    symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher, Crypter, Mode},
+};
+
+use crate::{
+    errors::RvError,
+    modules::crypto::{crypto_adaptors::common, AEADCipher, AESKeySize, BlockCipher, CipherMode, AES},
+};
 
 pub struct AdaptorCTX {
     ctx: Crypter,
@@ -45,13 +49,11 @@ impl BlockCipher for AES {
         common_aes_encrypt!(self, plaintext);
     }
 
-    fn encrypt_update(&mut self, plaintext: Vec<u8>, ciphertext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn encrypt_update(&mut self, plaintext: Vec<u8>, ciphertext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_encrypt_update!(self, plaintext, ciphertext);
     }
 
-    fn encrypt_final(&mut self, ciphertext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn encrypt_final(&mut self, ciphertext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_encrypt_final!(self, ciphertext);
     }
 
@@ -59,13 +61,11 @@ impl BlockCipher for AES {
         common_aes_decrypt!(self, ciphertext);
     }
 
-    fn decrypt_update(&mut self, ciphertext: Vec<u8>, plaintext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn decrypt_update(&mut self, ciphertext: Vec<u8>, plaintext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_decrypt_update!(self, ciphertext, plaintext);
     }
 
-    fn decrypt_final(&mut self, plaintext: &mut Vec<u8>
-        ) -> Result<usize, RvError> {
+    fn decrypt_final(&mut self, plaintext: &mut Vec<u8>) -> Result<usize, RvError> {
         common_aes_decrypt_final!(self, plaintext);
     }
 }

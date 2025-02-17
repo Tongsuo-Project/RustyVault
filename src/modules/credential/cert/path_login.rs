@@ -4,20 +4,19 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use foreign_types::ForeignType;
 use glob::Pattern;
 use openssl::{
+    asn1::{Asn1OctetString, Asn1Time},
     nid::Nid,
     stack::Stack,
-    asn1::{Asn1Time, Asn1OctetString},
     x509::{
-        verify::X509VerifyFlags,
         store::{X509Store, X509StoreBuilder},
+        verify::X509VerifyFlags,
         X509StoreContext, X509VerifyResult, X509,
     },
 };
 use openssl_sys::{
-    XKU_SSL_CLIENT, XKU_ANYEKU, X509_V_ERR_CERT_HAS_EXPIRED,
-    X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT, X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
     ASN1_STRING_get0_data, ASN1_STRING_length, OBJ_obj2txt, X509_EXTENSION_get_data, X509_EXTENSION_get_object,
-    X509_get_ext, X509_get_ext_count,
+    X509_get_ext, X509_get_ext_count, X509_V_ERR_CERT_HAS_EXPIRED, X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT,
+    X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY, XKU_ANYEKU, XKU_SSL_CLIENT,
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,14 +25,15 @@ use crate::{
     context::Context,
     errors::RvError,
     logical::{Auth, Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
-    new_fields, new_fields_internal, new_path, new_path_internal, rv_error_response, rv_error_response_status,
+    new_fields, new_fields_internal, new_path, new_path_internal, rv_error_response, rv_error_string,
     utils::{
         self,
         cert::{
-            deserialize_vec_x509, is_ca_cert, serialize_vec_x509, has_x509_ext_key_usage, has_x509_ext_key_usage_flag,
+            deserialize_vec_x509, has_x509_ext_key_usage, has_x509_ext_key_usage_flag, is_ca_cert, serialize_vec_x509,
         },
-        ocsp::{self, OcspConfig},
         cidr::remote_addr_is_ok,
+        ocsp::{self, OcspConfig},
+        policy::equivalent_policies,
         sock_addr::SockAddr,
     },
 };
@@ -115,7 +115,8 @@ impl CertBackendInner {
         let matched = self.verify_credentials(req)?;
 
         if !matched.entry.token_bound_cidrs.is_empty() {
-            let token_bound_cidrs: Vec<Box<dyn SockAddr>> = matched.entry.token_bound_cidrs.iter().map(|s| s.sock_addr.clone()).collect();
+            let token_bound_cidrs: Vec<Box<dyn SockAddr>> =
+                matched.entry.token_bound_cidrs.iter().map(|s| s.sock_addr.clone()).collect();
             if !remote_addr_is_ok(&conn.peer_addr, &token_bound_cidrs) {
                 return Err(RvError::ErrPermissionDenied);
             }
@@ -141,25 +142,92 @@ impl CertBackendInner {
         Ok(Some(resp))
     }
 
-    pub fn login_renew(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        //TODO
-        return Err(rv_error_response_status!(502, "TODO"));
+    pub fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let config = self.get_config(req)?.ok_or(RvError::ErrCredentailNotConfig)?;
+
+        if req.connection.is_none() {
+            return Err(rv_error_response!("tls connection required"));
+        }
+
+        if req.auth.is_none() {
+            return Err(rv_error_response!("invalid request"));
+        }
+        let mut auth = req.auth.clone().unwrap();
+
+        if !config.disable_binding {
+            let subject_key_id = auth
+                .metadata
+                .get("subject_key_id")
+                .ok_or(rv_error_response!("invalid request, not found subject_key_id"))?;
+            let authority_key_id = auth
+                .metadata
+                .get("authority_key_id")
+                .ok_or(rv_error_response!("invalid request, not found authority_key_id"))?;
+
+            let _matched = self.verify_credentials(req)?;
+
+            let conn = req.connection.as_ref().ok_or(RvError::ErrRequestNotReady)?;
+
+            let client_cert = conn
+                .peer_tls_cert
+                .as_ref()
+                .filter(|cert| !cert.is_empty())
+                .and_then(|cert| cert.first())
+                .ok_or(rv_error_response!("no client certificate found"))?;
+
+            let cert_subject_key_id = client_cert.subject_key_id().map(|asn1_ref| asn1_ref.as_slice()).unwrap_or(b"");
+            let cert_authority_key_id =
+                client_cert.authority_key_id().map(|asn1_ref| asn1_ref.as_slice()).unwrap_or(b"");
+
+            let skid_hex = utils::hex_encode_with_colon(cert_subject_key_id);
+            let akid_hex = utils::hex_encode_with_colon(cert_authority_key_id);
+
+            // Certificate should not only match a registered certificate policy.
+            // Also, the identity of the certificate presented should match the identity of the certificate used during login
+            if *subject_key_id != skid_hex && *authority_key_id != akid_hex {
+                return Err(rv_error_response!(
+                    "client identity during renewal not matching client identity used during login"
+                ));
+            }
+        }
+
+        let cert_name =
+            auth.metadata.get("cert_name").ok_or(rv_error_response!("invalid request, not found cert_name"))?;
+
+        let cert = self.get_cert(req, cert_name.as_str())?;
+        if cert.is_none() {
+            return Ok(None);
+        }
+
+        let cert = cert.unwrap();
+
+        if !equivalent_policies(&cert.policies, &auth.policies) {
+            return Err(rv_error_string!("policies have changed, not renewing"));
+        }
+
+        auth.period = cert.token_period;
+        auth.ttl = cert.token_ttl;
+        auth.max_ttl = cert.token_max_ttl;
+
+        Ok(Some(Response { auth: Some(auth), ..Response::default() }))
     }
 
     fn verify_credentials(&self, req: &Request) -> Result<ParsedCert, RvError> {
-        let peer_tls_cert = req.connection.as_ref()
+        let peer_tls_cert = req
+            .connection
+            .as_ref()
             .and_then(|conn| conn.peer_tls_cert.as_ref())
             .filter(|cert| !cert.is_empty())
             .ok_or_else(|| rv_error_response!("client certificate must be supplied"))?;
 
         let client_cert = &peer_tls_cert[0];
 
-        let cert_name = req.auth
+        let cert_name = req
+            .auth
             .as_ref()
             .and_then(|auth| auth.metadata.get("cert_name").cloned())
             .or_else(|| req.get_data("name").ok().and_then(|name| name.as_str().map(|s| s.to_string())))
             .unwrap_or_default();
-
 
         let (roots, trusted, trusted_non_ca, ocsp_config) = self.load_trusted_certs(req, &cert_name)?;
 
@@ -175,7 +243,9 @@ impl CertBackendInner {
                 continue;
             }
 
-            if crt.serial_number() == client_cert.serial_number() && crt_key_id.unwrap().as_slice() == client_key_id.unwrap().as_slice() {
+            if crt.serial_number() == client_cert.serial_number()
+                && crt_key_id.unwrap().as_slice() == client_key_id.unwrap().as_slice()
+            {
                 match self.matches_constraints(&client_cert, &trust.certs, trust, &ocsp_config) {
                     Ok(true) => return Ok(trust.clone()),
                     Err(e) => ret_err.push(e),
@@ -186,9 +256,11 @@ impl CertBackendInner {
 
         if trusted_chains.is_empty() {
             if !ret_err.is_empty() {
-                return Err(rv_error_response!(
-                        &format!("invalid certificate or no client certificate supplied; additionally got errors during verification:: {:?}", ret_err)
-                        ));
+                return Err(rv_error_response!(&format!(
+                    "invalid certificate or no client certificate supplied; additionally got errors during \
+                     verification:: {:?}",
+                    ret_err
+                )));
             }
             return Err(rv_error_response!("invalid certificate or no client certificate supplied"));
         }
@@ -204,14 +276,14 @@ impl CertBackendInner {
         }
 
         if !ret_err.is_empty() {
-            return Err(rv_error_response!(
-                &format!("no chain matching all constraints could be found for this login certificate; additionally got errors during verification: {:?}", ret_err)
-            ));
+            return Err(rv_error_response!(&format!(
+                "no chain matching all constraints could be found for this login certificate; additionally got errors \
+                 during verification: {:?}",
+                ret_err
+            )));
         }
 
-        return Err(rv_error_response!(
-            "no chain matching all constraints could be found for this login certificate"
-        ));
+        return Err(rv_error_response!("no chain matching all constraints could be found for this login certificate"));
     }
 
     fn load_trusted_certs(
@@ -219,11 +291,8 @@ impl CertBackendInner {
         req: &Request,
         cert_name: &str,
     ) -> Result<(X509Store, Vec<ParsedCert>, Vec<ParsedCert>, OcspConfig), RvError> {
-        let names: Vec<String> = if !cert_name.is_empty() {
-            vec![cert_name.to_string()]
-        } else {
-            req.storage_list("cert/")?
-        };
+        let names: Vec<String> =
+            if !cert_name.is_empty() { vec![cert_name.to_string()] } else { req.storage_list("cert/")? };
 
         let mut trusted: Vec<ParsedCert> = Vec::new();
         let mut trusted_non_ca: Vec<ParsedCert> = Vec::new();
@@ -277,11 +346,18 @@ impl CertBackendInner {
         let mut context = X509StoreContext::new()?;
         let (verified_res, verified_error, verified_chains) = context.init(roots, &peer_certs[0], &stack, |ctx| {
             let ret = ctx.verify_cert()?;
-            let verified_chains: Vec<X509> = ctx.chain()
-                .map(|chain| chain.iter().map(|crt| crt.to_owned())
-                     .filter(|crt| !has_x509_ext_key_usage(crt) ||
-                             has_x509_ext_key_usage_flag(crt, XKU_ANYEKU | XKU_SSL_CLIENT))
-                     .collect())
+            let verified_chains: Vec<X509> = ctx
+                .chain()
+                .map(|chain| {
+                    chain
+                        .iter()
+                        .map(|crt| crt.to_owned())
+                        .filter(|crt| {
+                            !has_x509_ext_key_usage(crt)
+                                || has_x509_ext_key_usage_flag(crt, XKU_ANYEKU | XKU_SSL_CLIENT)
+                        })
+                        .collect()
+                })
                 .unwrap_or_else(Vec::new);
 
             Ok((ret, ctx.error(), verified_chains))
@@ -291,11 +367,13 @@ impl CertBackendInner {
             return match verified_error.as_raw() {
                 X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT | X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY => {
                     if peer_certs[0].not_after() <= Asn1Time::days_from_now(0)? {
-                        Err(rv_error_response!(& unsafe {X509VerifyResult::from_raw(X509_V_ERR_CERT_HAS_EXPIRED).to_string() }))
+                        Err(rv_error_response!(&unsafe {
+                            X509VerifyResult::from_raw(X509_V_ERR_CERT_HAS_EXPIRED).to_string()
+                        }))
                     } else {
                         Ok(Vec::new())
                     }
-                },
+                }
                 _ => Err(rv_error_response!(&verified_error.to_string())),
             };
         }
@@ -542,25 +620,25 @@ impl CertBackendInner {
                     return false;
                 }
 
-                let is_match = hex_ext_map.get(req_hex_ext[0])
+                let is_match = hex_ext_map
+                    .get(req_hex_ext[0])
                     .and_then(|client_ext_value| {
                         Pattern::new(&req_hex_ext[1].to_lowercase())
                             .ok()
                             .filter(|pattern| pattern.matches(client_ext_value))
                     })
-                .is_some();
+                    .is_some();
 
                 if !is_match {
                     return false;
                 }
             } else {
-                let is_match = client_ext_map.get(req_ext[0])
+                let is_match = client_ext_map
+                    .get(req_ext[0])
                     .and_then(|client_ext_value| {
-                        Pattern::new(&req_ext[1])
-                            .ok()
-                            .filter(|pattern| pattern.matches(client_ext_value))
+                        Pattern::new(&req_ext[1]).ok().filter(|pattern| pattern.matches(client_ext_value))
                     })
-                .is_some();
+                    .is_some();
 
                 if !is_match {
                     return false;

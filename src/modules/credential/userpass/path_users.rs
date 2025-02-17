@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use serde::{Deserialize, Serialize};
 use derive_more::{Deref, DerefMut};
+use serde::{Deserialize, Serialize};
 
 use super::{UserPassBackend, UserPassBackendInner};
 use crate::{
@@ -27,10 +27,11 @@ pub struct UserEntry {
     pub ttl: Duration,
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub max_ttl: Duration,
-    #[serde(flatten)]
+    #[serde(flatten, default)]
     #[deref]
     #[deref_mut]
     pub token_params: TokenParams,
+    #[serde(default)]
     pub bound_cidrs: Vec<SockAddrMarshaler>,
 }
 

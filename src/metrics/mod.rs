@@ -1,17 +1,17 @@
-//! The `rusty_vault::metrics` module instruments RustyVault with Prometheus, allowing it to capture performance metrics. 
-//! 
+//! The `rusty_vault::metrics` module instruments RustyVault with Prometheus, allowing it to capture performance metrics.
+//!
 //! # Methodology
-//! 
+//!
 //! From a monitoring perspective, [Prometheus](https://prometheus.io/docs/practices/instrumentation/#the-three-types-of-services) categorizes services into three types: online services, offline processing, and batch jobs. As a modern key management system, RustyVault provides a set of RESTful APIs, so it is classified as an online service.
-//! 
+//!
 //! In online service systems, the key metrics include the number of executed queries, error rates, and latency. In this project, the monitored content is divided into two parts: the target operating system and the target application service.
-//! 
+//!
 //! Based on the [USE (Utilization, Saturation, and Errors) method](https://www.brendangregg.com/usemethod.html), system performance metrics such as CPU, memory, disk, network, and load are monitored. For the target service, the [RED (Rate, Errors, and Duration)](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) method is used to monitor the number of requests, request outcomes, and the time taken to process each request.
-//! 
+//!
 //! # Dependency
-//! 
+//!
 //! This implementation utilizes the [prometheus-client](https://docs.rs/prometheus-client/latest/prometheus_client/) and [sysinfo](https://docs.rs/sysinfo/latest/sysinfo/) libraries to gather system performance data.
-//! 
+//!
 //! # How to Create and Using New Metric
 //!
 //! 1. **Define and Implement Metrics**
@@ -69,7 +69,7 @@
 //!     metrics_manager.http_metrics.increment_request_count(&label);
 //! }
 //! ```
-pub mod middleware;
-pub mod manager;
-pub mod system_metrics;
 pub mod http_metrics;
+pub mod manager;
+pub mod middleware;
+pub mod system_metrics;

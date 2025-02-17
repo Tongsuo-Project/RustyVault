@@ -228,7 +228,7 @@ impl AppRoleBackendInner {
             path_inner.tidy_secret_id_routine(storage).await;
         });
 
-        req.add_task(task);
+        req.ctx.add_task(task);
 
         resp.set_request_id(&req.id);
         resp.add_warning(
@@ -335,7 +335,7 @@ mod test {
         req.path = "tidy/secret-id".to_string();
         let _resp = mock_backend.handle_request(&mut req);
 
-        assert!(req.wait_task_finish().await.is_ok());
+        assert!(req.ctx.wait_task_finish().await.is_ok());
 
         let accessor = req.storage_list("accessor/");
         assert!(accessor.is_ok());
@@ -390,11 +390,11 @@ mod test {
         while start.elapsed() < Duration::new(5, 0) {
             if start.elapsed() > Duration::from_millis(100)
                 && approle_module.tidy_secret_id_cas_guard.load(Ordering::SeqCst) == 0
-                {
-                    req.operation = Operation::Write;
-                    req.path = "tidy/secret-id".to_string();
-                    let _ = mock_backend.handle_request(&mut req);
-                }
+            {
+                req.operation = Operation::Write;
+                req.path = "tidy/secret-id".to_string();
+                let _ = mock_backend.handle_request(&mut req);
+            }
 
             let core_cloned2 = core_cloned.clone();
             let token = root_token.clone();
@@ -419,8 +419,8 @@ mod test {
             let entry = StorageEntry::new(
                 format!("accessor/invalid{}", *num).as_str(),
                 &SecretIdAccessorStorageEntry { secret_id_hmac: "samplesecretidhmac".to_string() },
-                )
-                .unwrap();
+            )
+            .unwrap();
 
             assert!(req.storage_put(&entry).is_ok());
 
@@ -429,7 +429,7 @@ mod test {
             thread::sleep(Duration::from_micros(10));
         }
 
-        assert!(req.wait_task_finish().await.is_ok());
+        assert!(req.ctx.wait_task_finish().await.is_ok());
 
         // Wait for tidy to finish
         while approle_module.tidy_secret_id_cas_guard.load(Ordering::SeqCst) != 0 {
@@ -437,15 +437,14 @@ mod test {
         }
 
         // Run tidy again
-        req.clear_task();
+        req.ctx.clear_task();
 
         req.operation = Operation::Write;
         req.path = "tidy/secret-id".to_string();
         let resp = mock_backend.handle_request(&mut req);
         assert!(resp.is_ok());
 
-        assert!(req.wait_task_finish().await.is_ok());
-
+        assert!(req.ctx.wait_task_finish().await.is_ok());
 
         let num = count.lock().unwrap();
 

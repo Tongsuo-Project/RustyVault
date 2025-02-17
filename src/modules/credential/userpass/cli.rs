@@ -1,13 +1,14 @@
 use std::io::{self, Write};
 
-use serde_json::{Map, Value};
 use better_default::Default;
 use rpassword::read_password;
+use serde_json::{Map, Value};
 
 use crate::{
-    api::{auth::LoginHandler, client::Client, HttpResponse}, errors::RvError, rv_error_response
+    api::{auth::LoginHandler, client::Client, HttpResponse},
+    errors::RvError,
+    rv_error_response,
 };
-
 
 #[derive(Default)]
 pub struct UsesPassCliHandler {

@@ -8,8 +8,8 @@
 //! [documentation site]: https://www.tongsuo.net
 
 use std::process::ExitCode;
-use clap::{Parser, CommandFactory};
 
+use clap::{CommandFactory, Parser};
 use rusty_vault::cli::Cli;
 
 fn main() -> ExitCode {
