@@ -109,6 +109,7 @@ version = "0.2"
 [lints.clippy]
 result_large_err = "allow"
 ptr_arg = "allow"
+let_and_return = "allow"
 
 [[bin]]
 name = "rvault"

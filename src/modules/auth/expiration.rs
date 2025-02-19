@@ -225,7 +225,7 @@ impl ExpirationManager {
             secret.lease_id = lease_id.into();
         }
 
-        le.data = resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new());
+        le.data = resp.data.clone().unwrap_or(Map::new());
         le.expire_time = resp.secret.as_ref().unwrap().expiration_time();
         le.secret = resp.secret.clone();
 
@@ -311,7 +311,7 @@ impl ExpirationManager {
                 lease_id: lease_id.clone(),
                 client_token: req.client_token.clone(),
                 path: req.path.clone(),
-                data: resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new()),
+                data: resp.data.clone().unwrap_or(Map::new()),
                 secret: Some(secret.clone()),
                 issue_time: now,
                 expire_time: secret.expiration_time(),

@@ -490,7 +490,7 @@ impl PolicyStore {
             all_policies.extend(ap);
         }
 
-        Ok(ACL::new(&all_policies)?)
+        ACL::new(&all_policies)
     }
 
     fn set_policy_internal(&self, policy: Arc<Policy>) -> Result<(), RvError> {
