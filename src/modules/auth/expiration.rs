@@ -311,7 +311,7 @@ impl ExpirationManager {
                 lease_id: lease_id.clone(),
                 client_token: req.client_token.clone(),
                 path: req.path.clone(),
-                data: resp.data.clone().unwrap_or(Map::new()),
+                data: resp.data.clone().unwrap_or_default(),
                 secret: Some(secret.clone()),
                 issue_time: now,
                 expire_time: secret.expiration_time(),

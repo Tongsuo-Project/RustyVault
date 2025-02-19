@@ -358,7 +358,7 @@ impl CertBackendInner {
                         })
                         .collect()
                 })
-                .unwrap_or_else(Vec::new);
+                .unwrap_or_default();
 
             Ok((ret, ctx.error(), verified_chains))
         })?;

@@ -583,7 +583,7 @@ impl Permissions {
 
             let pi = PolicyInfo { name: policy.name.clone(), policy_type: "acl".into(), ..Default::default() };
 
-            self.granting_policies_map.entry(cap.to_bits()).or_insert_with(Vec::new).push(pi);
+            self.granting_policies_map.entry(cap.to_bits()).or_default().push(pi);
         }
 
         Ok(())
