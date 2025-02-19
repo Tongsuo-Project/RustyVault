@@ -106,6 +106,10 @@ version = "0.3.1"
 [dependencies.libc]
 version = "0.2"
 
+[lints.clippy]
+result_large_err = "allow"
+ptr_arg = "allow"
+
 [[bin]]
 name = "rvault"
 path = "bin/rusty_vault.rs"
