@@ -522,8 +522,8 @@ impl ExpirationManager {
                 data: ole.data.clone().map(|serde_map| serde_map.into_iter().collect()).unwrap_or(Map::new()),
                 secret: ole.secret.clone(),
                 auth: ole.auth.clone(),
-                issue_time: ole.issue_time.clone(),
-                expire_time: ole.expire_time.clone(),
+                issue_time: ole.issue_time,
+                expire_time: ole.expire_time,
                 ..Default::default()
             };
             self.persist_lease_entry(&le)?;

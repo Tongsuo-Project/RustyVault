@@ -186,7 +186,7 @@ impl MountTable {
             return Ok(());
         }
 
-        self.load(storage, CORE_MOUNT_CONFIG_PATH, hmac_key, hmac_level.clone())?;
+        self.load(storage, CORE_MOUNT_CONFIG_PATH, hmac_key, hmac_level)?;
 
         self.mount_update(storage, hmac_key, hmac_level)
     }

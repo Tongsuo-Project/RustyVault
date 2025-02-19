@@ -401,7 +401,7 @@ impl Core {
         self.mounts.load_or_default(
             self.barrier.as_storage(),
             Some(&self.hmac_key),
-            self.mount_entry_hmac_level.clone(),
+            self.mount_entry_hmac_level,
         )?;
 
         self.setup_mounts()?;

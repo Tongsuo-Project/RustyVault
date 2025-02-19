@@ -49,11 +49,11 @@ impl Salt {
             }
 
             if salt.config.hash_type != c.hash_type {
-                salt.config.hash_type = c.hash_type.clone();
+                salt.config.hash_type = c.hash_type;
             }
 
             if salt.config.hmac_type != c.hmac_type {
-                salt.config.hmac_type = c.hmac_type.clone();
+                salt.config.hmac_type = c.hmac_type;
             }
         }
 

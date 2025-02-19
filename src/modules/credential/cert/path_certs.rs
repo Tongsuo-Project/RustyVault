@@ -244,13 +244,13 @@ impl CertBackendInner {
         let mut cert_entry: CertEntry = serde_json::from_slice(entry.value.as_slice())?;
 
         if cert_entry.token_ttl.as_secs() == 0 && cert_entry.ttl.as_secs() > 0 {
-            cert_entry.token_ttl = cert_entry.ttl.clone();
+            cert_entry.token_ttl = cert_entry.ttl;
         }
         if cert_entry.token_max_ttl.as_secs() == 0 && cert_entry.max_ttl.as_secs() > 0 {
-            cert_entry.token_max_ttl = cert_entry.max_ttl.clone();
+            cert_entry.token_max_ttl = cert_entry.max_ttl;
         }
         if cert_entry.token_period.as_secs() == 0 && cert_entry.period.as_secs() > 0 {
-            cert_entry.token_period = cert_entry.period.clone();
+            cert_entry.token_period = cert_entry.period;
         }
         if cert_entry.token_policies.len() == 0 && cert_entry.policies.len() > 0 {
             cert_entry.token_policies = cert_entry.policies.clone();
@@ -384,9 +384,9 @@ impl CertBackendInner {
         }
 
         let old_token_policies = cert_entry.token_policies.clone();
-        let old_token_period = cert_entry.token_period.clone();
-        let old_token_ttl = cert_entry.token_ttl.clone();
-        let old_token_max_ttl = cert_entry.token_max_ttl.clone();
+        let old_token_period = cert_entry.token_period;
+        let old_token_ttl = cert_entry.token_ttl;
+        let old_token_max_ttl = cert_entry.token_max_ttl;
         let old_token_bound_cidrs = cert_entry.token_bound_cidrs.clone();
 
         cert_entry.token_params.parse_token_fields(req)?;
@@ -400,30 +400,30 @@ impl CertBackendInner {
         }
 
         if old_token_period != cert_entry.token_period {
-            cert_entry.period = cert_entry.token_period.clone();
+            cert_entry.period = cert_entry.token_period;
         } else if let Ok(period_value) = req.get_data("period") {
             let period = period_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.period = period.clone();
+            cert_entry.period = period;
             cert_entry.token_period = period;
         }
 
         if old_token_ttl != cert_entry.token_ttl {
-            cert_entry.ttl = cert_entry.token_ttl.clone();
+            cert_entry.ttl = cert_entry.token_ttl;
         } else if let Ok(ttl_value) = req.get_data("ttl") {
             let ttl = ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.ttl = ttl.clone();
+            cert_entry.ttl = ttl;
             cert_entry.token_ttl = ttl;
         } else if let Ok(lease_value) = req.get_data("lease") {
             let lease = lease_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
             cert_entry.ttl = Duration::from_secs(lease);
-            cert_entry.token_ttl = cert_entry.ttl.clone();
+            cert_entry.token_ttl = cert_entry.ttl;
         }
 
         if old_token_max_ttl != cert_entry.token_max_ttl {
-            cert_entry.max_ttl = cert_entry.token_max_ttl.clone();
+            cert_entry.max_ttl = cert_entry.token_max_ttl;
         } else if let Ok(max_ttl_value) = req.get_data("max_ttl") {
             let max_ttl = max_ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.max_ttl = max_ttl.clone();
+            cert_entry.max_ttl = max_ttl;
             cert_entry.token_max_ttl = max_ttl;
         }
 

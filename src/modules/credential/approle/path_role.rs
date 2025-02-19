@@ -1081,7 +1081,7 @@ impl AppRoleBackendInner {
         }
 
         let old_token_policies = role_entry.token_policies.clone();
-        let old_token_period = role_entry.token_period.clone();
+        let old_token_period = role_entry.token_period;
 
         role_entry.parse_token_fields(req)?;
 
@@ -1094,10 +1094,10 @@ impl AppRoleBackendInner {
         }
 
         if old_token_period != role_entry.token_period {
-            role_entry.period = role_entry.token_period.clone();
+            role_entry.period = role_entry.token_period;
         } else if let Ok(period_value) = req.get_data("period") {
             let period = period_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            role_entry.period = period.clone();
+            role_entry.period = period;
             role_entry.token_period = period;
         }
 

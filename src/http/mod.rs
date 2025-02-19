@@ -125,7 +125,7 @@ impl ResponseError for RvError {
             status = StatusCode::from_u16(400).unwrap();
             text = resp_text.clone();
         } else if let RvError::ErrResponseStatus(status_code, resp_text) = self {
-            status = StatusCode::from_u16(status_code.clone()).unwrap();
+            status = StatusCode::from_u16(*status_code).unwrap();
             text = resp_text.clone();
         } else {
             text = self.to_string();

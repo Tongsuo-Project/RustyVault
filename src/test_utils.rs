@@ -1251,9 +1251,9 @@ impl Clone for NoopBackend {
             response: self.response.clone(),
             request_handler: self.request_handler.clone(),
             invalidations: self.invalidations.clone(),
-            default_lease_ttl: self.default_lease_ttl.clone(),
-            max_lease_ttl: self.max_lease_ttl.clone(),
-            rollback_errs: self.rollback_errs.clone(),
+            default_lease_ttl: self.default_lease_ttl,
+            max_lease_ttl: self.max_lease_ttl,
+            rollback_errs: self.rollback_errs,
         }
     }
 }

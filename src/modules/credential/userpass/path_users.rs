@@ -143,10 +143,10 @@ impl UserPassBackendInner {
         let mut user_entry: UserEntry = serde_json::from_slice(entry.value.as_slice())?;
 
         if user_entry.token_ttl.as_secs() == 0 && user_entry.ttl.as_secs() > 0 {
-            user_entry.token_ttl = user_entry.ttl.clone();
+            user_entry.token_ttl = user_entry.ttl;
         }
         if user_entry.token_max_ttl.as_secs() == 0 && user_entry.max_ttl.as_secs() > 0 {
-            user_entry.token_max_ttl = user_entry.max_ttl.clone();
+            user_entry.token_max_ttl = user_entry.max_ttl;
         }
         if user_entry.token_policies.len() == 0 && user_entry.policies.len() > 0 {
             user_entry.token_policies = user_entry.policies.clone();
@@ -229,8 +229,8 @@ impl UserPassBackendInner {
         }
 
         let old_token_policies = user_entry.token_policies.clone();
-        let old_token_ttl = user_entry.token_ttl.clone();
-        let old_token_max_ttl = user_entry.token_max_ttl.clone();
+        let old_token_ttl = user_entry.token_ttl;
+        let old_token_max_ttl = user_entry.token_max_ttl;
         let old_token_bound_cidrs = user_entry.token_bound_cidrs.clone();
 
         user_entry.parse_token_fields(req)?;
@@ -244,18 +244,18 @@ impl UserPassBackendInner {
         }
 
         if old_token_ttl != user_entry.token_ttl {
-            user_entry.ttl = user_entry.token_ttl.clone();
+            user_entry.ttl = user_entry.token_ttl;
         } else if let Ok(ttl_value) = req.get_data("ttl") {
             let ttl = ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            user_entry.ttl = ttl.clone();
+            user_entry.ttl = ttl;
             user_entry.token_ttl = ttl;
         }
 
         if old_token_max_ttl != user_entry.token_max_ttl {
-            user_entry.max_ttl = user_entry.token_max_ttl.clone();
+            user_entry.max_ttl = user_entry.token_max_ttl;
         } else if let Ok(max_ttl_value) = req.get_data("max_ttl") {
             let max_ttl = max_ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            user_entry.max_ttl = max_ttl.clone();
+            user_entry.max_ttl = max_ttl;
             user_entry.token_max_ttl = max_ttl;
         }
 

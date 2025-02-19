@@ -261,7 +261,7 @@ impl AuthModule {
 
     pub fn load_auth(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
         let router_store = self.router_store.read()?;
-        if router_store.mounts.load(self.barrier.as_storage(), AUTH_CONFIG_PATH, hmac_key, hmac_level.clone()).is_err()
+        if router_store.mounts.load(self.barrier.as_storage(), AUTH_CONFIG_PATH, hmac_key, hmac_level).is_err()
         {
             router_store.mounts.set_default(DEFAULT_AUTH_MOUNTS.to_vec(), hmac_key)?;
             router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())?;
@@ -380,7 +380,7 @@ impl Module for AuthModule {
         };
 
         self.add_auth_backend("token", Arc::new(token_backend_new_func))?;
-        self.load_auth(Some(&core.hmac_key), core.mount_entry_hmac_level.clone())?;
+        self.load_auth(Some(&core.hmac_key), core.mount_entry_hmac_level)?;
         self.setup_auth()?;
 
         expiration.restore()?;
