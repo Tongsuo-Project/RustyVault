@@ -969,7 +969,7 @@ pub fn new_test_http_server(
             .wrap(middleware::Logger::default())
             .app_data(web::Data::new(core.clone()))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 
@@ -1019,7 +1019,7 @@ pub fn new_test_http_server_with_prometheus(
             .app_data(web::Data::new(core.clone()))
             .app_data(web::Data::new(Arc::clone(&metrics_manager)))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 

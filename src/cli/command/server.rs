@@ -170,7 +170,7 @@ impl Server {
                 .app_data(web::Data::new(Arc::clone(&core)))
                 .app_data(web::Data::new(Arc::clone(&metrics_manager)))
                 .configure(http::init_service)
-                .default_service(web::to(|| HttpResponse::NotFound()))
+                .default_service(web::to(HttpResponse::NotFound))
         })
         .on_connect(http::request_on_connect_handler);
 
