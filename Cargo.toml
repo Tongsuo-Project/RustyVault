@@ -127,6 +127,8 @@ unnecessary_unwrap = "allow"
 collapsible_match = "allow"
 large_enum_variant = "allow"
 manual_flatten = "allow"
+regex_creation_in_loops = "allow"
+unnecessary_map_or = "allow"
 
 [[bin]]
 name = "rvault"
