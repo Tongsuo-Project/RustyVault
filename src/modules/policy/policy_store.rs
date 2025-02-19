@@ -451,7 +451,7 @@ impl PolicyStore {
     pub fn load_acl_policy(&self, policy_name: &str, policy_text: &str) -> Result<(), RvError> {
         let name = self.sanitize_name(policy_name);
         let policy = self.get_policy(&name, PolicyType::Acl)?;
-        if !policy.is_none() {
+        if policy.is_some() {
             if !IMMUTABLE_POLICIES.contains(&name.as_str()) || policy_text == policy.unwrap().raw {
                 return Ok(());
             }
@@ -511,7 +511,7 @@ impl PolicyStore {
             PolicyType::Acl => {
                 let rgp_view = self.get_rgp_view()?;
                 let rgp = rgp_view.get(&policy.name)?;
-                if !rgp.is_none() {
+                if rgp.is_some() {
                     return Err(rv_error_string!("cannot reuse policy names between ACLs and RGPs"));
                 }
 
@@ -524,7 +524,7 @@ impl PolicyStore {
             PolicyType::Rgp => {
                 let acl_view = self.get_acl_view()?;
                 let acl = acl_view.get(&policy.name)?;
-                if !acl.is_none() {
+                if acl.is_some() {
                     return Err(rv_error_string!("cannot reuse policy names between ACLs and RGPs"));
                 }
 
