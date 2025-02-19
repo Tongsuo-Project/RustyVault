@@ -204,7 +204,7 @@ impl AppRoleBackendInner {
                 secret_entry.expiration_time = now + ttl;
             }
 
-            self.create_secret_id_accessor_entry(storage, secret_entry, &secret_id_hmac, &role_secret_id_prefix)?;
+            self.create_secret_id_accessor_entry(storage, secret_entry, &secret_id_hmac, role_secret_id_prefix)?;
 
             self.set_secret_id_storage_entry(
                 storage,
@@ -257,7 +257,7 @@ impl AppRoleBackendInner {
 
         let entry_index = format!("{}{}", accessor_prefix, salt_id);
 
-        let lock_entry = self.secret_id_accessor_locks.get_lock(&secret_id_accessor);
+        let lock_entry = self.secret_id_accessor_locks.get_lock(secret_id_accessor);
         let _locked = lock_entry.lock.read()?;
 
         let storage_entry = storage.get(&entry_index)?;
@@ -349,7 +349,7 @@ impl AppRoleBackendInner {
         let secret_id_hmacs = storage.list(&key)?;
         for secret_id_hmac in secret_id_hmacs.iter() {
             let entry_index = format!("{}{}/{}", role_secret_id_prefix, role_name_hmac, secret_id_hmac);
-            let lock_entry = self.secret_id_locks.get_lock(&secret_id_hmac);
+            let lock_entry = self.secret_id_locks.get_lock(secret_id_hmac);
             let _locked = lock_entry.lock.write()?;
             storage.delete(&entry_index)?
         }

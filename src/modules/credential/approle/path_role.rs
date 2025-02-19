@@ -1067,7 +1067,7 @@ impl AppRoleBackendInner {
         let mut role_entry = RoleEntry::default();
         let mut create = false;
 
-        let lock_entry = self.role_locks.get_lock(&role_name);
+        let lock_entry = self.role_locks.get_lock(role_name);
         let _locked = lock_entry.lock.write()?;
 
         let entry = self.get_role(req, role_name)?;
@@ -1816,7 +1816,7 @@ impl AppRoleBackendInner {
                 // corresponding lock many times using secret_id is not
                 // possible. Also, indexing it everywhere using secret_id_hmacs
                 // makes listing operation easier.
-                let lock_entry = self.secret_id_locks.get_lock(&secret_id_hmac);
+                let lock_entry = self.secret_id_locks.get_lock(secret_id_hmac);
                 let _locked = lock_entry.lock.read()?;
                 let storage_entry = req.storage_get(&entry_index)?;
                 if storage_entry.is_none() {
@@ -1937,7 +1937,7 @@ impl AppRoleBackendInner {
         self.register_secret_id_entry(
             storage,
             &role.name,
-            &secret_id,
+            secret_id,
             &role.hmac_key,
             &role.secret_id_prefix,
             &mut secret_id_storage,
@@ -2554,7 +2554,7 @@ mod test {
         let role_id = resp_data["role_id"].as_str().unwrap();
 
         // Login should pass
-        let _ = test_login(&core, "approle", &role_id, &secret_id, true).await;
+        let _ = test_login(&core, "approle", role_id, secret_id, true).await;
 
         // Lookup of secret ID should work in case-insensitive manner
         let data = json!({
@@ -2620,7 +2620,7 @@ mod test {
         req.client_token = root_token.to_string();
         let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
-        let resp = approle_module.delete_role_id(&mut req, &role_id);
+        let resp = approle_module.delete_role_id(&mut req, role_id);
         assert!(resp.is_ok());
 
         // Read the role again. This should add the index and return a warning
@@ -2636,7 +2636,7 @@ mod test {
 
         // Check if the index has been successfully created
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
-        let role_id_entry = approle_module.get_role_id(&mut req, &role_id);
+        let role_id_entry = approle_module.get_role_id(&mut req, role_id);
         assert!(role_id_entry.is_ok());
         let role_id_entry = role_id_entry.unwrap().unwrap();
         assert_eq!(role_id_entry.name, "testrole");
@@ -2812,10 +2812,10 @@ mod test {
         let secret_id = resp_data["secret_id"].as_str().unwrap();
 
         // Login should fail
-        let _ = test_login(&core, "approle", "role-id-123", &secret_id, false).await;
+        let _ = test_login(&core, "approle", "role-id-123", secret_id, false).await;
 
         // Login should pass
-        let _ = test_login(&core, "approle", "customroleid", &secret_id, true).await;
+        let _ = test_login(&core, "approle", "customroleid", secret_id, true).await;
     }
 
     #[tokio::test]

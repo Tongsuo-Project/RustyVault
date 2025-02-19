@@ -309,7 +309,7 @@ impl Policy {
     fn init(&mut self, policy_config: &PolicyConfig) -> Result<(), RvError> {
         for (path, pc) in policy_config.path.iter() {
             let mut rules = PolicyPathRules::default();
-            rules.path = ensure_no_leading_slash(&path);
+            rules.path = ensure_no_leading_slash(path);
             rules.capabilities = pc.capabilities.clone();
             rules.min_wrapping_ttl = pc.min_wrapping_ttl;
             rules.max_wrapping_ttl = pc.max_wrapping_ttl;

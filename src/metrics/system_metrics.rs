@@ -172,7 +172,7 @@ mod tests {
         let root_token = &server.root_token;
         thread::sleep(Duration::from_secs(20));
 
-        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(&root_token), None).unwrap();
+        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(root_token), None).unwrap();
         assert_eq!(status, 200);
 
         let mut gauge_map = parse_gauge(resp["metrics"].as_str().unwrap());

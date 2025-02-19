@@ -28,7 +28,7 @@ impl Context {
     }
 
     pub fn get_mut(&self, key: &str) -> Option<Arc<RwLock<dyn Any + Send + Sync>>> {
-        self.data_map_mut.get(key).map(|r| Arc::clone(&r.value()))
+        self.data_map_mut.get(key).map(|r| Arc::clone(r.value()))
     }
 
     pub fn set(&self, key: &str, data: Arc<dyn Any + Send + Sync>) {

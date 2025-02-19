@@ -175,10 +175,10 @@ impl UserPassBackendInner {
 
         let user_entry = entry.unwrap();
         let mut user_entry_data = serde_json::to_value(&user_entry)?;
-        let mut data = user_entry_data.as_object_mut().unwrap();
+        let data = user_entry_data.as_object_mut().unwrap();
         data.remove("password_hash");
 
-        user_entry.populate_token_data(&mut data);
+        user_entry.populate_token_data(data);
 
         if user_entry.ttl.as_secs() == 0 {
             data.remove("ttl");

@@ -479,7 +479,7 @@ impl TokenStore {
 
         let children = view.list(&path)?;
         for child in children.iter() {
-            self.revoke_tree_salted(&child)?;
+            self.revoke_tree_salted(child)?;
         }
 
         self.revoke_salted(salted_id)

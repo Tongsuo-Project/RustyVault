@@ -130,7 +130,7 @@ impl CertBackendInner {
         auth.metadata.insert("subject_key_id".into(), skid_hex);
         auth.metadata.insert("authority_key_id".into(), akid_hex);
 
-        auth.metadata.extend(self.certificate_extensions_metadata(&client_cert, &matched));
+        auth.metadata.extend(self.certificate_extensions_metadata(client_cert, &matched));
 
         auth.internal_data.insert("subject_key_id".into(), skid_base64);
         auth.internal_data.insert("authority_key_id".into(), akid_base64);
@@ -246,7 +246,7 @@ impl CertBackendInner {
             if crt.serial_number() == client_cert.serial_number()
                 && crt_key_id.unwrap().as_slice() == client_key_id.unwrap().as_slice()
             {
-                match self.matches_constraints(&client_cert, &trust.certs, trust, &ocsp_config) {
+                match self.matches_constraints(client_cert, &trust.certs, trust, &ocsp_config) {
                     Ok(true) => return Ok(trust.clone()),
                     Err(e) => ret_err.push(e),
                     _ => {}
@@ -267,7 +267,7 @@ impl CertBackendInner {
 
         for trust in trusted.iter() {
             if trust.certs.iter().any(|crt| trusted_chains.contains(crt)) {
-                match self.matches_constraints(&client_cert, &trusted_chains, trust, &ocsp_config) {
+                match self.matches_constraints(client_cert, &trusted_chains, trust, &ocsp_config) {
                     Ok(true) => return Ok(trust.clone()),
                     Err(e) => ret_err.push(e),
                     _ => {}
@@ -636,7 +636,7 @@ impl CertBackendInner {
                 let is_match = client_ext_map
                     .get(req_ext[0])
                     .and_then(|client_ext_value| {
-                        Pattern::new(&req_ext[1]).ok().filter(|pattern| pattern.matches(client_ext_value))
+                        Pattern::new(req_ext[1]).ok().filter(|pattern| pattern.matches(client_ext_value))
                     })
                     .is_some();
 

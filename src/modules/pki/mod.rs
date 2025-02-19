@@ -162,7 +162,7 @@ mod test {
         .clone();
 
         // config ca
-        let resp = test_write_api(&core, token, format!("{}config/ca", path).as_str(), true, Some(ca_data)).await;
+        let resp = test_write_api(core, token, format!("{}config/ca", path).as_str(), true, Some(ca_data)).await;
         assert!(resp.is_ok());
     }
 
@@ -183,7 +183,7 @@ mod test {
         .clone();
 
         // config role
-        assert!(test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data))
+        assert!(test_write_api(core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data))
             .await
             .is_ok());
     }

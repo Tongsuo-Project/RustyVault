@@ -314,7 +314,7 @@ impl SystemBackendInner {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let mut me = MountEntry::new(&MOUNT_TABLE_TYPE, path, logical_type, description);
+        let mut me = MountEntry::new(MOUNT_TABLE_TYPE, path, logical_type, description);
         me.options = options.as_map();
 
         let core = self.core.read()?;
@@ -329,7 +329,7 @@ impl SystemBackendInner {
         }
 
         let core = self.core.read()?;
-        core.unmount(&suffix)?;
+        core.unmount(suffix)?;
         Ok(None)
     }
 
@@ -350,7 +350,7 @@ impl SystemBackendInner {
         if let Some(me) = core.router.matching_mount_entry(&from_path)? {
             let mount_entry = me.read()?;
 
-            let dst_path_match = core.router.matching_mount(&to)?;
+            let dst_path_match = core.router.matching_mount(to)?;
             if !dst_path_match.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path already in use at {}", dst_path_match)));
             }
@@ -435,7 +435,7 @@ impl SystemBackendInner {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let mut me = MountEntry::new(&AUTH_TABLE_TYPE, &path, logical_type, description);
+        let mut me = MountEntry::new(AUTH_TABLE_TYPE, &path, logical_type, description);
 
         me.options = options.as_map();
 

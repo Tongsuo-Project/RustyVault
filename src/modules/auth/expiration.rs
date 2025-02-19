@@ -190,7 +190,7 @@ impl ExpirationManager {
 
     /// Renews a lease entry by the given increment.
     pub fn renew(&self, lease_id: &str, increment: Duration) -> Result<Option<Response>, RvError> {
-        let le = self.load_lease_entry(&lease_id)?;
+        let le = self.load_lease_entry(lease_id)?;
         if le.is_none() {
             return Err(RvError::ErrLeaseNotFound);
         }
@@ -419,7 +419,7 @@ impl ExpirationManager {
     pub fn revoke_by_token(&self, te: &TokenEntry) -> Result<(), RvError> {
         let existing = self.lookup_by_token(&te.id)?;
         for lease_id in existing.iter() {
-            self.revoke_lease_id(&lease_id, true)?;
+            self.revoke_lease_id(lease_id, true)?;
         }
 
         Ok(())
@@ -813,7 +813,7 @@ mod mod_expiration_tests {
         )
         .unwrap();
 
-        let me = MountEntry::new(&MOUNT_TABLE_TYPE, "mytest/", "test", "test description");
+        let me = MountEntry::new(MOUNT_TABLE_TYPE, "mytest/", "test", "test description");
         core.mount(&me).unwrap();
 
         let mut request = Request::new("mytest/tt");
