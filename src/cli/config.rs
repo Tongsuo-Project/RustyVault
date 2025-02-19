@@ -154,7 +154,7 @@ where
 {
     struct TlsVersionVisitor;
 
-    impl<'de> Visitor<'de> for TlsVersionVisitor {
+    impl Visitor<'_> for TlsVersionVisitor {
         type Value = SslVersion;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

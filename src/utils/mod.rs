@@ -94,7 +94,7 @@ where
 {
     struct DurationVisitor;
 
-    impl<'de> serde::de::Visitor<'de> for DurationVisitor {
+    impl serde::de::Visitor<'_> for DurationVisitor {
         type Value = Duration;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
