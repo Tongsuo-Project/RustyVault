@@ -36,7 +36,7 @@
     "description": "The label of footer link with label=Tongsuo linking to https://tongsuo.net"
   },
   "copyright": {
-    "message": "Copyright © 2021-2024 OpenAtom Tongsuo Built with Docusaurus. ",
+    "message": "Copyright © 2021-2025 OpenAtom Tongsuo Built with Docusaurus. ",
     "description": "The footer copyright"
   }
 }
