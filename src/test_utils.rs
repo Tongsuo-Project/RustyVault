@@ -380,7 +380,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
@@ -472,7 +472,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),

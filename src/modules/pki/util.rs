@@ -121,7 +121,7 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
     let not_after: SystemTime;
     if role_entry.not_after.len() > 18 {
         let parsed_time = parse_rfc3339(&role_entry.not_after)?;
-        not_after = parsed_time.into();
+        not_after = parsed_time;
     } else {
         if role_entry.ttl != Duration::from_secs(0) {
             not_after = not_before + role_entry.ttl;

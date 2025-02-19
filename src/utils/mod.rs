@@ -76,7 +76,7 @@ where
 {
     let input: &str = Deserialize::deserialize(deserializer)?;
     let parsed_time = parse_rfc3339(input).map_err(serde::de::Error::custom)?;
-    let system_time: SystemTime = parsed_time.into();
+    let system_time: SystemTime = parsed_time;
     Ok(system_time)
 }
 
