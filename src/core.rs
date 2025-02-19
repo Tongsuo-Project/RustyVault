@@ -270,7 +270,7 @@ impl Core {
 
     pub fn add_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
         let mut handlers = self.handlers.write()?;
-        if handlers.iter().find(|h| h.name() == handler.name()).is_some() {
+        if handlers.iter().any(|h| h.name() == handler.name()) {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
@@ -286,7 +286,7 @@ impl Core {
 
     pub fn add_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
         let mut auth_handlers = self.auth_handlers.write()?;
-        if auth_handlers.iter().find(|h| h.name() == auth_handler.name()).is_some() {
+        if auth_handlers.iter().any(|h| h.name() == auth_handler.name()) {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
