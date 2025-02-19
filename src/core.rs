@@ -167,7 +167,7 @@ impl Core {
             return Err(RvError::ErrBarrierAlreadyInit);
         }
 
-        let _ = seal_config.validate()?;
+        seal_config.validate()?;
 
         // Encode the seal configuration
         let serialized_seal_config = serde_json::to_string(seal_config)?;
@@ -308,7 +308,7 @@ impl Core {
         }
 
         let config: SealConfig = serde_json::from_slice(pe.unwrap().value.as_slice())?;
-        let _ = config.validate()?;
+        config.validate()?;
         Ok(config)
     }
 
@@ -444,7 +444,7 @@ impl Core {
         }
 
         if err.is_none() {
-            let _ = self.handle_log_phase(&handlers, req, &mut resp).await?;
+            self.handle_log_phase(&handlers, req, &mut resp).await?;
         }
 
         if err.is_some() {

@@ -1075,7 +1075,7 @@ pub fn start_test_http_server(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = stop_future => {
@@ -1084,7 +1084,7 @@ pub fn start_test_http_server(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 
@@ -1114,7 +1114,7 @@ pub fn start_test_http_server_with_prometheus(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = system_metrics_fucture => {},
@@ -1124,7 +1124,7 @@ pub fn start_test_http_server_with_prometheus(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 

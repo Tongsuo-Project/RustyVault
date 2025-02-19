@@ -122,6 +122,10 @@ manual_strip = "allow"
 comparison_chain = "allow"
 unnecessary_get_then_check = "allow"
 too_many_arguments = "allow"
+module_inception = "allow"
+unnecessary_unwrap = "allow"
+collapsible_match = "allow"
+large_enum_variant = "allow"
 
 [[bin]]
 name = "rvault"

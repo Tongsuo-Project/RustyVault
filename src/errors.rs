@@ -315,7 +315,6 @@ pub enum RvError {
     },
     ///
     /// Database Errors End
-
     #[error(transparent)]
     ErrOther(#[from] anyhow::Error),
     #[error("Some error happend, response text: {0}")]
