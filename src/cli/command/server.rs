@@ -117,7 +117,7 @@ impl Server {
 
             let log_file = std::fs::OpenOptions::new()
                 .read(true)
-                .write(true)
+                
                 .append(true)
                 .create(true)
                 .truncate(false)
