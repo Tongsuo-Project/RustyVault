@@ -432,15 +432,15 @@ impl TestHttpServer {
                     return Ok((status, json!("")));
                 }
                 let json: Value = response.into_json()?;
-                return Ok((status, json));
+                Ok((status, json))
             }
             Err(ureq::Error::Status(code, response)) => {
                 let json: Value = response.into_json()?;
-                return Ok((code, json));
+                Ok((code, json))
             }
             Err(e) => {
                 println!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }
@@ -525,15 +525,15 @@ impl TestHttpServer {
                 }
                 let text = response.into_string()?;
                 let wrapped_json = json!({"metrics":text});
-                return Ok((status, wrapped_json));
+                Ok((status, wrapped_json))
             }
             Err(ureq::Error::Status(code, response)) => {
                 let json: Value = response.into_json()?;
-                return Ok((code, json));
+                Ok((code, json))
             }
             Err(e) => {
                 println!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }
@@ -886,7 +886,7 @@ pub unsafe fn new_test_crl(revoked_cert_pem: &str, ca_cert_pem: &str, ca_key_pem
     openssl_sys::BIO_free_all(bio);
     openssl_sys::X509_CRL_free(crl);
 
-    return Ok(String::from_utf8_lossy(&buffer).into());
+    Ok(String::from_utf8_lossy(&buffer).into())
 }
 
 pub fn test_backend(name: &str) -> Arc<dyn Backend> {

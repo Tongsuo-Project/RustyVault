@@ -418,7 +418,7 @@ impl SystemBackendInner {
             data.insert(entry.path.clone(), info);
         }
 
-        return Ok(Some(Response::data_response(Some(data))));
+        Ok(Some(Response::data_response(Some(data))))
     }
 
     pub fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -586,7 +586,7 @@ impl SystemModule {
 
 impl Module for SystemModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {

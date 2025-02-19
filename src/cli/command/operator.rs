@@ -38,11 +38,11 @@ pub enum Commands {
 
 impl Commands {
     pub fn execute(&mut self) -> ExitCode {
-        return match self {
+        match self {
             Commands::Init(init) => init.execute(),
             Commands::Seal(seal) => seal.execute(),
             Commands::Unseal(unseal) => unseal.execute(),
-        };
+        }
     }
 }
 

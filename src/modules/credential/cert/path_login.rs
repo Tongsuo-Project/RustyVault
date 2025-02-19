@@ -283,7 +283,7 @@ impl CertBackendInner {
             )));
         }
 
-        return Err(rv_error_response!("no chain matching all constraints could be found for this login certificate"));
+        Err(rv_error_response!("no chain matching all constraints could be found for this login certificate"))
     }
 
     fn load_trusted_certs(
@@ -402,7 +402,7 @@ impl CertBackendInner {
             ret = ret && ocsp_ret;
         }
 
-        return Ok(ret);
+        Ok(ret)
     }
 
     fn matches_names(&self, client_cert: &X509, config: &ParsedCert) -> bool {
@@ -646,7 +646,7 @@ impl CertBackendInner {
             }
         }
 
-        return true;
+        true
     }
 
     fn certificate_extensions_metadata(&self, client_cert: &X509, config: &ParsedCert) -> HashMap<String, String> {
@@ -683,7 +683,7 @@ impl CertBackendInner {
             }
         }
 
-        return metadata_map;
+        metadata_map
     }
 
     fn check_for_cert_in_ocsp(
@@ -698,7 +698,7 @@ impl CertBackendInner {
 
         //TODO
         //let err = self.ocsp_client.verify_leaf_certificate(client_cert, chain, ocsp_config)?;
-        return Ok(true);
+        Ok(true)
     }
 
     fn check_for_chain_in_crls(&self, chain: &[X509]) -> bool {

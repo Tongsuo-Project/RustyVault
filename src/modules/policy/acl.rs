@@ -806,7 +806,7 @@ path "kv/deny" {
         if !name.is_empty() {
             policy.name = name.into();
         }
-        return policy;
+        policy
     }
 
     #[derive(Debug)]

@@ -185,18 +185,18 @@ impl Client {
                 }
                 let json: Value = response.into_json()?;
                 ret.response_data = Some(json);
-                return Ok(ret.clone());
+                Ok(ret.clone())
             }
             Err(ureq::Error::Status(status, response)) => {
                 ret.response_status = status;
                 if let Ok(response_data) = response.into_json() {
                     ret.response_data = Some(response_data);
                 }
-                return Ok(ret.clone());
+                Ok(ret.clone())
             }
             Err(e) => {
                 log::error!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }

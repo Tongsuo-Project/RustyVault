@@ -127,7 +127,7 @@ impl FieldTrait for Value {
         }
 
         let map = serde_json::from_str::<Value>(map_str.unwrap());
-        return map.is_ok() && map.unwrap().is_object();
+        map.is_ok() && map.unwrap().is_object()
     }
 
     fn as_int(&self) -> Option<i64> {
@@ -273,21 +273,21 @@ impl Field {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Int => {
                 if self.default.is_i64() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Bool => {
                 if self.default.is_boolean() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Array => {
                 if self.default.is_array() {
@@ -300,7 +300,7 @@ impl Field {
                     return Ok(serde_json::from_str(arr_str.unwrap())?);
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Map => {
                 if self.default.is_object() {
@@ -313,21 +313,21 @@ impl Field {
                     return Ok(serde_json::from_str(arr_str.unwrap())?);
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::DurationSecond => {
                 if self.default.is_duration() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::CommaStringSlice => {
                 if self.default.is_comma_string_slice() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
         }
     }

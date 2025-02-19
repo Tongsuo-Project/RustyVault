@@ -398,13 +398,13 @@ impl PolicyStore {
             PolicyType::Acl => {
                 let mut keys = view.get_keys()?;
                 keys.retain(|s| !NON_ASSIGNABLE_POLICIES.iter().any(|&x| s == x));
-                return Ok(keys);
+                Ok(keys)
             }
             PolicyType::Rgp | PolicyType::Egp => {
-                return view.get_keys();
+                view.get_keys()
             }
             _ => {
-                return Err(rv_error_string!("invalid type of policy"));
+                Err(rv_error_string!("invalid type of policy"))
             }
         }
     }

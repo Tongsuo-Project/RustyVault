@@ -113,7 +113,7 @@ impl PolicyModule {
 
 impl Module for PolicyModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, _core: &Core) -> Result<(), RvError> {

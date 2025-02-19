@@ -32,12 +32,12 @@ pub enum EncryptExtraData<'a> {
 }
 
 fn key_bits_default(key_type: &str) -> u32 {
-    return match key_type {
+    match key_type {
         "rsa" => 2048,
         "ec" | "sm2" => 256,
         "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm" => 256,
         _ => 0,
-    };
+    }
 }
 
 // TODO: this function needs to be refactored to use crypto adaptors.
@@ -201,7 +201,7 @@ impl KeyBundle {
                     let _ = rsa.public_encrypt(data, &mut buf, Padding::PKCS1)?;
                 }
 
-                return Ok(buf);
+                Ok(buf)
             }
             _ => Err(RvError::ErrPkiKeyOperationInvalid),
         }
@@ -252,7 +252,7 @@ impl KeyBundle {
                 let pos = buf.iter().position(|&x| x == 0).ok_or(RvError::ErrPkiInternal)?;
                 buf.truncate(pos);
 
-                return Ok(buf);
+                Ok(buf)
             }
             _ => Err(RvError::ErrPkiKeyOperationInvalid),
         }
