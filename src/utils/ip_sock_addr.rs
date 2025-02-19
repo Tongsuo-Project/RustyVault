@@ -25,10 +25,6 @@ impl IpSockAddr {
         }
         Err(RvError::ErrResponse(format!("Unable to parse {} to an IP address:", s)))
     }
-
-    pub fn to_string(&self) -> String {
-        format!("{}", self)
-    }
 }
 
 impl SockAddr for IpSockAddr {
