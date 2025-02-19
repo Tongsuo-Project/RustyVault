@@ -113,7 +113,7 @@ impl MountEntry {
 
         if let Some(options) = &self.options {
             let options_btree: BTreeMap<String, String> =
-                options.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             for (key, value) in options_btree.iter() {
                 msg = format!("{}-{}:{}", msg, key, value);
             }
