@@ -68,7 +68,7 @@ impl Server {
     }
 
     pub fn main(&self, config_path: &PathBuf) -> Result<(), RvError> {
-        let config = config::load_config(&*config_path.to_string_lossy())?;
+        let config = config::load_config(&config_path.to_string_lossy())?;
 
         if config.storage.len() != 1 {
             return Err(RvError::ErrConfigStorageNotFound);

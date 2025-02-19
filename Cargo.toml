@@ -126,6 +126,7 @@ module_inception = "allow"
 unnecessary_unwrap = "allow"
 collapsible_match = "allow"
 large_enum_variant = "allow"
+manual_flatten = "allow"
 
 [[bin]]
 name = "rvault"
