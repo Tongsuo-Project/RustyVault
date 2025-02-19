@@ -148,10 +148,10 @@ impl UserPassBackendInner {
         if user_entry.token_max_ttl.as_secs() == 0 && user_entry.max_ttl.as_secs() > 0 {
             user_entry.token_max_ttl = user_entry.max_ttl;
         }
-        if user_entry.token_policies.len() == 0 && user_entry.policies.len() > 0 {
+        if user_entry.token_policies.is_empty() && !user_entry.policies.is_empty() {
             user_entry.token_policies = user_entry.policies.clone();
         }
-        if user_entry.token_bound_cidrs.len() == 0 && user_entry.bound_cidrs.len() > 0 {
+        if user_entry.token_bound_cidrs.is_empty() && !user_entry.bound_cidrs.is_empty() {
             user_entry.token_bound_cidrs = user_entry.bound_cidrs.clone();
         }
 
@@ -188,11 +188,11 @@ impl UserPassBackendInner {
             data.remove("max_ttl");
         }
 
-        if user_entry.policies.len() > 0 {
+        if !user_entry.policies.is_empty() {
             data["policies"] = data["token_policies"].clone();
         }
 
-        if user_entry.bound_cidrs.len() > 0 {
+        if !user_entry.bound_cidrs.is_empty() {
             data["bound_cidrs"] = data["token_bound_cidrs"].clone();
         }
 

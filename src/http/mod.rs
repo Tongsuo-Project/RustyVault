@@ -161,7 +161,7 @@ pub fn request_auth(req: &HttpRequest) -> Request {
 }
 
 pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
-    if msg.len() == 0 {
+    if msg.is_empty() {
         HttpResponse::build(status).finish()
     } else {
         let err_json = json!({ "error": msg.to_string() });

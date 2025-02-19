@@ -217,7 +217,7 @@ impl Server {
                     p
                 });
 
-                if listener.tls_client_ca_file.len() > 0 {
+                if !listener.tls_client_ca_file.is_empty() {
                     let mut store = X509StoreBuilder::new()?;
 
                     let mut client_ca_file = File::open(&listener.tls_client_ca_file)?;

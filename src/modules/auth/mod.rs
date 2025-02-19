@@ -111,7 +111,7 @@ impl AuthModule {
             }
 
             let match_mount_path = router_store.router.matching_mount(&entry.path)?;
-            if match_mount_path.len() != 0 {
+            if !match_mount_path.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path is already in use at {}", match_mount_path)));
             }
 
@@ -198,7 +198,7 @@ impl AuthModule {
         let router_store = self.router_store.read()?;
 
         let dst_match = router_store.router.matching_mount(&dst)?;
-        if dst_match.len() != 0 {
+        if !dst_match.is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 

@@ -65,7 +65,7 @@ async fn logical_request_handler(
         }
         Method::POST | Method::PUT => {
             r.operation = Operation::Write;
-            if body.len() > 0 {
+            if !body.is_empty() {
                 let payload = serde_json::from_slice(&body)?;
                 r.body = Some(payload);
                 body.clear();

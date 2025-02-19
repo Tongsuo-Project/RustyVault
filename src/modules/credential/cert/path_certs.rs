@@ -252,10 +252,10 @@ impl CertBackendInner {
         if cert_entry.token_period.as_secs() == 0 && cert_entry.period.as_secs() > 0 {
             cert_entry.token_period = cert_entry.period;
         }
-        if cert_entry.token_policies.len() == 0 && cert_entry.policies.len() > 0 {
+        if cert_entry.token_policies.is_empty() && !cert_entry.policies.is_empty() {
             cert_entry.token_policies = cert_entry.policies.clone();
         }
-        if cert_entry.token_bound_cidrs.len() == 0 && cert_entry.bound_cidrs.len() > 0 {
+        if cert_entry.token_bound_cidrs.is_empty() && !cert_entry.bound_cidrs.is_empty() {
             cert_entry.token_bound_cidrs = cert_entry.bound_cidrs.clone();
         }
 
@@ -288,11 +288,11 @@ impl CertBackendInner {
             data.remove("max_ttl");
         }
 
-        if cert_entry.policies.len() > 0 {
+        if !cert_entry.policies.is_empty() {
             data["policies"] = data["token_policies"].clone();
         }
 
-        if cert_entry.bound_cidrs.len() > 0 {
+        if !cert_entry.bound_cidrs.is_empty() {
             data["bound_cidrs"] = data["token_bound_cidrs"].clone();
         }
 

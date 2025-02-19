@@ -131,19 +131,19 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
     }
 
     let mut subject_name = X509NameBuilder::new().unwrap();
-    if role_entry.country.len() > 0 {
+    if !role_entry.country.is_empty() {
         subject_name.append_entry_by_text("C", &role_entry.country).unwrap();
     }
-    if role_entry.province.len() > 0 {
+    if !role_entry.province.is_empty() {
         subject_name.append_entry_by_text("ST", &role_entry.province).unwrap();
     }
-    if role_entry.locality.len() > 0 {
+    if !role_entry.locality.is_empty() {
         subject_name.append_entry_by_text("L", &role_entry.locality).unwrap();
     }
-    if role_entry.organization.len() > 0 {
+    if !role_entry.organization.is_empty() {
         subject_name.append_entry_by_text("O", &role_entry.organization).unwrap();
     }
-    if role_entry.ou.len() > 0 {
+    if !role_entry.ou.is_empty() {
         subject_name.append_entry_by_text("OU", &role_entry.ou).unwrap();
     }
     if !common_name.is_empty() {

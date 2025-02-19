@@ -287,7 +287,7 @@ impl Core {
             }
 
             let match_mount_path = self.router.matching_mount(&entry.path)?;
-            if match_mount_path.len() != 0 {
+            if !match_mount_path.is_empty() {
                 return Err(RvError::ErrMountPathExist);
             }
 
@@ -326,7 +326,7 @@ impl Core {
         }
 
         let match_mount = self.router.matching_mount(&path)?;
-        if match_mount.len() == 0 || match_mount != path {
+        if match_mount.is_empty() || match_mount != path {
             return Err(RvError::ErrMountNotMatch);
         }
 
@@ -364,7 +364,7 @@ impl Core {
         }
 
         let dst_match = self.router.matching_mount(&dst)?;
-        if dst_match.len() != 0 {
+        if !dst_match.is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 

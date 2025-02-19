@@ -93,9 +93,9 @@ pub struct RoleIdEntry {
 impl RoleEntry {
     pub fn validate_role_constraints(&self) -> Result<(), RvError> {
         if self.bind_secret_id
-            || self.bound_cidr_list.len() > 0
-            || self.secret_id_bound_cidrs.len() > 0
-            || self.token_bound_cidrs.len() > 0
+            || !self.bound_cidr_list.is_empty()
+            || !self.secret_id_bound_cidrs.is_empty()
+            || !self.token_bound_cidrs.is_empty()
         {
             return Ok(());
         }
@@ -993,7 +993,7 @@ impl AppRoleBackendInner {
             role_entry.bound_cidr_list_old.clear();
         }
 
-        if role_entry.bound_cidr_list.len() != 0 {
+        if !role_entry.bound_cidr_list.is_empty() {
             role_entry.secret_id_bound_cidrs = role_entry.bound_cidr_list.clone();
             role_entry.bound_cidr_list.clear();
         }
@@ -1002,7 +1002,7 @@ impl AppRoleBackendInner {
             role_entry.token_period = role_entry.period;
         }
 
-        if role_entry.token_policies.len() == 0 && role_entry.policies.len() > 0 {
+        if role_entry.token_policies.is_empty() && !role_entry.policies.is_empty() {
             role_entry.token_policies = role_entry.policies.clone();
         }
 
@@ -1137,7 +1137,7 @@ impl AppRoleBackendInner {
                 bound_cidr_list_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         }
 
-        if role_entry.secret_id_bound_cidrs.len() != 0 {
+        if !role_entry.secret_id_bound_cidrs.is_empty() {
             let cidrs: Vec<&str> = role_entry.secret_id_bound_cidrs.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("invalid CIDR blocks".to_string()));
@@ -1193,7 +1193,7 @@ impl AppRoleBackendInner {
                 data.insert("period".to_string(), Value::from(entry.period.as_secs()));
             }
 
-            if entry.policies.len() > 0 {
+            if !entry.policies.is_empty() {
                 data.insert("policies".to_string(), Value::from(entry.policies.clone()));
             }
 
@@ -1262,7 +1262,7 @@ impl AppRoleBackendInner {
             .unwrap()
             .clone();
 
-            if role.policies.len() > 0 {
+            if !role.policies.is_empty() {
                 data.insert("policies".to_string(), Value::from(role.policies));
             }
 
@@ -1416,7 +1416,7 @@ impl AppRoleBackendInner {
         match field {
             "bound_cidr_list" | "secret_id_bound_cidrs" | "token_bound_cidrs" => {
                 cidr_list = field_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-                if cidr_list.len() == 0 {
+                if cidr_list.is_empty() {
                     return Err(RvError::ErrResponse(format!("missing {}", field).to_string()));
                 }
 
@@ -1863,7 +1863,7 @@ impl AppRoleBackendInner {
         let cidr_list_value = req.get_data_or_default("cidr_list")?;
         let cidr_list = cidr_list_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         // Validate the list of CIDR blocks
-        if cidr_list.len() != 0 {
+        if !cidr_list.is_empty() {
             let cidrs: Vec<&str> = cidr_list.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("failed to validate CIDR blocks".to_string()));
@@ -1877,7 +1877,7 @@ impl AppRoleBackendInner {
         let token_bound_cidrs =
             token_bound_cidrs_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         // Validate the list of CIDR blocks
-        if token_bound_cidrs.len() != 0 {
+        if !token_bound_cidrs.is_empty() {
             let cidrs: Vec<&str> = token_bound_cidrs.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("failed to validate CIDR blocks".to_string()));

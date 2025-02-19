@@ -17,7 +17,7 @@ pub fn is_ip_addr(addr: &dyn SockAddr) -> bool {
 }
 
 pub fn remote_addr_is_ok(remote_addr: &str, bound_cidrs: &[Box<dyn SockAddr>]) -> bool {
-    if bound_cidrs.len() == 0 {
+    if bound_cidrs.is_empty() {
         return true;
     }
 
@@ -48,7 +48,7 @@ pub fn ip_belongs_to_cidrs(ip_addr: &str, cidrs: &[&str]) -> Result<bool, RvErro
         return Err(RvError::ErrResponse("missing IP address".to_string()));
     }
 
-    if cidrs.len() == 0 {
+    if cidrs.is_empty() {
         return Err(RvError::ErrResponse("missing CIDR blocks to be checked against".to_string()));
     }
 
@@ -79,7 +79,7 @@ pub fn validate_cidr_string(cidr_list: &str, separator: &str) -> Result<bool, Rv
 }
 
 pub fn validate_cidrs(cidrs: &[&str]) -> Result<bool, RvError> {
-    if cidrs.len() == 0 {
+    if cidrs.is_empty() {
         return Err(RvError::ErrResponse("missing CIDR blocks that needs validation".to_string()));
     }
 
@@ -133,11 +133,11 @@ pub fn subset(cidr1: &str, cidr2: &str) -> Result<bool, RvError> {
  * parameter is the set of CIDR blocks that needs to be checked.
  */
 pub fn subset_blocks(cidr_blocks1: &[&str], cidr_blocks2: &[&str]) -> Result<bool, RvError> {
-    if cidr_blocks1.len() == 0 {
+    if cidr_blocks1.is_empty() {
         return Err(RvError::ErrResponse("missing CIDR blocks to be checked against".to_string()));
     }
 
-    if cidr_blocks2.len() == 0 {
+    if cidr_blocks2.is_empty() {
         return Err(RvError::ErrResponse("missing CIDR blocks that needs to be checked".to_string()));
     }
 

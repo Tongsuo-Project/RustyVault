@@ -82,7 +82,7 @@ impl Backend for LogicalBackend {
         }
 
         if let Some((path, captures)) = self.match_path(&req.path) {
-            if captures.len() != 0 {
+            if !captures.is_empty() {
                 let mut data = Map::new();
                 captures.iter().for_each(|(key, value)| {
                     data.insert(key.to_string(), Value::String(value.to_string()));

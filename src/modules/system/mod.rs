@@ -324,7 +324,7 @@ impl SystemBackendInner {
 
     pub fn handle_unmount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let suffix = req.path.trim_start_matches("mounts/");
-        if suffix.len() == 0 {
+        if suffix.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -339,7 +339,7 @@ impl SystemBackendInner {
 
         let from = from.as_str().unwrap();
         let to = to.as_str().unwrap();
-        if from.len() == 0 || to.len() == 0 {
+        if from.is_empty() || to.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -351,7 +351,7 @@ impl SystemBackendInner {
             let mount_entry = me.read()?;
 
             let dst_path_match = core.router.matching_mount(&to)?;
-            if dst_path_match.len() != 0 {
+            if !dst_path_match.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path already in use at {}", dst_path_match)));
             }
 
@@ -450,7 +450,7 @@ impl SystemBackendInner {
 
     pub fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = sanitize_path(req.path.trim_start_matches("auth/"));
-        if path.len() == 0 {
+        if path.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 

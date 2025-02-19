@@ -204,7 +204,7 @@ where
             return Err(serde::de::Error::custom("Invalid listener key"));
         }
 
-        if !listener.tls_disable && (listener.tls_cert_file.len() == 0 || listener.tls_key_file.len() == 0) {
+        if !listener.tls_disable && (listener.tls_cert_file.is_empty() || listener.tls_key_file.is_empty()) {
             return Err(serde::de::Error::custom(
                 "when tls_disable is false, tls_cert_file and tls_key_file must be configured",
             ));
