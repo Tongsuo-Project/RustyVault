@@ -9,7 +9,7 @@ title: 设计
 
 # 结构图
 
-![RustyVault Architecture](/docs/static/img/RustyVault-arch.png)
+![RustyVault Architecture](../../../../static/img/RustyVault-arch.png)
 
 说明如下：
 
