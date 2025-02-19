@@ -77,7 +77,7 @@ impl Backend for LogicalBackend {
             _ => {}
         }
 
-        if req.path == "" && req.operation == Operation::Help {
+        if req.path.is_empty() && req.operation == Operation::Help {
             return self.handle_root_help(req);
         }
 

@@ -24,7 +24,7 @@ impl LoginHandler for UsesPassCliHandler {
         let username = data["username"].as_str().unwrap();
 
         let mut password = data["password"].as_str().unwrap_or("").to_string();
-        if password == "" {
+        if password.is_empty() {
             let mut writer = io::stdout();
             write!(writer, "Password (will be hidden): ")?;
             writer.flush()?;
@@ -38,7 +38,7 @@ impl LoginHandler for UsesPassCliHandler {
         });
 
         let mut mount = data["mount"].as_str().unwrap_or("");
-        if mount == "" {
+        if mount.is_empty() {
             mount = &self.default_mount;
         }
         let path = format!("auth/{}/login/{}", mount, username);

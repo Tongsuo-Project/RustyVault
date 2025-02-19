@@ -170,7 +170,7 @@ impl CertBackendInner {
 
     pub fn read_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?.to_lowercase();
-        if name == "" {
+        if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 
@@ -190,7 +190,7 @@ impl CertBackendInner {
 
     pub fn write_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?.to_lowercase();
-        if name == "" {
+        if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 
@@ -200,7 +200,7 @@ impl CertBackendInner {
             self.set_crl(req, Some(x509crl), &name, None)?;
         } else if let Ok(url_value) = req.get_data("url") {
             let url = url_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if url == "" {
+            if url.is_empty() {
                 return Err(RvError::ErrRequestInvalid);
             }
             let _ = Url::parse(url)?;
@@ -217,7 +217,7 @@ impl CertBackendInner {
 
     pub fn delete_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?.to_lowercase();
-        if name == "" {
+        if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 

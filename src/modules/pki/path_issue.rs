@@ -70,13 +70,13 @@ impl PkiBackendInner {
 
         let common_name_value = req.get_data_or_default("common_name")?;
         let common_name = common_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if common_name != "" {
+        if !common_name.is_empty() {
             common_names.push(common_name.to_string());
         }
 
         if let Ok(alt_names_value) = req.get_data("alt_names") {
             let alt_names = alt_names_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if alt_names != "" {
+            if !alt_names.is_empty() {
                 for v in alt_names.split(',') {
                     common_names.push(v.to_string());
                 }
@@ -93,7 +93,7 @@ impl PkiBackendInner {
         let mut ip_sans = Vec::new();
         if let Ok(ip_sans_value) = req.get_data("ip_sans") {
             let ip_sans_str = ip_sans_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if ip_sans_str != "" {
+            if !ip_sans_str.is_empty() {
                 for v in ip_sans_str.split(',') {
                     ip_sans.push(v.to_string());
                 }
@@ -140,7 +140,7 @@ impl PkiBackendInner {
         if role_entry.ou.len() > 0 {
             subject_name.append_entry_by_text("OU", &role_entry.ou).unwrap();
         }
-        if common_name != "" {
+        if !common_name.is_empty() {
             subject_name.append_entry_by_text("CN", common_name).unwrap();
         }
         let subject = subject_name.build();

@@ -249,12 +249,12 @@ impl MountTable {
 
         for mount_entry in mounts.values() {
             let mut entry = mount_entry.write()?;
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = MOUNT_TABLE_TYPE.to_string();
                 need_persist = true;
             }
 
-            if entry.hmac == "" && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
+            if entry.hmac.is_empty() && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
                 entry.calc_hmac(hmac_key.unwrap())?;
                 need_persist = true;
             }
@@ -282,7 +282,7 @@ impl Core {
                 return Err(RvError::ErrMountPathProtected);
             }
 
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = MOUNT_TABLE_TYPE.to_string();
             }
 
@@ -378,7 +378,7 @@ impl Core {
 
         self.router.taint(&src)?;
 
-        if self.router.matching_mount(&dst)? != "" {
+        if !(self.router.matching_mount(&dst)?).is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 

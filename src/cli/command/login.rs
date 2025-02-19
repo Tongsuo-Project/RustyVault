@@ -106,12 +106,12 @@ impl CommandExecutor for Login {
 
         let mut auth_method = util::sanitize_path(&self.options.method);
 
-        if auth_method == "" {
+        if auth_method.is_empty() {
             auth_method = "token".into();
         }
 
         let mut auth_path = self.options.path.clone();
-        if auth_path == "" {
+        if auth_path.is_empty() {
             auth_path = util::ensure_trailing_slash(&auth_method);
         }
 
@@ -127,7 +127,7 @@ impl CommandExecutor for Login {
         //let mount = auth_data.get("mount").unwrap_or("");
 
         //if mount == "" && auth_path != "" {
-        if auth_path != "" {
+        if !auth_path.is_empty() {
             auth_data.insert("mount".into(), Value::String(auth_path));
         }
 

@@ -917,7 +917,7 @@ or 'secret_id_ttl' option on the role, and/or the backend mount's maximum TTL va
 
 impl AppRoleBackendInner {
     pub fn get_role_id(&self, req: &mut Request, role_id: &str) -> Result<Option<RoleIdEntry>, RvError> {
-        if role_id == "" {
+        if role_id.is_empty() {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
@@ -952,7 +952,7 @@ impl AppRoleBackendInner {
     }
 
     pub fn delete_role_id(&self, req: &mut Request, role_id: &str) -> Result<(), RvError> {
-        if role_id == "" {
+        if role_id.is_empty() {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
@@ -983,11 +983,11 @@ impl AppRoleBackendInner {
             role_entry.name = name.to_lowercase();
         }
 
-        if role_entry.secret_id_prefix == "" {
+        if role_entry.secret_id_prefix.is_empty() {
             role_entry.secret_id_prefix = SECRET_ID_PREFIX.to_string();
         }
 
-        if role_entry.bound_cidr_list_old != "" {
+        if !role_entry.bound_cidr_list_old.is_empty() {
             role_entry.secret_id_bound_cidrs =
                 role_entry.bound_cidr_list_old.split(',').map(|s| s.to_string()).collect();
             role_entry.bound_cidr_list_old.clear();
@@ -1016,7 +1016,7 @@ impl AppRoleBackendInner {
         role_entry: &RoleEntry,
         previous_role_id: &str,
     ) -> Result<(), RvError> {
-        if name == "" {
+        if name.is_empty() {
             return Err(RvError::ErrResponse("missing role name".to_string()));
         }
 
@@ -1030,7 +1030,7 @@ impl AppRoleBackendInner {
 
         let mut create_role_id = true;
 
-        if previous_role_id != "" {
+        if !previous_role_id.is_empty() {
             if previous_role_id != role_entry.role_id.as_str() {
                 self.delete_role_id(req, previous_role_id)?;
             } else {
@@ -1121,7 +1121,7 @@ impl AppRoleBackendInner {
             role_entry.role_id = utils::generate_uuid();
         }
 
-        if role_entry.role_id == "" {
+        if role_entry.role_id.is_empty() {
             return Err(RvError::ErrResponse("invalid role_id supplied, or failed to generate a role_id".to_string()));
         }
 
@@ -1842,7 +1842,7 @@ impl AppRoleBackendInner {
     ) -> Result<Option<Response>, RvError> {
         let role_name = req.get_data_as_str("role_name")?;
 
-        if secret_id == "" {
+        if secret_id.is_empty() {
             return Err(RvError::ErrResponse("missing secret_id".to_string()));
         }
 

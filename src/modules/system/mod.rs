@@ -310,7 +310,7 @@ impl SystemBackendInner {
         let logical_type = logical_type.as_str().unwrap();
         let description = description.as_str().unwrap();
 
-        if logical_type == "" {
+        if logical_type.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -431,7 +431,7 @@ impl SystemBackendInner {
         let logical_type = logical_type.as_str().unwrap();
         let description = description.as_str().unwrap();
 
-        if logical_type == "" {
+        if logical_type.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 

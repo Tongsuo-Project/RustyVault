@@ -33,7 +33,7 @@ pub fn remote_addr_is_ok(remote_addr: &str, bound_cidrs: &[Box<dyn SockAddr>]) -
 }
 
 pub fn ip_belongs_to_cidr(ip_addr: &str, cidr: &str) -> Result<bool, RvError> {
-    if ip_addr == "" {
+    if ip_addr.is_empty() {
         return Err(RvError::ErrResponse("missing IP address".to_string()));
     }
 
@@ -44,7 +44,7 @@ pub fn ip_belongs_to_cidr(ip_addr: &str, cidr: &str) -> Result<bool, RvError> {
 }
 
 pub fn ip_belongs_to_cidrs(ip_addr: &str, cidrs: &[&str]) -> Result<bool, RvError> {
-    if ip_addr == "" {
+    if ip_addr.is_empty() {
         return Err(RvError::ErrResponse("missing IP address".to_string()));
     }
 
@@ -62,11 +62,11 @@ pub fn ip_belongs_to_cidrs(ip_addr: &str, cidrs: &[&str]) -> Result<bool, RvErro
 }
 
 pub fn validate_cidr_string(cidr_list: &str, separator: &str) -> Result<bool, RvError> {
-    if cidr_list == "" {
+    if cidr_list.is_empty() {
         return Err(RvError::ErrResponse("missing CIDR list that needs validation".to_string()));
     }
 
-    if separator == "" {
+    if separator.is_empty() {
         return Err(RvError::ErrResponse("missing separator".to_string()));
     }
 
@@ -91,11 +91,11 @@ pub fn validate_cidrs(cidrs: &[&str]) -> Result<bool, RvError> {
 }
 
 pub fn subset(cidr1: &str, cidr2: &str) -> Result<bool, RvError> {
-    if cidr1 == "" {
+    if cidr1.is_empty() {
         return Err(RvError::ErrResponse("missing CIDR to be checked against".to_string()));
     }
 
-    if cidr2 == "" {
+    if cidr2.is_empty() {
         return Err(RvError::ErrResponse("missing CIDR that needs to be checked".to_string()));
     }
 

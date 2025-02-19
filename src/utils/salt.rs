@@ -44,7 +44,7 @@ impl Salt {
     pub fn new(storage: Option<&dyn Storage>, config: Option<&Config>) -> Result<Self, RvError> {
         let mut salt = Salt::default();
         if let Some(c) = config {
-            if salt.config.location != c.location && c.location != "" {
+            if salt.config.location != c.location && !c.location.is_empty() {
                 salt.config.location = c.location.clone();
             }
 

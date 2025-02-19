@@ -211,7 +211,7 @@ impl UserPassBackendInner {
 
         if let Ok(password_value) = req.get_data("password") {
             let password = password_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if password != "" {
+            if !password.is_empty() {
                 user_entry.password_hash = self.gen_password_hash(password)?;
             }
         }
@@ -278,7 +278,7 @@ impl UserPassBackendInner {
     pub fn delete_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
         let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if username == "" {
+        if username.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 

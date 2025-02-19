@@ -438,7 +438,7 @@ impl CertBackendInner {
             cert_entry.token_bound_cidrs = cert_entry.bound_cidrs.clone();
         }
 
-        if cert_entry.display_name == "" {
+        if cert_entry.display_name.is_empty() {
             cert_entry.display_name = name.clone();
         }
 

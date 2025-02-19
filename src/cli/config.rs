@@ -226,19 +226,19 @@ impl Config {
     pub fn merge(&mut self, other: Config) {
         self.listener.extend(other.listener);
         self.storage.extend(other.storage);
-        if other.api_addr != "" {
+        if !other.api_addr.is_empty() {
             self.api_addr = other.api_addr;
         }
 
-        if other.log_format != "" {
+        if !other.log_format.is_empty() {
             self.log_format = other.log_format;
         }
 
-        if other.log_level != "" {
+        if !other.log_level.is_empty() {
             self.log_level = other.log_level;
         }
 
-        if other.pid_file != "" {
+        if !other.pid_file.is_empty() {
             self.pid_file = other.pid_file;
         }
 
