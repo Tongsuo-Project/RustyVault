@@ -197,9 +197,9 @@ impl PkiBackendInner {
             secret.lease.ttl = Duration::from_secs(cert_expiration as u64) - now_timestamp;
             secret.lease.renewable = true;
 
-            return Ok(Some(resp));
+            Ok(Some(resp))
         } else {
-            return Ok(Some(Response::data_response(Some(resp_data))));
+            Ok(Some(Response::data_response(Some(resp_data))))
         }
     }
 }

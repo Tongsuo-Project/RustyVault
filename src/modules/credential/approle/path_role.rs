@@ -1266,9 +1266,9 @@ impl AppRoleBackendInner {
                 data.insert("policies".to_string(), Value::from(role.policies));
             }
 
-            return Ok(Some(Response::data_response(Some(data))));
+            Ok(Some(Response::data_response(Some(data))))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -1397,9 +1397,9 @@ impl AppRoleBackendInner {
                     return Err(RvError::ErrResponse("unrecognized field".to_string()));
                 }
             };
-            return Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))));
+            Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -1564,7 +1564,7 @@ impl AppRoleBackendInner {
             self.set_role(req, &role_name, &role, "")?;
         }
 
-        return Ok(None);
+        Ok(None)
     }
 
     pub fn read_role_bound_cidr_list(
@@ -1832,7 +1832,7 @@ impl AppRoleBackendInner {
             return Ok(Some(Response::list_response(&list_items)));
         }
 
-        return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+        Err(RvError::ErrResponse(format!("role {} does not exist", role_name)))
     }
 
     pub fn update_role_secret_id_common(

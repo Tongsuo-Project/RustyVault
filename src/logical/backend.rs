@@ -164,7 +164,7 @@ impl LogicalBackend {
         }
 
         log::error!("secret is unsupported by this backend");
-        return Ok(None);
+        Ok(None)
     }
 
     pub fn handle_root_help(&self, _req: &mut Request) -> Result<Option<Response>, RvError> {

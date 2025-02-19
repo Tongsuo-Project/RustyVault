@@ -73,7 +73,7 @@ impl UserPassModule {
 
 impl Module for UserPassModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {

@@ -313,11 +313,11 @@ impl Core {
     }
 
     pub fn sealed(&self) -> bool {
-        return self.sealed;
+        self.sealed
     }
 
     pub fn unseal_progress(&self) -> usize {
-        return self.unseal_key_shares.len();
+        self.unseal_key_shares.len()
     }
 
     pub fn unseal(&mut self, key: &[u8]) -> Result<bool, RvError> {

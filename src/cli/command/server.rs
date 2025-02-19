@@ -214,7 +214,7 @@ impl Server {
 
             if listener.tls_require_and_verify_client_cert {
                 builder.set_verify_callback(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT, move |p, _x| {
-                    return p;
+                    p
                 });
 
                 if listener.tls_client_ca_file.len() > 0 {

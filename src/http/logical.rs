@@ -134,9 +134,9 @@ fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError
     }
 
     if no_content {
-        return Ok(response_ok(cookie, None));
+        Ok(response_ok(cookie, None))
     } else {
-        return Ok(response_json_ok(cookie, logical_resp));
+        Ok(response_json_ok(cookie, logical_resp))
     }
 }
 

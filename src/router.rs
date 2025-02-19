@@ -31,7 +31,7 @@ pub struct Router {
 
 impl RouterEntry {
     fn salt_id(&self, id: &str) -> String {
-        return id.to_string();
+        id.to_string()
     }
 }
 
@@ -161,7 +161,7 @@ impl Router {
             return Ok(remain.starts_with(unauth_path_match));
         }
 
-        return Ok(remain == *unauth_path_match);
+        Ok(remain == *unauth_path_match)
     }
 
     pub fn is_root_path(&self, path: &str) -> Result<bool, RvError> {
@@ -187,7 +187,7 @@ impl Router {
             return Ok(remain.starts_with(root_path_match));
         }
 
-        return Ok(remain == *root_path_match);
+        Ok(remain == *root_path_match)
     }
 
     pub fn as_handler(&self) -> &dyn Handler {

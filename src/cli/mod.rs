@@ -36,7 +36,7 @@ pub enum Commands {
 
 impl Commands {
     pub fn execute(&mut self) -> ExitCode {
-        return match self {
+        match self {
             Commands::Server(server) => server.execute(),
             Commands::Status(status) => status.execute(),
             Commands::Operator(operator) => operator.execute(),
@@ -46,7 +46,7 @@ impl Commands {
             Commands::List(list) => list.execute(),
             Commands::Login(login) => login.execute(),
             Commands::Auth(auth) => auth.execute(),
-        };
+        }
     }
 }
 

@@ -150,5 +150,5 @@ pub fn is_protect_path(protected: &[&str], paths: &[&str]) -> bool {
         }
     }
 
-    return false;
+    false
 }

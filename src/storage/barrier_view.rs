@@ -93,9 +93,9 @@ impl BarrierView {
 
     fn truncate_key(&self, full: &str) -> String {
         if let Some(result) = full.strip_prefix(self.prefix.as_str()) {
-            return result.to_string();
+            result.to_string()
         } else {
-            return full.to_string();
+            full.to_string()
         }
     }
 }

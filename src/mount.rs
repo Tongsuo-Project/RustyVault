@@ -159,7 +159,7 @@ impl MountTable {
                 return false;
             }
         }
-        return false;
+        false
     }
 
     pub fn set_default(&self, mounts: Vec<MountEntry>, hmac_key: Option<&[u8]>) -> Result<(), RvError> {

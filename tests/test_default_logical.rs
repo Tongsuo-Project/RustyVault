@@ -23,11 +23,9 @@ async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool, expect
         let resp = resp.unwrap();
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().data.as_ref().unwrap(), expect.as_ref().unwrap());
-    } else {
-        if is_ok {
-            let resp = resp.unwrap();
-            assert!(resp.is_none());
-        }
+    } else if is_ok {
+        let resp = resp.unwrap();
+        assert!(resp.is_none());
     }
 }
 

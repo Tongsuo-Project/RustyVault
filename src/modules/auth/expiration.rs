@@ -670,7 +670,7 @@ impl ExpirationManager {
             log::error!("failed to renew_auth entry: {}", ret.as_ref().unwrap_err());
         }
 
-        return ret;
+        ret
     }
 }
 

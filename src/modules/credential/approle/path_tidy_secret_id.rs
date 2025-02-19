@@ -196,7 +196,6 @@ impl AppRoleBackendInner {
 
         if let Err(err) = tidy_func(SECRET_ID_LOCAL_PREFIX, SECRET_ID_ACCESSOR_LOCAL_PREFIX) {
             log::error!("error tidying local secret IDs, error: {}", err);
-            return;
         }
     }
 

@@ -151,7 +151,7 @@ impl AppRoleModule {
 
 impl Module for AppRoleModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {

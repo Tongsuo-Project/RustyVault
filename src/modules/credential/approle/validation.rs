@@ -228,7 +228,7 @@ impl AppRoleBackendInner {
             return MAX_LEASE_DURATION_SECS;
         }
 
-        return secret_id_ttl;
+        secret_id_ttl
     }
 
     // secret_id_accessor_entry is used to read the storage entry that maps an

@@ -93,7 +93,7 @@ impl Request {
             return field.get_default();
         }
 
-        return Err(RvError::ErrRequestFieldNotFound);
+        Err(RvError::ErrRequestFieldNotFound)
     }
 
     pub fn get_data(&self, key: &str) -> Result<Value, RvError> {
@@ -142,7 +142,7 @@ impl Request {
             }
         }
 
-        return Err(RvError::ErrRequestFieldNotFound);
+        Err(RvError::ErrRequestFieldNotFound)
     }
 
     pub fn get_data_as_str(&self, key: &str) -> Result<String, RvError> {
