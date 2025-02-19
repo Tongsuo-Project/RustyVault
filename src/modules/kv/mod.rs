@@ -34,7 +34,7 @@ Leases can be set on a per-secret basis. These leases will be sent down
 when that secret is read, and it is assumed that some outside process will
 revoke and/or replace the secret at that path.
 "#;
-const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(3600 as u64);
+const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(3600_u64);
 
 pub struct KvModule {
     pub name: String,

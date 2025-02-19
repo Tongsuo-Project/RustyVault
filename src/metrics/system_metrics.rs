@@ -125,7 +125,7 @@ impl SystemMetrics {
         // self.network_in.set(total_network_in as f64);
         // self.network_out.set(total_network_out as f64);
 
-        self.load_avg.set(System::load_average().one as f64);
+        self.load_avg.set(System::load_average().one);
     }
 }
 

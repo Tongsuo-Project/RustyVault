@@ -6,7 +6,7 @@ use openssl::x509::X509NameBuilder;
 use super::path_roles::RoleEntry;
 use crate::{errors::RvError, logical::Request, utils::cert::Certificate};
 
-pub const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
+pub const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60_u64);
 
 pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
     let mut ttl = DEFAULT_MAX_TTL;
