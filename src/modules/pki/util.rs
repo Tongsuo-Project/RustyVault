@@ -122,12 +122,10 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
     if role_entry.not_after.len() > 18 {
         let parsed_time = parse_rfc3339(&role_entry.not_after)?;
         not_after = parsed_time;
+    } else if role_entry.ttl != Duration::from_secs(0) {
+        not_after = not_before + role_entry.ttl;
     } else {
-        if role_entry.ttl != Duration::from_secs(0) {
-            not_after = not_before + role_entry.ttl;
-        } else {
-            not_after = not_before + role_entry.max_ttl;
-        }
+        not_after = not_before + role_entry.max_ttl;
     }
 
     let mut subject_name = X509NameBuilder::new().unwrap();

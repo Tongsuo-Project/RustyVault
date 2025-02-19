@@ -830,10 +830,8 @@ impl Handler for TokenStore {
                 let source = source.as_str().trim_start_matches(AUTH_ROUTER_PREFIX).replace("/", "-");
                 auth.display_name = (source + &auth.display_name).trim_end_matches("-").to_string();
                 req.name = auth.display_name.clone();
-            } else {
-                if !req.path.starts_with("auth/token/") {
-                    return Err(RvError::ErrPermissionDenied);
-                }
+            } else if !req.path.starts_with("auth/token/") {
+                return Err(RvError::ErrPermissionDenied);
             }
 
             if auth.ttl.as_secs() == 0 {

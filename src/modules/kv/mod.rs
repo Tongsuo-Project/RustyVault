@@ -113,14 +113,12 @@ impl KvBackendInner {
                     ttl_duration = Some(ttl_dur);
                 }
             }
-        } else {
-            if let Some(lease) = data.get("lease") {
-                if let Some(lease_i64) = lease.as_i64() {
-                    ttl_duration = Some(Duration::from_secs(lease_i64 as u64));
-                } else if let Some(lease_str) = lease.as_str() {
-                    if let Ok(lease_dur) = parse_duration(lease_str) {
-                        ttl_duration = Some(lease_dur);
-                    }
+        } else if let Some(lease) = data.get("lease") {
+            if let Some(lease_i64) = lease.as_i64() {
+                ttl_duration = Some(Duration::from_secs(lease_i64 as u64));
+            } else if let Some(lease_str) = lease.as_str() {
+                if let Ok(lease_dur) = parse_duration(lease_str) {
+                    ttl_duration = Some(lease_dur);
                 }
             }
         }

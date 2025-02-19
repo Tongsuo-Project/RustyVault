@@ -353,15 +353,13 @@ impl Core {
         if config.secret_threshold == 1 {
             master_key = self.unseal_key_shares[0].clone();
             self.unseal_key_shares.clear();
+        } else if let Some(res) = ShamirSecret::combine(self.unseal_key_shares.clone()) {
+            master_key = res;
+            self.unseal_key_shares.clear();
         } else {
-            if let Some(res) = ShamirSecret::combine(self.unseal_key_shares.clone()) {
-                master_key = res;
-                self.unseal_key_shares.clear();
-            } else {
-                //TODO
-                self.unseal_key_shares.clear();
-                return Err(RvError::ErrBarrierKeyInvalid);
-            }
+            //TODO
+            self.unseal_key_shares.clear();
+            return Err(RvError::ErrBarrierKeyInvalid);
         }
 
         log::debug!("unseal, recover master_key: {}", hex::encode(&master_key));
