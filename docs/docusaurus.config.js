@@ -38,7 +38,7 @@ module.exports = {
       disableSwitch: false,
       respectPrefersColorScheme: false,
     },
-    image: 'img/RustyVault-arch.png',
+    image: 'static/img/RustyVault-arch.png',
     metadata: [
       {name: 'keywords', content: 'rust, hashicorp-vault, key-management, secure-storage, secrets-management, key-manager-service, secrets-manager, cloudnative-services'},
     ],
