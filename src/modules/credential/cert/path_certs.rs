@@ -465,7 +465,7 @@ impl CertBackendInner {
     }
 
     pub fn list_cert(&self, _backend: &dyn Backend, req: &Request) -> Result<Option<Response>, RvError> {
-        let certs = req.storage_list(format!("cert/").as_str())?;
+        let certs = req.storage_list("cert/".to_string().as_str())?;
         let resp = Response::list_response(&certs);
         Ok(Some(resp))
     }

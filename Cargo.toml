@@ -120,6 +120,8 @@ field_reassign_with_default = "allow"
 await_holding_lock = "allow"
 manual_strip = "allow"
 comparison_chain = "allow"
+unnecessary_get_then_check = "allow"
+too_many_arguments = "allow"
 
 [[bin]]
 name = "rvault"
