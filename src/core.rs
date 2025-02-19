@@ -270,7 +270,7 @@ impl Core {
 
     pub fn add_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
         let mut handlers = self.handlers.write()?;
-        if let Some(_) = handlers.iter().find(|h| h.name() == handler.name()) {
+        if handlers.iter().find(|h| h.name() == handler.name()).is_some() {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
@@ -286,7 +286,7 @@ impl Core {
 
     pub fn add_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
         let mut auth_handlers = self.auth_handlers.write()?;
-        if let Some(_) = auth_handlers.iter().find(|h| h.name() == auth_handler.name()) {
+        if auth_handlers.iter().find(|h| h.name() == auth_handler.name()).is_some() {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
@@ -340,7 +340,7 @@ impl Core {
         }
 
         let config = self.seal_config()?;
-        if self.unseal_key_shares.iter().find(|&v| *v == key).is_some() {
+        if self.unseal_key_shares.iter().any(|v| *v == key) {
             return Ok(false);
         }
 
@@ -436,10 +436,7 @@ impl Core {
             }
 
             if err.is_none() {
-                match self.handle_post_route_phase(&handlers, req, &mut resp).await {
-                    Err(e) => err = Some(e),
-                    _ => {}
-                }
+                if let Err(e) = self.handle_post_route_phase(&handlers, req, &mut resp).await { err = Some(e) }
             }
         }
 
