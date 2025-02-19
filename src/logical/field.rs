@@ -134,14 +134,10 @@ impl FieldTrait for Value {
         let mut int = self.as_i64();
         if int.is_none() {
             let int_str = self.as_str();
-            if int_str.is_none() {
-                return None;
-            }
+            int_str?;
 
             int = int_str.unwrap().parse::<i64>().ok();
-            if int.is_none() {
-                return None;
-            }
+            int?;
         }
 
         int
