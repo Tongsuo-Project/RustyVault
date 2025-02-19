@@ -305,7 +305,7 @@ impl PkiBackendInner {
         }
 
         if !hex_bundle.is_empty() {
-            key_bundle.key = hex::decode(&hex_bundle)?;
+            key_bundle.key = hex::decode(hex_bundle)?;
             key_bundle.bits = (key_bundle.key.len() as u32) * 8;
             match key_bundle.bits {
                 128 | 192 | 256 => {}
@@ -326,7 +326,7 @@ impl PkiBackendInner {
             // Proceed to check IV only if required by the key type.
             if is_iv_required {
                 if let Some(iv) = iv_value.as_str() {
-                    key_bundle.iv = hex::decode(&iv)?;
+                    key_bundle.iv = hex::decode(iv)?;
                 } else {
                     return Err(RvError::ErrRequestFieldNotFound);
                 }

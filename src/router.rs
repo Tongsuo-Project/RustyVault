@@ -224,7 +224,7 @@ impl Router {
                 }
             }
 
-            req.path = req.path.replacen(&mount, "", 1);
+            req.path = req.path.replacen(mount, "", 1);
             if req.path == "/" {
                 req.path = String::new();
             }

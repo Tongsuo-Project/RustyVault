@@ -546,13 +546,13 @@ impl TestHttpServer {
         }
 
         if self.tls_enable {
-            cmd.arg(&format!("--address=https://{}", self.listen_addr));
-            cmd.arg(&format!("--ca-cert={}/ca.crt", self.cert_dir));
-            cmd.arg(&format!("--client-cert={}/server.crt", self.cert_dir));
-            cmd.arg(&format!("--client-key={}/key.pem", self.cert_dir));
+            cmd.arg(format!("--address=https://{}", self.listen_addr));
+            cmd.arg(format!("--ca-cert={}/ca.crt", self.cert_dir));
+            cmd.arg(format!("--client-cert={}/server.crt", self.cert_dir));
+            cmd.arg(format!("--client-key={}/key.pem", self.cert_dir));
             cmd.arg("--tls-skip-verify");
         } else {
-            cmd.arg(&format!("--address=http://{}", self.listen_addr));
+            cmd.arg(format!("--address=http://{}", self.listen_addr));
         }
 
         for arg in args {
