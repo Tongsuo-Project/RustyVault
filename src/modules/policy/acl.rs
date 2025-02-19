@@ -356,12 +356,8 @@ impl ACL {
 
                 if bare_mount && i == path_parts.len() - 2 {
                     let joined_path = segments.join("/") + "/";
-                    if joined_path.starts_with(path) {
-                        if permissions.capabilities_bitmap & Capability::Deny.to_bits() == 0
-                            && permissions.capabilities_bitmap > 0
-                        {
-                            return Some(permissions.clone());
-                        }
+                    if joined_path.starts_with(path) && permissions.capabilities_bitmap & Capability::Deny.to_bits() == 0 && permissions.capabilities_bitmap > 0 {
+                        return Some(permissions.clone());
                     }
                     skip = true;
                     break;

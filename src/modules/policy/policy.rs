@@ -320,11 +320,9 @@ impl Policy {
 
             // If there are segment wildcards, don't actually strip the
             // trailing asterisk, but don't want to hit the default case
-            if rules.path.ends_with("*") {
-                if !rules.has_segment_wildcards {
-                    rules.path = rules.path.trim_end_matches("*").to_string();
-                    rules.is_prefix = true;
-                }
+            if rules.path.ends_with("*") && !rules.has_segment_wildcards {
+                rules.path = rules.path.trim_end_matches("*").to_string();
+                rules.is_prefix = true;
             }
 
             if let Some(old_path_policy) = pc.policy {
@@ -402,10 +400,8 @@ impl Permissions {
             _ => return Ok(ret),
         };
 
-        if self.capabilities_bitmap & cap.to_bits() == 0 {
-            if req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0 {
-                return Ok(ret);
-            }
+        if self.capabilities_bitmap & cap.to_bits() == 0 && (req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0) {
+            return Ok(ret);
         }
 
         if let Some(value) = self.granting_policies_map.get(&cap.to_bits()) {

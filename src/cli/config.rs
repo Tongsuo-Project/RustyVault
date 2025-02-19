@@ -210,12 +210,10 @@ where
             ));
         }
 
-        if !listener.tls_disable {
-            if listener.tls_require_and_verify_client_cert && listener.tls_disable_client_certs {
-                return Err(serde::de::Error::custom(
-                    "'tls_disable_client_certs' and 'tls_require_and_verify_client_cert' are mutually exclusive",
-                ));
-            }
+        if !listener.tls_disable && listener.tls_require_and_verify_client_cert && listener.tls_disable_client_certs {
+            return Err(serde::de::Error::custom(
+                "'tls_disable_client_certs' and 'tls_require_and_verify_client_cert' are mutually exclusive",
+            ));
         }
     }
 

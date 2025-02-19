@@ -451,10 +451,8 @@ impl PolicyStore {
     pub fn load_acl_policy(&self, policy_name: &str, policy_text: &str) -> Result<(), RvError> {
         let name = self.sanitize_name(policy_name);
         let policy = self.get_policy(&name, PolicyType::Acl)?;
-        if policy.is_some() {
-            if !IMMUTABLE_POLICIES.contains(&name.as_str()) || policy_text == policy.unwrap().raw {
-                return Ok(());
-            }
+        if policy.is_some() && (!IMMUTABLE_POLICIES.contains(&name.as_str()) || policy_text == policy.unwrap().raw) {
+            return Ok(());
         }
 
         let mut policy = Policy::from_str(policy_text)?;

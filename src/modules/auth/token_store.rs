@@ -546,12 +546,8 @@ impl TokenStore {
             }
         }
 
-        if te.policies.contains(&"root".into()) {
-            if !parent.policies.contains(&"root".into()) {
-                return Err(rv_error_response!("root tokens may not be created without parent token being root"));
-            }
-
-            // TODO: batch tokens cannot be root tokens
+        if te.policies.contains(&"root".into()) && !parent.policies.contains(&"root".into()) {
+            return Err(rv_error_response!("root tokens may not be created without parent token being root"));
         }
 
         if data.no_parent {
