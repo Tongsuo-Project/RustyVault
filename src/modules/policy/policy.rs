@@ -453,7 +453,7 @@ impl Permissions {
                     return Ok(ret);
                 }
 
-                if self.denied_parameters.get("*").is_some() {
+                if self.denied_parameters.contains_key("*") {
                     return Ok(ret);
                 }
 
@@ -465,7 +465,7 @@ impl Permissions {
                     }
                 }
 
-                let allowed_all = self.allowed_parameters.get("*").is_some();
+                let allowed_all = self.allowed_parameters.contains_key("*");
 
                 if self.allowed_parameters.is_empty() || (allowed_all && self.allowed_parameters.len() == 1) {
                     ret.capabilities_bitmap = self.capabilities_bitmap;

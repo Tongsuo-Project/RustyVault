@@ -1897,9 +1897,7 @@ impl AppRoleBackendInner {
                 return Err(RvError::ErrResponse("num_uses cannot be negative".to_string()));
             }
             // If the specified num_uses is higher than the role's secret_id_num_uses, throw an error rather than implicitly overriding
-            if (num_uses == 0 && role.secret_id_num_uses > 0)
-                || (role.secret_id_num_uses > 0 && num_uses > role.secret_id_num_uses)
-            {
+            if role.secret_id_num_uses > 0 && (num_uses == 0 || num_uses > role.secret_id_num_uses) {
                 return Err(RvError::ErrResponse(
                     "num_uses cannot be higher than the role's secret_id_num_uses".to_string(),
                 ));
