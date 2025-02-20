@@ -9,7 +9,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use async_trait::async_trait;
 use better_default::Default;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
@@ -727,7 +726,7 @@ impl TokenStore {
     }
 }
 
-#[async_trait]
+#[maybe_async::maybe_async]
 impl Handler for TokenStore {
     fn name(&self) -> String {
         "auth_token".to_string()
