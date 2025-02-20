@@ -72,9 +72,7 @@ impl FieldTrait for Value {
         }
 
         if let Some(secs_str) = self.as_str() {
-            if secs_str.parse::<u64>().ok().is_some() {
-                return true;
-            } else if parse_duration(secs_str).is_ok() {
+            if secs_str.parse::<u64>().ok().is_some() || parse_duration(secs_str).is_ok() {
                 return true;
             }
         }
