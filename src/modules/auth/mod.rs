@@ -261,8 +261,7 @@ impl AuthModule {
 
     pub fn load_auth(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
         let router_store = self.router_store.read()?;
-        if router_store.mounts.load(self.barrier.as_storage(), AUTH_CONFIG_PATH, hmac_key, hmac_level).is_err()
-        {
+        if router_store.mounts.load(self.barrier.as_storage(), AUTH_CONFIG_PATH, hmac_key, hmac_level).is_err() {
             router_store.mounts.set_default(DEFAULT_AUTH_MOUNTS.to_vec(), hmac_key)?;
             router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())?;
         }

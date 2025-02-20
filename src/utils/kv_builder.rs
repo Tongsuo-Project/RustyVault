@@ -23,7 +23,7 @@ impl KvPairParse for Vec<String> {
 
                 let parsed_value = if value.starts_with('@') {
                     // Read from file
-                    let file_path = &value[1..];
+                    let file_path = value.strip_prefix('@').unwrap();
                     match fs::read_to_string(file_path) {
                         Ok(content) => Value::String(content),
                         Err(err) => {

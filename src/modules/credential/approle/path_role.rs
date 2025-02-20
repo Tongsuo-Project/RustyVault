@@ -889,28 +889,29 @@ or 'secret_id_ttl' option on the role, and/or the backend mount's maximum TTL va
     }
 
     pub fn role_paths(&self) -> Vec<Path> {
-        let mut paths: Vec<Path> = Vec::with_capacity(21);
-        paths.push(self.role_path());
-        paths.push(self.role_name_path());
-        paths.push(self.role_policies_path());
-        paths.push(self.role_local_secret_ids_path());
-        paths.push(self.role_bound_cidr_list_path());
-        paths.push(self.role_secret_id_bound_cidrs_path());
-        paths.push(self.role_token_bound_cidrs_path());
-        paths.push(self.role_bind_secret_id_path());
-        paths.push(self.role_secret_id_num_uses_path());
-        paths.push(self.role_secret_id_ttl_path());
-        paths.push(self.role_period_path());
-        paths.push(self.role_token_num_uses_path());
-        paths.push(self.role_token_ttl_path());
-        paths.push(self.role_token_max_ttl_path());
-        paths.push(self.role_role_id_path());
-        paths.push(self.role_secret_id_path());
-        paths.push(self.role_secret_id_lookup_path());
-        paths.push(self.role_secret_id_destroy_path());
-        paths.push(self.role_secret_id_accessor_lookup_path());
-        paths.push(self.role_secret_id_accessor_destroy_path());
-        paths.push(self.role_custom_secret_id_path());
+        let paths: Vec<Path> = vec![
+            self.role_path(),
+            self.role_name_path(),
+            self.role_policies_path(),
+            self.role_local_secret_ids_path(),
+            self.role_bound_cidr_list_path(),
+            self.role_secret_id_bound_cidrs_path(),
+            self.role_token_bound_cidrs_path(),
+            self.role_bind_secret_id_path(),
+            self.role_secret_id_num_uses_path(),
+            self.role_secret_id_ttl_path(),
+            self.role_period_path(),
+            self.role_token_num_uses_path(),
+            self.role_token_ttl_path(),
+            self.role_token_max_ttl_path(),
+            self.role_role_id_path(),
+            self.role_secret_id_path(),
+            self.role_secret_id_lookup_path(),
+            self.role_secret_id_destroy_path(),
+            self.role_secret_id_accessor_lookup_path(),
+            self.role_secret_id_accessor_destroy_path(),
+            self.role_custom_secret_id_path(),
+        ];
         paths
     }
 }
@@ -1897,9 +1898,7 @@ impl AppRoleBackendInner {
                 return Err(RvError::ErrResponse("num_uses cannot be negative".to_string()));
             }
             // If the specified num_uses is higher than the role's secret_id_num_uses, throw an error rather than implicitly overriding
-            if (num_uses == 0 && role.secret_id_num_uses > 0)
-                || (role.secret_id_num_uses > 0 && num_uses > role.secret_id_num_uses)
-            {
+            if role.secret_id_num_uses > 0 && (num_uses == 0 || num_uses > role.secret_id_num_uses) {
                 return Err(RvError::ErrResponse(
                     "num_uses cannot be higher than the role's secret_id_num_uses".to_string(),
                 ));

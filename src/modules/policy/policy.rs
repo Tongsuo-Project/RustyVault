@@ -400,7 +400,9 @@ impl Permissions {
             _ => return Ok(ret),
         };
 
-        if self.capabilities_bitmap & cap.to_bits() == 0 && (req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0) {
+        if self.capabilities_bitmap & cap.to_bits() == 0
+            && (req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0)
+        {
             return Ok(ret);
         }
 
@@ -453,7 +455,7 @@ impl Permissions {
                     return Ok(ret);
                 }
 
-                if self.denied_parameters.get("*").is_some() {
+                if self.denied_parameters.contains_key("*") {
                     return Ok(ret);
                 }
 
@@ -465,7 +467,7 @@ impl Permissions {
                     }
                 }
 
-                let allowed_all = self.allowed_parameters.get("*").is_some();
+                let allowed_all = self.allowed_parameters.contains_key("*");
 
                 if self.allowed_parameters.is_empty() || (allowed_all && self.allowed_parameters.len() == 1) {
                     ret.capabilities_bitmap = self.capabilities_bitmap;

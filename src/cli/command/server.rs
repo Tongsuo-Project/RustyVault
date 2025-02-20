@@ -117,7 +117,6 @@ impl Server {
 
             let log_file = std::fs::OpenOptions::new()
                 .read(true)
-                
                 .append(true)
                 .create(true)
                 .truncate(false)
@@ -213,9 +212,7 @@ impl Server {
             }
 
             if listener.tls_require_and_verify_client_cert {
-                builder.set_verify_callback(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT, move |p, _x| {
-                    p
-                });
+                builder.set_verify_callback(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT, move |p, _x| p);
 
                 if !listener.tls_client_ca_file.is_empty() {
                     let mut store = X509StoreBuilder::new()?;

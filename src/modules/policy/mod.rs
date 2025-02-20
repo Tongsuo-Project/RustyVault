@@ -15,6 +15,7 @@ use crate::{
     logical::{Backend, Request, Response},
 };
 
+#[allow(clippy::module_inception)]
 pub mod policy;
 pub use policy::{Permissions, Policy, PolicyPathRules, PolicyType};
 

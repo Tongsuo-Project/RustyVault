@@ -41,8 +41,8 @@ impl Backend for FileBackend {
         for entry in entries {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with('_') {
-                names.push(name[1..].to_owned());
+            if let Some(stripped) = name.strip_prefix('_') {
+                names.push(stripped.to_owned());
             } else {
                 names.push(name + "/");
             }

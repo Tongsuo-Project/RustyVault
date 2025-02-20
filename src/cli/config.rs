@@ -262,18 +262,16 @@ fn load_config_dir(dir: &str) -> Result<Config, RvError> {
     let mut paths: Vec<String> = Vec::new();
 
     if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if !path.is_file() {
-                    continue;
-                }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
 
-                if let Some(ext) = path.extension() {
-                    if ext == "hcl" || ext == "json" {
-                        let filename = path.to_string_lossy().into_owned();
-                        paths.push(filename);
-                    }
+            if let Some(ext) = path.extension() {
+                if ext == "hcl" || ext == "json" {
+                    let filename = path.to_string_lossy().into_owned();
+                    paths.push(filename);
                 }
             }
         }

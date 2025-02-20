@@ -36,7 +36,7 @@ pub async fn metrics_midleware(
     let path = req.path().to_string();
     let method = match *req.method() {
         Method::GET => MetricsMethod::GET,
-        _ if req.method().to_string() == "LIST" => MetricsMethod::LIST,
+        _ if *req.method() == "LIST" => MetricsMethod::LIST,
         Method::POST => MetricsMethod::POST,
         Method::PUT => MetricsMethod::PUT,
         Method::DELETE => MetricsMethod::DELETE,

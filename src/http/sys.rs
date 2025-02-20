@@ -107,10 +107,8 @@ async fn sys_init_put_request_handler(
     let mut core = core.write()?;
     let result = core.init(&seal_config)?;
 
-    let resp = InitResponse {
-        keys: result.secret_shares.iter().map(hex::encode).collect(),
-        root_token: result.root_token,
-    };
+    let resp =
+        InitResponse { keys: result.secret_shares.iter().map(hex::encode).collect(), root_token: result.root_token };
 
     Ok(response_json_ok(None, resp))
 }
