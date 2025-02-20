@@ -4,7 +4,6 @@
 
 use std::sync::{Arc, RwLock};
 
-use async_trait::async_trait;
 use radix_trie::{Trie, TrieCommon};
 
 use crate::{
@@ -249,7 +248,7 @@ impl Router {
     }
 }
 
-#[async_trait]
+#[maybe_async::maybe_async]
 impl Handler for Router {
     fn name(&self) -> String {
         "core_router".to_string()

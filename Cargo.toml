@@ -78,6 +78,7 @@ stretto = "0.8"
 itertools = "0.14"
 priority-queue = "2.1"
 crossbeam-channel = "0.5"
+maybe-async = { version = "0.2", optional = false }
 
 # optional dependencies
 openssl = { version = "0.10.64", optional = true }
@@ -96,6 +97,7 @@ default = ["crypto_adaptor_openssl"]
 storage_mysql = ["diesel", "r2d2", "r2d2-diesel"]
 crypto_adaptor_openssl = ["dep:openssl", "dep:openssl-sys"]
 crypto_adaptor_tongsuo = ["dep:openssl", "dep:openssl-sys"]
+sync_handler = ["maybe-async/is_sync"]
 
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5"

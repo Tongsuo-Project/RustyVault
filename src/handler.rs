@@ -7,7 +7,6 @@
 //! for instance.
 
 use derive_more::Display;
-use async_trait::async_trait;
 
 use crate::{
     core::Core,
@@ -16,7 +15,7 @@ use crate::{
     logical::{request::Request, response::Response, Auth},
 };
 
-#[async_trait]
+#[maybe_async::maybe_async]
 pub trait Handler: Send + Sync {
     fn name(&self) -> String;
 
@@ -41,7 +40,7 @@ pub trait Handler: Send + Sync {
     }
 }
 
-#[async_trait]
+#[maybe_async::maybe_async]
 pub trait AuthHandler: Send + Sync {
     fn name(&self) -> String;
 
