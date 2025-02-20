@@ -400,7 +400,9 @@ impl Permissions {
             _ => return Ok(ret),
         };
 
-        if self.capabilities_bitmap & cap.to_bits() == 0 && (req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0) {
+        if self.capabilities_bitmap & cap.to_bits() == 0
+            && (req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0)
+        {
             return Ok(ret);
         }
 

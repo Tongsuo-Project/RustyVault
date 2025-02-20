@@ -396,11 +396,7 @@ impl Core {
 
         // Perform initial setup
         self.hmac_key = self.barrier.derive_hmac_key()?;
-        self.mounts.load_or_default(
-            self.barrier.as_storage(),
-            Some(&self.hmac_key),
-            self.mount_entry_hmac_level,
-        )?;
+        self.mounts.load_or_default(self.barrier.as_storage(), Some(&self.hmac_key), self.mount_entry_hmac_level)?;
 
         self.setup_mounts()?;
 
@@ -436,7 +432,9 @@ impl Core {
             }
 
             if err.is_none() {
-                if let Err(e) = self.handle_post_route_phase(&handlers, req, &mut resp).await { err = Some(e) }
+                if let Err(e) = self.handle_post_route_phase(&handlers, req, &mut resp).await {
+                    err = Some(e)
+                }
             }
         }
 

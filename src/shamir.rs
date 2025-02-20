@@ -288,12 +288,12 @@ impl ShamirSecret {
             std::cmp::Ordering::Less => {
                 let mut t = vec![0; b.len() - a.len()];
                 a.append(&mut t);
-            },
+            }
             std::cmp::Ordering::Greater => {
                 let mut t = vec![0; a.len() - b.len()];
                 b.append(&mut t);
-            },
-            std::cmp::Ordering::Equal => {},
+            }
+            std::cmp::Ordering::Equal => {}
         }
 
         let mut results: Vec<u8> = vec![];

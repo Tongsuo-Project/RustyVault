@@ -400,12 +400,8 @@ impl PolicyStore {
                 keys.retain(|s| !NON_ASSIGNABLE_POLICIES.iter().any(|&x| s == x));
                 Ok(keys)
             }
-            PolicyType::Rgp | PolicyType::Egp => {
-                view.get_keys()
-            }
-            _ => {
-                Err(rv_error_string!("invalid type of policy"))
-            }
+            PolicyType::Rgp | PolicyType::Egp => view.get_keys(),
+            _ => Err(rv_error_string!("invalid type of policy")),
         }
     }
 

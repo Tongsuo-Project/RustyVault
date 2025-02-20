@@ -112,8 +112,7 @@ impl MountEntry {
         let mut msg = format!("{}-{}-{}-{}", self.table, self.path, self.logical_type, self.description);
 
         if let Some(options) = &self.options {
-            let options_btree: BTreeMap<String, String> =
-                options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let options_btree: BTreeMap<String, String> = options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             for (key, value) in options_btree.iter() {
                 msg = format!("{}-{}:{}", msg, key, value);
             }
