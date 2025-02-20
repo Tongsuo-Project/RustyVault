@@ -167,7 +167,7 @@ impl Core {
             return Err(RvError::ErrBarrierAlreadyInit);
         }
 
-        let _ = seal_config.validate()?;
+        seal_config.validate()?;
 
         // Encode the seal configuration
         let serialized_seal_config = serde_json::to_string(seal_config)?;
@@ -203,7 +203,7 @@ impl Core {
         log::debug!("seal config: {:?}", seal_config);
         log::debug!("secret_shares:");
         for key in init_result.secret_shares.iter() {
-            log::debug!("{}", hex::encode(&key));
+            log::debug!("{}", hex::encode(key));
         }
 
         // Unseal the barrier
@@ -270,7 +270,7 @@ impl Core {
 
     pub fn add_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
         let mut handlers = self.handlers.write()?;
-        if let Some(_) = handlers.iter().find(|h| h.name() == handler.name()) {
+        if handlers.iter().any(|h| h.name() == handler.name()) {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
@@ -286,7 +286,7 @@ impl Core {
 
     pub fn add_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
         let mut auth_handlers = self.auth_handlers.write()?;
-        if let Some(_) = auth_handlers.iter().find(|h| h.name() == auth_handler.name()) {
+        if auth_handlers.iter().any(|h| h.name() == auth_handler.name()) {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
@@ -308,7 +308,7 @@ impl Core {
         }
 
         let config: SealConfig = serde_json::from_slice(pe.unwrap().value.as_slice())?;
-        let _ = config.validate()?;
+        config.validate()?;
         Ok(config)
     }
 
@@ -340,7 +340,7 @@ impl Core {
         }
 
         let config = self.seal_config()?;
-        if self.unseal_key_shares.iter().find(|&v| *v == key).is_some() {
+        if self.unseal_key_shares.iter().any(|v| *v == key) {
             return Ok(false);
         }
 
@@ -353,15 +353,13 @@ impl Core {
         if config.secret_threshold == 1 {
             master_key = self.unseal_key_shares[0].clone();
             self.unseal_key_shares.clear();
+        } else if let Some(res) = ShamirSecret::combine(self.unseal_key_shares.clone()) {
+            master_key = res;
+            self.unseal_key_shares.clear();
         } else {
-            if let Some(res) = ShamirSecret::combine(self.unseal_key_shares.clone()) {
-                master_key = res;
-                self.unseal_key_shares.clear();
-            } else {
-                //TODO
-                self.unseal_key_shares.clear();
-                return Err(RvError::ErrBarrierKeyInvalid);
-            }
+            //TODO
+            self.unseal_key_shares.clear();
+            return Err(RvError::ErrBarrierKeyInvalid);
         }
 
         log::debug!("unseal, recover master_key: {}", hex::encode(&master_key));
@@ -401,7 +399,7 @@ impl Core {
         self.mounts.load_or_default(
             self.barrier.as_storage(),
             Some(&self.hmac_key),
-            self.mount_entry_hmac_level.clone(),
+            self.mount_entry_hmac_level,
         )?;
 
         self.setup_mounts()?;
@@ -438,15 +436,12 @@ impl Core {
             }
 
             if err.is_none() {
-                match self.handle_post_route_phase(&handlers, req, &mut resp).await {
-                    Err(e) => err = Some(e),
-                    _ => {}
-                }
+                if let Err(e) = self.handle_post_route_phase(&handlers, req, &mut resp).await { err = Some(e) }
             }
         }
 
         if err.is_none() {
-            let _ = self.handle_log_phase(&handlers, req, &mut resp).await?;
+            self.handle_log_phase(&handlers, req, &mut resp).await?;
         }
 
         if err.is_some() {

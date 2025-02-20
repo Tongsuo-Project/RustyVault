@@ -154,7 +154,7 @@ where
 {
     struct TlsVersionVisitor;
 
-    impl<'de> Visitor<'de> for TlsVersionVisitor {
+    impl Visitor<'_> for TlsVersionVisitor {
         type Value = SslVersion;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -204,18 +204,16 @@ where
             return Err(serde::de::Error::custom("Invalid listener key"));
         }
 
-        if !listener.tls_disable && (listener.tls_cert_file.len() == 0 || listener.tls_key_file.len() == 0) {
+        if !listener.tls_disable && (listener.tls_cert_file.is_empty() || listener.tls_key_file.is_empty()) {
             return Err(serde::de::Error::custom(
                 "when tls_disable is false, tls_cert_file and tls_key_file must be configured",
             ));
         }
 
-        if !listener.tls_disable {
-            if listener.tls_require_and_verify_client_cert && listener.tls_disable_client_certs {
-                return Err(serde::de::Error::custom(
-                    "'tls_disable_client_certs' and 'tls_require_and_verify_client_cert' are mutually exclusive",
-                ));
-            }
+        if !listener.tls_disable && listener.tls_require_and_verify_client_cert && listener.tls_disable_client_certs {
+            return Err(serde::de::Error::custom(
+                "'tls_disable_client_certs' and 'tls_require_and_verify_client_cert' are mutually exclusive",
+            ));
         }
     }
 
@@ -226,19 +224,19 @@ impl Config {
     pub fn merge(&mut self, other: Config) {
         self.listener.extend(other.listener);
         self.storage.extend(other.storage);
-        if other.api_addr != "" {
+        if !other.api_addr.is_empty() {
             self.api_addr = other.api_addr;
         }
 
-        if other.log_format != "" {
+        if !other.log_format.is_empty() {
             self.log_format = other.log_format;
         }
 
-        if other.log_level != "" {
+        if !other.log_level.is_empty() {
             self.log_level = other.log_level;
         }
 
-        if other.pid_file != "" {
+        if !other.pid_file.is_empty() {
             self.pid_file = other.pid_file;
         }
 

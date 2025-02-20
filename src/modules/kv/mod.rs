@@ -34,7 +34,7 @@ Leases can be set on a per-secret basis. These leases will be sent down
 when that secret is read, and it is assumed that some outside process will
 revoke and/or replace the secret at that path.
 "#;
-const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(3600 as u64);
+const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(3600_u64);
 
 pub struct KvModule {
     pub name: String,
@@ -113,14 +113,12 @@ impl KvBackendInner {
                     ttl_duration = Some(ttl_dur);
                 }
             }
-        } else {
-            if let Some(lease) = data.get("lease") {
-                if let Some(lease_i64) = lease.as_i64() {
-                    ttl_duration = Some(Duration::from_secs(lease_i64 as u64));
-                } else if let Some(lease_str) = lease.as_str() {
-                    if let Ok(lease_dur) = parse_duration(lease_str) {
-                        ttl_duration = Some(lease_dur);
-                    }
+        } else if let Some(lease) = data.get("lease") {
+            if let Some(lease_i64) = lease.as_i64() {
+                ttl_duration = Some(Duration::from_secs(lease_i64 as u64));
+            } else if let Some(lease_str) = lease.as_str() {
+                if let Ok(lease_dur) = parse_duration(lease_str) {
+                    ttl_duration = Some(lease_dur);
                 }
             }
         }

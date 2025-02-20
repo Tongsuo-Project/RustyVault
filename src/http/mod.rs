@@ -125,7 +125,7 @@ impl ResponseError for RvError {
             status = StatusCode::from_u16(400).unwrap();
             text = resp_text.clone();
         } else if let RvError::ErrResponseStatus(status_code, resp_text) = self {
-            status = StatusCode::from_u16(status_code.clone()).unwrap();
+            status = StatusCode::from_u16(*status_code).unwrap();
             text = resp_text.clone();
         } else {
             text = self.to_string();
@@ -161,7 +161,7 @@ pub fn request_auth(req: &HttpRequest) -> Request {
 }
 
 pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
-    if msg.len() == 0 {
+    if msg.is_empty() {
         HttpResponse::build(status).finish()
     } else {
         let err_json = json!({ "error": msg.to_string() });

@@ -68,7 +68,7 @@ impl Server {
     }
 
     pub fn main(&self, config_path: &PathBuf) -> Result<(), RvError> {
-        let config = config::load_config(&*config_path.to_string_lossy())?;
+        let config = config::load_config(&config_path.to_string_lossy())?;
 
         if config.storage.len() != 1 {
             return Err(RvError::ErrConfigStorageNotFound);
@@ -117,7 +117,7 @@ impl Server {
 
             let log_file = std::fs::OpenOptions::new()
                 .read(true)
-                .write(true)
+                
                 .append(true)
                 .create(true)
                 .truncate(false)
@@ -170,7 +170,7 @@ impl Server {
                 .app_data(web::Data::new(Arc::clone(&core)))
                 .app_data(web::Data::new(Arc::clone(&metrics_manager)))
                 .configure(http::init_service)
-                .default_service(web::to(|| HttpResponse::NotFound()))
+                .default_service(web::to(HttpResponse::NotFound))
         })
         .on_connect(http::request_on_connect_handler);
 
@@ -217,7 +217,7 @@ impl Server {
                     p
                 });
 
-                if listener.tls_client_ca_file.len() > 0 {
+                if !listener.tls_client_ca_file.is_empty() {
                     let mut store = X509StoreBuilder::new()?;
 
                     let mut client_ca_file = File::open(&listener.tls_client_ca_file)?;

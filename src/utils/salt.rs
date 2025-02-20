@@ -44,16 +44,16 @@ impl Salt {
     pub fn new(storage: Option<&dyn Storage>, config: Option<&Config>) -> Result<Self, RvError> {
         let mut salt = Salt::default();
         if let Some(c) = config {
-            if salt.config.location != c.location && c.location != "" {
+            if salt.config.location != c.location && !c.location.is_empty() {
                 salt.config.location = c.location.clone();
             }
 
             if salt.config.hash_type != c.hash_type {
-                salt.config.hash_type = c.hash_type.clone();
+                salt.config.hash_type = c.hash_type;
             }
 
             if salt.config.hmac_type != c.hmac_type {
-                salt.config.hmac_type = c.hmac_type.clone();
+                salt.config.hmac_type = c.hmac_type;
             }
         }
 

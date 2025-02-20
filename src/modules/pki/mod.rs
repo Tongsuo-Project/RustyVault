@@ -33,7 +33,7 @@ The PKI backend dynamically generates X509 server and client certificates.
 After mounting this backend, configure the CA using the "pem_bundle" endpoint within
 the "config/" path.
 "#;
-const _DEFAULT_LEASE_TTL: Duration = Duration::from_secs(3600 as u64);
+const _DEFAULT_LEASE_TTL: Duration = Duration::from_secs(3600_u64);
 
 pub struct PkiModule {
     pub name: String,
@@ -162,7 +162,7 @@ mod test {
         .clone();
 
         // config ca
-        let resp = test_write_api(&core, token, format!("{}config/ca", path).as_str(), true, Some(ca_data)).await;
+        let resp = test_write_api(core, token, format!("{}config/ca", path).as_str(), true, Some(ca_data)).await;
         assert!(resp.is_ok());
     }
 
@@ -183,7 +183,7 @@ mod test {
         .clone();
 
         // config role
-        assert!(test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data))
+        assert!(test_write_api(core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data))
             .await
             .is_ok());
     }

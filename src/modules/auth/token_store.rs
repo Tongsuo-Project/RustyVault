@@ -479,7 +479,7 @@ impl TokenStore {
 
         let children = view.list(&path)?;
         for child in children.iter() {
-            self.revoke_tree_salted(&child)?;
+            self.revoke_tree_salted(child)?;
         }
 
         self.revoke_salted(salted_id)
@@ -546,12 +546,8 @@ impl TokenStore {
             }
         }
 
-        if te.policies.contains(&"root".into()) {
-            if !parent.policies.contains(&"root".into()) {
-                return Err(rv_error_response!("root tokens may not be created without parent token being root"));
-            }
-
-            // TODO: batch tokens cannot be root tokens
+        if te.policies.contains(&"root".into()) && !parent.policies.contains(&"root".into()) {
+            return Err(rv_error_response!("root tokens may not be created without parent token being root"));
         }
 
         if data.no_parent {
@@ -834,10 +830,8 @@ impl Handler for TokenStore {
                 let source = source.as_str().trim_start_matches(AUTH_ROUTER_PREFIX).replace("/", "-");
                 auth.display_name = (source + &auth.display_name).trim_end_matches("-").to_string();
                 req.name = auth.display_name.clone();
-            } else {
-                if !req.path.starts_with("auth/token/") {
-                    return Err(RvError::ErrPermissionDenied);
-                }
+            } else if !req.path.starts_with("auth/token/") {
+                return Err(RvError::ErrPermissionDenied);
             }
 
             if auth.ttl.as_secs() == 0 {

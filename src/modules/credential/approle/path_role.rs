@@ -93,9 +93,9 @@ pub struct RoleIdEntry {
 impl RoleEntry {
     pub fn validate_role_constraints(&self) -> Result<(), RvError> {
         if self.bind_secret_id
-            || self.bound_cidr_list.len() > 0
-            || self.secret_id_bound_cidrs.len() > 0
-            || self.token_bound_cidrs.len() > 0
+            || !self.bound_cidr_list.is_empty()
+            || !self.secret_id_bound_cidrs.is_empty()
+            || !self.token_bound_cidrs.is_empty()
         {
             return Ok(());
         }
@@ -917,7 +917,7 @@ or 'secret_id_ttl' option on the role, and/or the backend mount's maximum TTL va
 
 impl AppRoleBackendInner {
     pub fn get_role_id(&self, req: &mut Request, role_id: &str) -> Result<Option<RoleIdEntry>, RvError> {
-        if role_id == "" {
+        if role_id.is_empty() {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
@@ -952,7 +952,7 @@ impl AppRoleBackendInner {
     }
 
     pub fn delete_role_id(&self, req: &mut Request, role_id: &str) -> Result<(), RvError> {
-        if role_id == "" {
+        if role_id.is_empty() {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
@@ -983,17 +983,17 @@ impl AppRoleBackendInner {
             role_entry.name = name.to_lowercase();
         }
 
-        if role_entry.secret_id_prefix == "" {
+        if role_entry.secret_id_prefix.is_empty() {
             role_entry.secret_id_prefix = SECRET_ID_PREFIX.to_string();
         }
 
-        if role_entry.bound_cidr_list_old != "" {
+        if !role_entry.bound_cidr_list_old.is_empty() {
             role_entry.secret_id_bound_cidrs =
                 role_entry.bound_cidr_list_old.split(',').map(|s| s.to_string()).collect();
             role_entry.bound_cidr_list_old.clear();
         }
 
-        if role_entry.bound_cidr_list.len() != 0 {
+        if !role_entry.bound_cidr_list.is_empty() {
             role_entry.secret_id_bound_cidrs = role_entry.bound_cidr_list.clone();
             role_entry.bound_cidr_list.clear();
         }
@@ -1002,7 +1002,7 @@ impl AppRoleBackendInner {
             role_entry.token_period = role_entry.period;
         }
 
-        if role_entry.token_policies.len() == 0 && role_entry.policies.len() > 0 {
+        if role_entry.token_policies.is_empty() && !role_entry.policies.is_empty() {
             role_entry.token_policies = role_entry.policies.clone();
         }
 
@@ -1016,7 +1016,7 @@ impl AppRoleBackendInner {
         role_entry: &RoleEntry,
         previous_role_id: &str,
     ) -> Result<(), RvError> {
-        if name == "" {
+        if name.is_empty() {
             return Err(RvError::ErrResponse("missing role name".to_string()));
         }
 
@@ -1030,7 +1030,7 @@ impl AppRoleBackendInner {
 
         let mut create_role_id = true;
 
-        if previous_role_id != "" {
+        if !previous_role_id.is_empty() {
             if previous_role_id != role_entry.role_id.as_str() {
                 self.delete_role_id(req, previous_role_id)?;
             } else {
@@ -1067,7 +1067,7 @@ impl AppRoleBackendInner {
         let mut role_entry = RoleEntry::default();
         let mut create = false;
 
-        let lock_entry = self.role_locks.get_lock(&role_name);
+        let lock_entry = self.role_locks.get_lock(role_name);
         let _locked = lock_entry.lock.write()?;
 
         let entry = self.get_role(req, role_name)?;
@@ -1081,7 +1081,7 @@ impl AppRoleBackendInner {
         }
 
         let old_token_policies = role_entry.token_policies.clone();
-        let old_token_period = role_entry.token_period.clone();
+        let old_token_period = role_entry.token_period;
 
         role_entry.parse_token_fields(req)?;
 
@@ -1094,10 +1094,10 @@ impl AppRoleBackendInner {
         }
 
         if old_token_period != role_entry.token_period {
-            role_entry.period = role_entry.token_period.clone();
+            role_entry.period = role_entry.token_period;
         } else if let Ok(period_value) = req.get_data("period") {
             let period = period_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            role_entry.period = period.clone();
+            role_entry.period = period;
             role_entry.token_period = period;
         }
 
@@ -1121,7 +1121,7 @@ impl AppRoleBackendInner {
             role_entry.role_id = utils::generate_uuid();
         }
 
-        if role_entry.role_id == "" {
+        if role_entry.role_id.is_empty() {
             return Err(RvError::ErrResponse("invalid role_id supplied, or failed to generate a role_id".to_string()));
         }
 
@@ -1137,7 +1137,7 @@ impl AppRoleBackendInner {
                 bound_cidr_list_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         }
 
-        if role_entry.secret_id_bound_cidrs.len() != 0 {
+        if !role_entry.secret_id_bound_cidrs.is_empty() {
             let cidrs: Vec<&str> = role_entry.secret_id_bound_cidrs.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("invalid CIDR blocks".to_string()));
@@ -1193,7 +1193,7 @@ impl AppRoleBackendInner {
                 data.insert("period".to_string(), Value::from(entry.period.as_secs()));
             }
 
-            if entry.policies.len() > 0 {
+            if !entry.policies.is_empty() {
                 data.insert("policies".to_string(), Value::from(entry.policies.clone()));
             }
 
@@ -1262,7 +1262,7 @@ impl AppRoleBackendInner {
             .unwrap()
             .clone();
 
-            if role.policies.len() > 0 {
+            if !role.policies.is_empty() {
                 data.insert("policies".to_string(), Value::from(role.policies));
             }
 
@@ -1416,7 +1416,7 @@ impl AppRoleBackendInner {
         match field {
             "bound_cidr_list" | "secret_id_bound_cidrs" | "token_bound_cidrs" => {
                 cidr_list = field_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-                if cidr_list.len() == 0 {
+                if cidr_list.is_empty() {
                     return Err(RvError::ErrResponse(format!("missing {}", field).to_string()));
                 }
 
@@ -1816,7 +1816,7 @@ impl AppRoleBackendInner {
                 // corresponding lock many times using secret_id is not
                 // possible. Also, indexing it everywhere using secret_id_hmacs
                 // makes listing operation easier.
-                let lock_entry = self.secret_id_locks.get_lock(&secret_id_hmac);
+                let lock_entry = self.secret_id_locks.get_lock(secret_id_hmac);
                 let _locked = lock_entry.lock.read()?;
                 let storage_entry = req.storage_get(&entry_index)?;
                 if storage_entry.is_none() {
@@ -1842,7 +1842,7 @@ impl AppRoleBackendInner {
     ) -> Result<Option<Response>, RvError> {
         let role_name = req.get_data_as_str("role_name")?;
 
-        if secret_id == "" {
+        if secret_id.is_empty() {
             return Err(RvError::ErrResponse("missing secret_id".to_string()));
         }
 
@@ -1863,7 +1863,7 @@ impl AppRoleBackendInner {
         let cidr_list_value = req.get_data_or_default("cidr_list")?;
         let cidr_list = cidr_list_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         // Validate the list of CIDR blocks
-        if cidr_list.len() != 0 {
+        if !cidr_list.is_empty() {
             let cidrs: Vec<&str> = cidr_list.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("failed to validate CIDR blocks".to_string()));
@@ -1877,7 +1877,7 @@ impl AppRoleBackendInner {
         let token_bound_cidrs =
             token_bound_cidrs_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         // Validate the list of CIDR blocks
-        if token_bound_cidrs.len() != 0 {
+        if !token_bound_cidrs.is_empty() {
             let cidrs: Vec<&str> = token_bound_cidrs.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("failed to validate CIDR blocks".to_string()));
@@ -1937,7 +1937,7 @@ impl AppRoleBackendInner {
         self.register_secret_id_entry(
             storage,
             &role.name,
-            &secret_id,
+            secret_id,
             &role.hmac_key,
             &role.secret_id_prefix,
             &mut secret_id_storage,
@@ -2554,7 +2554,7 @@ mod test {
         let role_id = resp_data["role_id"].as_str().unwrap();
 
         // Login should pass
-        let _ = test_login(&core, "approle", &role_id, &secret_id, true).await;
+        let _ = test_login(&core, "approle", role_id, secret_id, true).await;
 
         // Lookup of secret ID should work in case-insensitive manner
         let data = json!({
@@ -2620,7 +2620,7 @@ mod test {
         req.client_token = root_token.to_string();
         let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
-        let resp = approle_module.delete_role_id(&mut req, &role_id);
+        let resp = approle_module.delete_role_id(&mut req, role_id);
         assert!(resp.is_ok());
 
         // Read the role again. This should add the index and return a warning
@@ -2636,7 +2636,7 @@ mod test {
 
         // Check if the index has been successfully created
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
-        let role_id_entry = approle_module.get_role_id(&mut req, &role_id);
+        let role_id_entry = approle_module.get_role_id(&mut req, role_id);
         assert!(role_id_entry.is_ok());
         let role_id_entry = role_id_entry.unwrap().unwrap();
         assert_eq!(role_id_entry.name, "testrole");
@@ -2812,10 +2812,10 @@ mod test {
         let secret_id = resp_data["secret_id"].as_str().unwrap();
 
         // Login should fail
-        let _ = test_login(&core, "approle", "role-id-123", &secret_id, false).await;
+        let _ = test_login(&core, "approle", "role-id-123", secret_id, false).await;
 
         // Login should pass
-        let _ = test_login(&core, "approle", "customroleid", &secret_id, true).await;
+        let _ = test_login(&core, "approle", "customroleid", secret_id, true).await;
     }
 
     #[tokio::test]

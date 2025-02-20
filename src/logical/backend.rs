@@ -77,12 +77,12 @@ impl Backend for LogicalBackend {
             _ => {}
         }
 
-        if req.path == "" && req.operation == Operation::Help {
+        if req.path.is_empty() && req.operation == Operation::Help {
             return self.handle_root_help(req);
         }
 
         if let Some((path, captures)) = self.match_path(&req.path) {
-            if captures.len() != 0 {
+            if !captures.is_empty() {
                 let mut data = Map::new();
                 captures.iter().for_each(|(key, value)| {
                     data.insert(key.to_string(), Value::String(value.to_string()));

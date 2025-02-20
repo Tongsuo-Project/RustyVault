@@ -146,7 +146,7 @@ impl AppRoleBackendInner {
                 let key = format!("{}{}/", secret_id_prefix_to_use, role_name_hmac);
                 let secret_id_hmacs = storage.list(&key)?;
                 for secret_id_hmac in secret_id_hmacs.iter() {
-                    secret_id_cleanup_func(&secret_id_hmac, &role_name_hmac, secret_id_prefix_to_use)?;
+                    secret_id_cleanup_func(secret_id_hmac, role_name_hmac, secret_id_prefix_to_use)?;
                 }
             }
 

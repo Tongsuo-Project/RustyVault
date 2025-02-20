@@ -160,7 +160,7 @@ pub fn convert_keys(value: &Value) -> Value {
     }
 }
 
-static SEPS: [&'static str; 15] = [
+static SEPS: [&str; 15] = [
     "",
     "-",
     "--",

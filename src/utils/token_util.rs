@@ -11,9 +11,9 @@ use crate::{
 };
 
 // 24h
-pub const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(24 * 60 * 60 as u64);
+pub const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(24 * 60 * 60_u64);
 // 30d
-pub const MAX_LEASE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60 as u64);
+pub const MAX_LEASE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60_u64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenParams {

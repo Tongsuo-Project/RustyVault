@@ -93,11 +93,11 @@ impl AppRoleBackendInner {
         role_name_hmac: &str,
         secret_id_hmac: &str,
     ) -> Result<Option<SecretIdStorageEntry>, RvError> {
-        if secret_id_hmac == "" {
+        if secret_id_hmac.is_empty() {
             return Err(RvError::ErrResponse("missing secret id hmac".to_string()));
         }
 
-        if role_name_hmac == "" {
+        if role_name_hmac.is_empty() {
             return Err(RvError::ErrResponse("missing role name hmac".to_string()));
         }
 
@@ -126,15 +126,15 @@ impl AppRoleBackendInner {
         secret_id_hmac: &str,
         secret_entry: &SecretIdStorageEntry,
     ) -> Result<(), RvError> {
-        if role_secret_id_prefix == "" {
+        if role_secret_id_prefix.is_empty() {
             return Err(RvError::ErrResponse("missing secret id prefix".to_string()));
         }
 
-        if secret_id_hmac == "" {
+        if secret_id_hmac.is_empty() {
             return Err(RvError::ErrResponse("missing secret id hmac".to_string()));
         }
 
-        if role_name_hmac == "" {
+        if role_name_hmac.is_empty() {
             return Err(RvError::ErrResponse("missing role name hmac".to_string()));
         }
 
@@ -151,11 +151,11 @@ impl AppRoleBackendInner {
         role_name_hmac: &str,
         secret_id_hmac: &str,
     ) -> Result<(), RvError> {
-        if secret_id_hmac == "" {
+        if secret_id_hmac.is_empty() {
             return Err(RvError::ErrResponse("missing secret id hmac".to_string()));
         }
 
-        if role_name_hmac == "" {
+        if role_name_hmac.is_empty() {
             return Err(RvError::ErrResponse("missing role name hmac".to_string()));
         }
 
@@ -204,7 +204,7 @@ impl AppRoleBackendInner {
                 secret_entry.expiration_time = now + ttl;
             }
 
-            self.create_secret_id_accessor_entry(storage, secret_entry, &secret_id_hmac, &role_secret_id_prefix)?;
+            self.create_secret_id_accessor_entry(storage, secret_entry, &secret_id_hmac, role_secret_id_prefix)?;
 
             self.set_secret_id_storage_entry(
                 storage,
@@ -239,7 +239,7 @@ impl AppRoleBackendInner {
         secret_id_accessor: &str,
         role_secret_id_prefix: &str,
     ) -> Result<Option<SecretIdAccessorStorageEntry>, RvError> {
-        if secret_id_accessor == "" {
+        if secret_id_accessor.is_empty() {
             return Err(RvError::ErrResponse("missing secret id accessor".to_string()));
         }
 
@@ -257,7 +257,7 @@ impl AppRoleBackendInner {
 
         let entry_index = format!("{}{}", accessor_prefix, salt_id);
 
-        let lock_entry = self.secret_id_accessor_locks.get_lock(&secret_id_accessor);
+        let lock_entry = self.secret_id_accessor_locks.get_lock(secret_id_accessor);
         let _locked = lock_entry.lock.read()?;
 
         let storage_entry = storage.get(&entry_index)?;
@@ -349,7 +349,7 @@ impl AppRoleBackendInner {
         let secret_id_hmacs = storage.list(&key)?;
         for secret_id_hmac in secret_id_hmacs.iter() {
             let entry_index = format!("{}{}/{}", role_secret_id_prefix, role_name_hmac, secret_id_hmac);
-            let lock_entry = self.secret_id_locks.get_lock(&secret_id_hmac);
+            let lock_entry = self.secret_id_locks.get_lock(secret_id_hmac);
             let _locked = lock_entry.lock.write()?;
             storage.delete(&entry_index)?
         }
@@ -359,7 +359,7 @@ impl AppRoleBackendInner {
 }
 
 pub fn create_hmac(key: &str, value: &str) -> Result<String, RvError> {
-    if key == "" {
+    if key.is_empty() {
         return Err(RvError::ErrResponse("invalid hmac key".to_string()));
     }
 

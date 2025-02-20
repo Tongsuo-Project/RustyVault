@@ -380,7 +380,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
@@ -472,7 +472,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
@@ -546,13 +546,13 @@ impl TestHttpServer {
         }
 
         if self.tls_enable {
-            cmd.arg(&format!("--address=https://{}", self.listen_addr));
-            cmd.arg(&format!("--ca-cert={}/ca.crt", self.cert_dir));
-            cmd.arg(&format!("--client-cert={}/server.crt", self.cert_dir));
-            cmd.arg(&format!("--client-key={}/key.pem", self.cert_dir));
+            cmd.arg(format!("--address=https://{}", self.listen_addr));
+            cmd.arg(format!("--ca-cert={}/ca.crt", self.cert_dir));
+            cmd.arg(format!("--client-cert={}/server.crt", self.cert_dir));
+            cmd.arg(format!("--client-key={}/key.pem", self.cert_dir));
             cmd.arg("--tls-skip-verify");
         } else {
-            cmd.arg(&format!("--address=http://{}", self.listen_addr));
+            cmd.arg(format!("--address=http://{}", self.listen_addr));
         }
 
         for arg in args {
@@ -969,7 +969,7 @@ pub fn new_test_http_server(
             .wrap(middleware::Logger::default())
             .app_data(web::Data::new(core.clone()))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 
@@ -1019,7 +1019,7 @@ pub fn new_test_http_server_with_prometheus(
             .app_data(web::Data::new(core.clone()))
             .app_data(web::Data::new(Arc::clone(&metrics_manager)))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 
@@ -1075,7 +1075,7 @@ pub fn start_test_http_server(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = stop_future => {
@@ -1084,7 +1084,7 @@ pub fn start_test_http_server(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 
@@ -1114,7 +1114,7 @@ pub fn start_test_http_server_with_prometheus(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = system_metrics_fucture => {},
@@ -1124,7 +1124,7 @@ pub fn start_test_http_server_with_prometheus(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 
@@ -1251,9 +1251,9 @@ impl Clone for NoopBackend {
             response: self.response.clone(),
             request_handler: self.request_handler.clone(),
             invalidations: self.invalidations.clone(),
-            default_lease_ttl: self.default_lease_ttl.clone(),
-            max_lease_ttl: self.max_lease_ttl.clone(),
-            rollback_errs: self.rollback_errs.clone(),
+            default_lease_ttl: self.default_lease_ttl,
+            max_lease_ttl: self.max_lease_ttl,
+            rollback_errs: self.rollback_errs,
         }
     }
 }

@@ -134,14 +134,10 @@ impl FieldTrait for Value {
         let mut int = self.as_i64();
         if int.is_none() {
             let int_str = self.as_str();
-            if int_str.is_none() {
-                return None;
-            }
+            int_str?;
 
             int = int_str.unwrap().parse::<i64>().ok();
-            if int.is_none() {
-                return None;
-            }
+            int?;
         }
 
         int
@@ -153,7 +149,7 @@ impl FieldTrait for Value {
         }
 
         if let Some(secs_str) = self.as_str() {
-            if let Some(secs_int) = secs_str.parse::<u64>().ok() {
+            if let Ok(secs_int) = secs_str.parse::<u64>() {
                 return Some(Duration::from_secs(secs_int));
             } else if let Ok(ret) = parse_duration(secs_str) {
                 return Some(ret);

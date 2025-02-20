@@ -248,7 +248,7 @@ mod test {
         .unwrap()
         .clone();
 
-        if role_id == "" {
+        if role_id.is_empty() {
             role_data.remove("role_id");
         }
 

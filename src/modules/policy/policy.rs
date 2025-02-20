@@ -309,7 +309,7 @@ impl Policy {
     fn init(&mut self, policy_config: &PolicyConfig) -> Result<(), RvError> {
         for (path, pc) in policy_config.path.iter() {
             let mut rules = PolicyPathRules::default();
-            rules.path = ensure_no_leading_slash(&path);
+            rules.path = ensure_no_leading_slash(path);
             rules.capabilities = pc.capabilities.clone();
             rules.min_wrapping_ttl = pc.min_wrapping_ttl;
             rules.max_wrapping_ttl = pc.max_wrapping_ttl;
@@ -320,11 +320,9 @@ impl Policy {
 
             // If there are segment wildcards, don't actually strip the
             // trailing asterisk, but don't want to hit the default case
-            if rules.path.ends_with("*") {
-                if !rules.has_segment_wildcards {
-                    rules.path = rules.path.trim_end_matches("*").to_string();
-                    rules.is_prefix = true;
-                }
+            if rules.path.ends_with("*") && !rules.has_segment_wildcards {
+                rules.path = rules.path.trim_end_matches("*").to_string();
+                rules.is_prefix = true;
             }
 
             if let Some(old_path_policy) = pc.policy {
@@ -402,10 +400,8 @@ impl Permissions {
             _ => return Ok(ret),
         };
 
-        if self.capabilities_bitmap & cap.to_bits() == 0 {
-            if req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0 {
-                return Ok(ret);
-            }
+        if self.capabilities_bitmap & cap.to_bits() == 0 && (req.operation != Operation::Write || self.capabilities_bitmap & Capability::Create.to_bits() == 0) {
+            return Ok(ret);
         }
 
         if let Some(value) = self.granting_policies_map.get(&cap.to_bits()) {
@@ -587,7 +583,7 @@ impl Permissions {
 
             let pi = PolicyInfo { name: policy.name.clone(), policy_type: "acl".into(), ..Default::default() };
 
-            self.granting_policies_map.entry(cap.to_bits()).or_insert_with(Vec::new).push(pi);
+            self.granting_policies_map.entry(cap.to_bits()).or_default().push(pi);
         }
 
         Ok(())

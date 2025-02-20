@@ -190,7 +190,7 @@ impl ExpirationManager {
 
     /// Renews a lease entry by the given increment.
     pub fn renew(&self, lease_id: &str, increment: Duration) -> Result<Option<Response>, RvError> {
-        let le = self.load_lease_entry(&lease_id)?;
+        let le = self.load_lease_entry(lease_id)?;
         if le.is_none() {
             return Err(RvError::ErrLeaseNotFound);
         }
@@ -225,7 +225,7 @@ impl ExpirationManager {
             secret.lease_id = lease_id.into();
         }
 
-        le.data = resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new());
+        le.data = resp.data.clone().unwrap_or(Map::new());
         le.expire_time = resp.secret.as_ref().unwrap().expiration_time();
         le.secret = resp.secret.clone();
 
@@ -311,7 +311,7 @@ impl ExpirationManager {
                 lease_id: lease_id.clone(),
                 client_token: req.client_token.clone(),
                 path: req.path.clone(),
-                data: resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new()),
+                data: resp.data.clone().unwrap_or_default(),
                 secret: Some(secret.clone()),
                 issue_time: now,
                 expire_time: secret.expiration_time(),
@@ -419,7 +419,7 @@ impl ExpirationManager {
     pub fn revoke_by_token(&self, te: &TokenEntry) -> Result<(), RvError> {
         let existing = self.lookup_by_token(&te.id)?;
         for lease_id in existing.iter() {
-            self.revoke_lease_id(&lease_id, true)?;
+            self.revoke_lease_id(lease_id, true)?;
         }
 
         Ok(())
@@ -522,8 +522,8 @@ impl ExpirationManager {
                 data: ole.data.clone().map(|serde_map| serde_map.into_iter().collect()).unwrap_or(Map::new()),
                 secret: ole.secret.clone(),
                 auth: ole.auth.clone(),
-                issue_time: ole.issue_time.clone(),
-                expire_time: ole.expire_time.clone(),
+                issue_time: ole.issue_time,
+                expire_time: ole.expire_time,
                 ..Default::default()
             };
             self.persist_lease_entry(&le)?;
@@ -813,7 +813,7 @@ mod mod_expiration_tests {
         )
         .unwrap();
 
-        let me = MountEntry::new(&MOUNT_TABLE_TYPE, "mytest/", "test", "test description");
+        let me = MountEntry::new(MOUNT_TABLE_TYPE, "mytest/", "test", "test description");
         core.mount(&me).unwrap();
 
         let mut request = Request::new("mytest/tt");

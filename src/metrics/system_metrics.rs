@@ -125,7 +125,7 @@ impl SystemMetrics {
         // self.network_in.set(total_network_in as f64);
         // self.network_out.set(total_network_out as f64);
 
-        self.load_avg.set(System::load_average().one as f64);
+        self.load_avg.set(System::load_average().one);
     }
 }
 
@@ -172,7 +172,7 @@ mod tests {
         let root_token = &server.root_token;
         thread::sleep(Duration::from_secs(20));
 
-        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(&root_token), None).unwrap();
+        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(root_token), None).unwrap();
         assert_eq!(status, 200);
 
         let mut gauge_map = parse_gauge(resp["metrics"].as_str().unwrap());

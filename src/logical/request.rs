@@ -69,7 +69,7 @@ impl Request {
 
         if self.data.is_some() {
             if let Some(data) = self.data.as_ref().unwrap().get(key) {
-                if !field.check_data_type(&data) {
+                if !field.check_data_type(data) {
                     return Err(RvError::ErrRequestFieldInvalid);
                 }
                 return Ok(data.clone());
@@ -78,7 +78,7 @@ impl Request {
 
         if self.body.is_some() {
             if let Some(data) = self.body.as_ref().unwrap().get(key) {
-                if !field.check_data_type(&data) {
+                if !field.check_data_type(data) {
                     return Err(RvError::ErrRequestFieldInvalid);
                 }
                 return Ok(data.clone());

@@ -35,6 +35,8 @@ jobs:
       run: ulimit -n 65535
     - name: Run tests
       run: cargo test --verbose
+    - name: Run Clippy
+      run: cargo clippy -- -D warnings
     - name: debug with ssh tunnel
       if: ${{ failure() }}
       uses: wa5i/ssh-to-actions@main
