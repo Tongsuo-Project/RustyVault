@@ -39,9 +39,9 @@ jobs:
       run: cargo clippy -- -D warnings
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
-	- name: Generate coverage report
-	  run: cargo tarpaulin --out Lcov
-	- name: Upload coverage reports to Codecov
+    - name: Generate coverage report
+      run: CARGO_BIN_NAME=rvault cargo tarpaulin --out Lcov
+    - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
