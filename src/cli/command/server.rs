@@ -59,7 +59,7 @@ impl Server {
                 Ok(_) => EXIT_CODE_OK,
                 Err(e) => {
                     println!("server error: {:?}", e);
-                    EXIT_CODE_LOAD_CONFIG_FAILURE
+                    std::process::exit(EXIT_CODE_LOAD_CONFIG_FAILURE as i32);
                 }
             };
         }
