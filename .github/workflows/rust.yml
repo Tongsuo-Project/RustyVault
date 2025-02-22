@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "v0.2" ]
     paths-ignore:
       - "docs/**"
       - ".github/workflows/website.yml"
