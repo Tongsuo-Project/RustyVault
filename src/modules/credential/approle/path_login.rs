@@ -9,7 +9,7 @@ use crate::{
     context::Context,
     errors::RvError,
     logical::{Auth, Backend, Field, FieldType, Operation, Path, PathOperation, Request, Response},
-    new_fields, new_fields_internal, new_path, new_path_internal,
+    new_fields, new_fields_internal, new_path, new_path_internal, rv_error_response, rv_error_string,
     storage::StorageEntry,
     utils::cidr,
 };
@@ -220,5 +220,32 @@ impl AppRoleBackendInner {
         let resp = Response { auth: Some(auth), ..Response::default() };
 
         Ok(Some(resp))
+    }
+
+    pub fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        if req.auth.is_none() {
+            return Err(rv_error_string!("invalid request"));
+        }
+        let mut auth = req.auth.clone().unwrap();
+        let role_name = auth.metadata.get("username");
+        if role_name.is_none() {
+            return Ok(None);
+        }
+        let role_name = role_name.unwrap();
+
+        let role = self.get_role(req, role_name.as_str())?;
+        if role.is_none() {
+            return Ok(None);
+        }
+
+        let role = self
+            .get_role(req, &role_name)?
+            .ok_or(rv_error_response!(format!("role {} does not exist during renewal", role_name)))?;
+
+        auth.period = role.token_period;
+        auth.ttl = role.token_ttl;
+        auth.max_ttl = role.token_max_ttl;
+
+        Ok(Some(Response { auth: Some(auth), ..Response::default() }))
     }
 }

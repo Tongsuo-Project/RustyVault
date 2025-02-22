@@ -16,7 +16,7 @@ lazy_static! {
     static ref HTTP_STATUS_CODE: &'static str = "http_status_code";
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Response {
     #[serde(default)]
     pub request_id: String,

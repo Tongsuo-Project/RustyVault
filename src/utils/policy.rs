@@ -1,6 +1,8 @@
 //! This module is a Rust replica of
 //! https://github.com/hashicorp/vault/blob/main/sdk/helper/policyutil/policyutil.go
 
+use std::collections::HashSet;
+
 use super::string::remove_duplicates;
 
 // sanitize_policies performs the common input validation tasks
@@ -37,6 +39,33 @@ pub fn sanitize_policies(policies: &mut Vec<String>, add_default: bool) {
     }
 
     remove_duplicates(policies, false, true)
+}
+
+// equivalent_policies checks whether the given policy sets are equivalent, as in,
+// they contain the same values. The benefit of this method is that it leaves
+// the "default" policy out of its comparisons as it may be added later by core
+// after a set of policies has been saved by a backend.
+pub fn equivalent_policies(a: &Vec<String>, b: &Vec<String>) -> bool {
+    if a.is_empty() && b.is_empty() {
+        return true;
+    } else if a.is_empty() && b.len() == 1 && b[0] == "default" {
+        return true;
+    } else if b.is_empty() && a.len() == 1 && a[0] == "default" {
+        return true;
+    } else if a.is_empty() || b.is_empty() {
+        return false;
+    }
+
+    let mut filtered_sorted_a: Vec<String> =
+        a.iter().filter(|s| *s != "default").cloned().collect::<HashSet<_>>().into_iter().collect::<Vec<_>>();
+
+    let mut filtered_sorted_b: Vec<String> =
+        b.iter().filter(|s| *s != "default").cloned().collect::<HashSet<_>>().into_iter().collect::<Vec<_>>();
+
+    filtered_sorted_a.sort();
+    filtered_sorted_b.sort();
+
+    filtered_sorted_a == filtered_sorted_b
 }
 
 #[cfg(test)]
@@ -92,5 +121,94 @@ mod test {
 
         sanitize_policies(&mut policies7, false);
         assert_eq!(policies7, vec!["admin".to_string(), "rooot".to_string()]);
+    }
+
+    #[test]
+    fn test_equivalent_policies_both_empty() {
+        let a: Vec<String> = vec![];
+        let b: Vec<String> = vec![];
+        assert!(equivalent_policies(&a, &b));
+    }
+
+    #[test]
+    fn test_equivalent_policies_one_empty_other_default() {
+        let a: Vec<String> = vec![];
+        let b: Vec<String> = vec![String::from("default")];
+        assert!(equivalent_policies(&a, &b));
+
+        let a: Vec<String> = vec![String::from("default")];
+        let b: Vec<String> = vec![];
+        assert!(equivalent_policies(&a, &b));
+    }
+
+    #[test]
+    fn test_equivalent_policies_one_empty_other_non_default() {
+        let a: Vec<String> = vec![];
+        let b: Vec<String> = vec![String::from("apple"), String::from("banana")];
+        assert!(!equivalent_policies(&a, &b));
+
+        let a: Vec<String> = vec![String::from("apple"), String::from("banana")];
+        let b: Vec<String> = vec![];
+        assert!(!equivalent_policies(&a, &b));
+    }
+
+    #[test]
+    fn test_equivalent_policies_arrays() {
+        let a = vec![
+            String::from("apple"),
+            String::from("default"),
+            String::from("banana"),
+            String::from("cherry"),
+            String::from("default"),
+            String::from("date"),
+            String::from("apple"), // duplicated
+        ];
+
+        let b = vec![
+            String::from("banana"),
+            String::from("default"),
+            String::from("cherry"),
+            String::from("apple"),
+            String::from("default"),
+            String::from("date"),
+        ];
+
+        assert!(equivalent_policies(&a, &b));
+
+        let b = vec![
+            String::from("banana"),
+            String::from("default"),
+            String::from("cherry"),
+            String::from("apple"),
+            String::from("default"),
+            String::from("grape"),
+        ];
+
+        assert!(!equivalent_policies(&a, &b));
+    }
+
+    #[test]
+    fn test_equivalent_policies_mixed_elements() {
+        let a = vec![
+            String::from("apple"),
+            String::from("default"),
+            String::from("banana"),
+            String::from("cherry"),
+            String::from("default"),
+            String::from("date"),
+            String::from("apple"), // duplicated
+        ];
+
+        let b = vec![
+            String::from("banana"),
+            String::from("default"),
+            String::from("cherry"),
+            String::from("apple"),
+            String::from("default"),
+            String::from("date"),
+            String::from("default"), // dup default
+        ];
+
+        assert!(equivalent_policies(&a, &b));
     }
 }

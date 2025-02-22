@@ -233,11 +233,6 @@ pub enum RvError {
         #[from]
         source: chrono::ParseError,
     },
-    #[error("Some delay_timer error happened, {:?}", .source)]
-    TaskError {
-        #[from]
-        source: delay_timer::error::TaskError,
-    },
     #[error("Some bcrypt error happened, {:?}", .source)]
     BcryptError {
         #[from]

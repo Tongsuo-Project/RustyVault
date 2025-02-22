@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "v0.2" ]
     paths-ignore:
       - "docs/**"
       - ".github/workflows/website.yml"
@@ -151,7 +151,7 @@ jobs:
       run: vcpkg install openssl:x64-windows-static-md
     - name: Download MySQL Connector/C
       run: |
-        Invoke-WebRequest -Uri "https://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.11-winx64.msi" -OutFile "mysql-connector.msi"
+        Invoke-WebRequest -Uri "https://cdn.mysql.com/Downloads/Connector-C/mysql-connector-c-6.1.11-winx64.msi" -OutFile "mysql-connector.msi"
     - name: Install MySQL Connector/C
       run: |
         Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait

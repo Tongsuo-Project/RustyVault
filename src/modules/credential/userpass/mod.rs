@@ -49,7 +49,7 @@ impl UserPassBackend {
 
         let mut backend = new_logical_backend!({
             unauth_paths: ["login/*"],
-            auth_renew_handler: userpass_backend_ref.renew_path_login,
+            auth_renew_handler: userpass_backend_ref.login_renew,
             help: USERPASS_BACKEND_HELP,
         });
 
@@ -59,12 +59,6 @@ impl UserPassBackend {
         backend.paths.push(Arc::new(self.login_path()));
 
         backend
-    }
-}
-
-impl UserPassBackendInner {
-    pub fn renew_path_login(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        Ok(None)
     }
 }
 
@@ -207,8 +201,8 @@ mod test {
         let resp = test_login(&core, "pass", "test", "123qwe!@#", true).await;
         let login_auth = resp.unwrap().unwrap().auth.unwrap();
         let test_client_token = login_auth.client_token.clone();
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", true).await;
-        println!("test mounts resp: {:?}", resp);
+        let resp = test_read_api(&core, &test_client_token, "auth/token/lookup-self", true).await;
+        println!("read auth/token/lookup-self resp: {:?}", resp);
         assert!(resp.unwrap().is_some());
 
         test_delete_user(&core, &root_token, "test").await;
@@ -227,8 +221,9 @@ mod test {
         println!("wait 7s");
         std::thread::sleep(Duration::from_secs(7));
         let test_client_token = login_auth.client_token.clone();
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", false).await;
-        println!("test mounts resp: {:?}", resp);
+        let resp = test_read_api(&core, &test_client_token, "auth/token/lookup-self", false).await;
+        println!("read auth/token/lookup-self resp: {:?}", resp);
+        assert_eq!(resp.unwrap_err(), RvError::ErrPermissionDenied);
 
         // mount userpass auth to path: auth/testpass
         test_mount_auth_api(&core, &root_token, "userpass", "testpass").await;
@@ -237,8 +232,8 @@ mod test {
         let login_auth = resp.unwrap().unwrap().auth.unwrap();
         let test_client_token = login_auth.client_token.clone();
         println!("test_client_token: {}", test_client_token);
-        let resp = test_read_api(&core, &test_client_token, "sys/mounts", true).await;
-        println!("test mounts resp: {:?}", resp);
+        let resp = test_read_api(&core, &test_client_token, "auth/token/lookup-self", true).await;
+        println!("read auth/token/lookup-self resp: {:?}", resp);
         assert!(resp.unwrap().is_some());
     }
 }

@@ -277,7 +277,9 @@ mod test {
         .clone();
 
         // issue cert
-        let resp = test_write_api(core, token, format!("{}issue/{}", path, role_name).as_str(), true, Some(issue_data)).await;
+        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let resp =
+            test_write_api(core, token, format!("{}issue/{}", path, role_name).as_str(), true, Some(issue_data)).await;
         assert!(resp.is_ok());
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
@@ -306,12 +308,12 @@ mod test {
         let ttl_compare = cert.not_after().compare(&expiration_time);
         assert!(ttl_compare.is_ok());
         assert_eq!(ttl_compare.unwrap(), std::cmp::Ordering::Equal);
-        let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let expiration_ttl = cert_data["expiration"].as_u64().unwrap();
         let ttl = expiration_ttl - now_timestamp;
         let expect_ttl = 10 * 24 * 60 * 60;
+        println!("ttl: {}, expect_ttl: {}", ttl, expect_ttl);
         assert!(ttl <= expect_ttl);
-        assert!((ttl + 10) > expect_ttl);
+        assert!((ttl + 10) >= expect_ttl);
 
         let authority_key_id = cert.authority_key_id();
         assert!(authority_key_id.is_some());
