@@ -75,7 +75,6 @@ prettytable = "0.10"
 rpassword = "7.3"
 async-trait = "0.1"
 stretto = "0.8"
-itertools = "0.14"
 priority-queue = "2.1"
 crossbeam-channel = "0.5"
 
