@@ -81,8 +81,12 @@ async fn logical_request_handler(
             r.operation = Operation::List;
         }
     }
+    #[cfg(feature = "sync_handler")]
+    let ret = core.read()?.handle_request(&mut r)?;
+    #[cfg(not(feature = "sync_handler"))]
+    let ret = core.read()?.handle_request(&mut r).await?;
 
-    match core.read()?.handle_request(&mut r).await? {
+    match ret {
         Some(resp) => response_logical(&resp, &r.path),
         None => {
             if matches!(r.operation, Operation::Read | Operation::List) {

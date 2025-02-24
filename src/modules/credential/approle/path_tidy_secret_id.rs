@@ -268,6 +268,9 @@ mod test {
         let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
+        #[cfg(feature = "sync_handler")]
+        test_mount_auth_api(&c, &root_token, "approle", "approle/");
+        #[cfg(not(feature = "sync_handler"))]
         test_mount_auth_api(&c, &root_token, "approle", "approle/").await;
 
         let module = c.module_manager.get_module("approle").unwrap();
@@ -294,7 +297,12 @@ mod test {
         req.operation = Operation::Write;
         req.path = "auth/approle/role/role1/secret-id".to_string();
         req.client_token = root_token.to_string();
+
+        #[cfg(feature = "sync_handler")]
+        let _resp = c.handle_request(&mut req);
+        #[cfg(not(feature = "sync_handler"))]
         let _resp = c.handle_request(&mut req).await;
+
         req.storage = c.get_system_view().map(|arc| arc as Arc<dyn Storage>);
 
         let mut mock_backend = approle_module.new_backend();
@@ -348,6 +356,9 @@ mod test {
         let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
+        #[cfg(feature = "sync_handler")]
+        test_mount_auth_api(&c, &root_token, "approle", "approle/");
+        #[cfg(not(feature = "sync_handler"))]
         test_mount_auth_api(&c, &root_token, "approle", "approle/").await;
 
         let module = c.module_manager.get_module("approle").unwrap();
@@ -377,7 +388,12 @@ mod test {
         req.operation = Operation::Write;
         req.path = "auth/approle/role/role1/secret-id".to_string();
         req.client_token = root_token.to_string();
+
+        #[cfg(feature = "sync_handler")]
+        let _resp = c.handle_request(&mut req);
+        #[cfg(not(feature = "sync_handler"))]
         let _resp = c.handle_request(&mut req).await;
+
         req.storage = c.get_system_view().map(|arc| arc as Arc<dyn Storage>);
         let resp = approle_module.write_role_secret_id(&mock_backend, &mut req);
         assert!(resp.is_ok());
@@ -407,7 +423,12 @@ mod test {
                 let mut req = Request::new("auth/approle/role/role1/secret-id");
                 req.operation = Operation::Write;
                 req.client_token = token.clone();
+
+                #[cfg(feature = "sync_handler")]
+                let _resp = c.handle_request(&mut req);
+                #[cfg(not(feature = "sync_handler"))]
                 let _resp = c.handle_request(&mut req).await;
+
                 req.storage = c.get_system_view().map(|arc| arc as Arc<dyn Storage>);
                 let resp = approle_module.write_role_secret_id(&mb, &mut req);
                 assert!(resp.is_ok());

@@ -127,6 +127,7 @@ mod test {
         test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
+    #[maybe_async::maybe_async]
     async fn test_write_user(core: &Core, token: &str, path: &str, username: &str, password: &str, ttl: i32) {
         let user_data = json!({
             "password": password,
@@ -142,18 +143,20 @@ mod test {
         assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     async fn test_read_user(core: &Core, token: &str, username: &str) -> Result<Option<Response>, RvError> {
         let resp = test_read_api(core, token, format!("auth/pass/users/{}", username).as_str(), true).await;
         assert!(resp.is_ok());
         resp
     }
 
+    #[maybe_async::maybe_async]
     async fn test_delete_user(core: &Core, token: &str, username: &str) {
-        assert!(test_delete_api(core, token, format!("auth/pass/users/{}", username).as_str(), true, None)
-            .await
-            .is_ok());
+        let resp = test_delete_api(core, token, format!("auth/pass/users/{}", username).as_str(), true, None).await;
+        assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     async fn test_login(
         core: &Core,
         path: &str,
@@ -181,7 +184,7 @@ mod test {
         resp
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_userpass_module() {
         let (root_token, core) = test_rusty_vault_init("test_userpass_module");
         let core = core.read().unwrap();

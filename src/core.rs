@@ -107,6 +107,7 @@ impl Default for Core {
     }
 }
 
+#[maybe_async::maybe_async]
 impl Core {
     pub fn config(&mut self, core: Arc<RwLock<Core>>, config: Option<&Config>) -> Result<(), RvError> {
         if let Some(conf) = config {
@@ -411,6 +412,7 @@ impl Core {
         Ok(())
     }
 
+    #[maybe_async::maybe_async]
     pub async fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut resp = None;
         let mut err: Option<RvError> = None;

@@ -151,6 +151,7 @@ mod test {
         test_utils::{test_delete_api, test_mount_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
+    #[maybe_async::maybe_async]
     async fn config_ca(core: &Core, token: &str, path: &str) {
         let ca_pem_bundle = format!("{}{}", CA_CERT_PEM, CA_KEY_PEM);
 
@@ -166,6 +167,7 @@ mod test {
         assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     async fn config_role(core: &Core, token: &str, path: &str, role_name: &str, key_type: &str, key_bits: u32) {
         let role_data = json!({
             "ttl": "60d",
@@ -183,11 +185,12 @@ mod test {
         .clone();
 
         // config role
-        assert!(test_write_api(core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data))
-            .await
-            .is_ok());
+        let resp =
+            test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data)).await;
+        assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     async fn generate_root(
         core: &Core,
         token: &str,
@@ -264,6 +267,7 @@ mod test {
         }
     }
 
+    #[maybe_async::maybe_async]
     async fn delete_root(core: &Core, token: &str, path: &str, is_ok: bool) {
         let resp = test_delete_api(core, token, format!("{}root", path).as_str(), is_ok, None).await;
         if !is_ok {
@@ -275,6 +279,7 @@ mod test {
         assert_eq!(resp_ca_pem.unwrap_err(), RvError::ErrPkiCaNotConfig);
     }
 
+    #[maybe_async::maybe_async]
     async fn issue_cert_by_generate_root(
         core: &Core,
         token: &str,
@@ -397,7 +402,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 2k24wuH7oUtLlvf05p4cqfEx
 -----END PRIVATE KEY-----"#;
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_config_ca() {
         let (root_token, c) = test_rusty_vault_init("test_pki_config_ca");
         let token = &root_token;
@@ -427,7 +432,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert_eq!(resp_ca_cert_data["certificate"].as_str().unwrap().trim(), CA_CERT_PEM.trim());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_config_role() {
         let (root_token, c) = test_rusty_vault_init("test_pki_config_role");
         let token = &root_token;
@@ -465,7 +470,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert_eq!(role_data["no_store"].as_bool().unwrap(), false);
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_issue_cert() {
         let (root_token, c) = test_rusty_vault_init("test_pki_issue_cert");
         let token = &root_token;
@@ -565,7 +570,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         );
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_generate_root() {
         let (root_token, c) = test_rusty_vault_init("test_pki_generate_root");
         let token = &root_token;
@@ -591,7 +596,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
     }
 
     #[cfg(feature = "crypto_adaptor_tongsuo")]
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_sm2_generate_root() {
         let (root_token, c) = test_rusty_vault_init("test_pki_generate_root");
         let token = &root_token;
@@ -616,6 +621,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         delete_root(&core, token, path, true).await;
     }
 
+    #[maybe_async::maybe_async]
     async fn test_pki_generate_key_case(
         core: &Core,
         token: &str,
@@ -681,6 +687,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         }
     }
 
+    #[maybe_async::maybe_async]
     async fn test_pki_import_key_case(
         core: &Core,
         token: &str,
@@ -727,6 +734,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         assert_eq!(key_data["key_bits"].as_u64().unwrap(), key_bits as u64);
     }
 
+    #[maybe_async::maybe_async]
     async fn test_pki_sign_verify(core: &Core, token: &str, path: &str, key_name: &str, data: &[u8], is_ok: bool) {
         let req_data = json!({
             "key_name": key_name.to_string(),
@@ -812,9 +820,11 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         .as_object()
         .unwrap()
         .clone();
-        assert!(test_write_api(core, token, &format!("{}/keys/verify", path), false, Some(req_data)).await.is_err());
+        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), false, Some(req_data)).await;
+        assert!(resp.is_err());
     }
 
+    #[maybe_async::maybe_async]
     async fn test_pki_encrypt_decrypt(core: &Core, token: &str, path: &str, key_name: &str, data: &[u8], is_ok: bool) {
         let origin_data = hex::encode(data);
         let req_data = json!({
@@ -863,10 +873,11 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         .as_object()
         .unwrap()
         .clone();
-        assert!(test_write_api(core, token, &format!("{}/keys/decrypt", path), false, Some(req_data)).await.is_err());
+        let resp = test_write_api(core, token, &format!("{}/keys/decrypt", path), false, Some(req_data)).await;
+        assert!(resp.is_err());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_generate_key() {
         let (root_token, c) = test_rusty_vault_init("test_pki_generate_key");
         let token = &root_token;
@@ -968,7 +979,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             .await;
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_import_key() {
         let (root_token, c) = test_rusty_vault_init("test_pki_import_key");
         let token = &root_token;
