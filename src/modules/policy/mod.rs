@@ -152,6 +152,7 @@ mod mod_policy_tests {
         },
     };
 
+    #[maybe_async::maybe_async]
     async fn test_write_policy(core: &Core, token: &str, name: &str, policy: &str) {
         let data = json!({
             "policy": policy,
@@ -164,16 +165,20 @@ mod mod_policy_tests {
         assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     async fn test_read_policy(core: &Core, token: &str, name: &str) -> Result<Option<Response>, RvError> {
         let resp = test_read_api(core, token, format!("sys/policy/{}", name).as_str(), true).await;
         assert!(resp.is_ok());
         resp
     }
 
+    #[maybe_async::maybe_async]
     async fn test_delete_policy(core: &Core, token: &str, name: &str) {
-        assert!(test_delete_api(core, token, format!("sys/policy/{}", name).as_str(), true, None).await.is_ok());
+        let resp = test_delete_api(core, token, format!("sys/policy/{}", name).as_str(), true, None).await;
+        assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     async fn test_write_user(
         core: &Core,
         token: &str,
@@ -198,6 +203,7 @@ mod mod_policy_tests {
         assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     async fn test_user_login(
         core: &Core,
         path: &str,
@@ -225,7 +231,7 @@ mod mod_policy_tests {
         resp
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_curd_api() {
         let (root_token, core) = test_rusty_vault_init("test_policy_curd_api");
         let core = core.read().unwrap();
@@ -277,7 +283,7 @@ mod mod_policy_tests {
         assert_eq!(policies["policies"], json!(["default", "root"]));
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_http_api() {
         let mut test_http_server = TestHttpServer::new("test_policy_http_api", true);
 
@@ -332,7 +338,7 @@ mod mod_policy_tests {
         assert_eq!(ret.unwrap().1, json!({"keys": ["default", "root"], "policies": ["default", "root"]}));
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check() {
         let (root_token, core) = test_rusty_vault_init("test_policy_acl_check");
         let core = core.read().unwrap();
@@ -426,7 +432,7 @@ mod mod_policy_tests {
         assert!(resp.is_err());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check_with_policy_parameters() {
         let (root_token, core) = test_rusty_vault_init("test_policy_acl_check_with_policy_parameters");
         let core = core.read().unwrap();

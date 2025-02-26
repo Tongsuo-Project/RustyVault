@@ -23,7 +23,6 @@ use std::{
     sync::{Arc, RwLock, Weak},
 };
 
-use async_trait::async_trait;
 use better_default::Default;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
@@ -629,7 +628,7 @@ impl PolicyStore {
     }
 }
 
-#[async_trait]
+#[maybe_async::maybe_async]
 impl AuthHandler for PolicyStore {
     fn name(&self) -> String {
         "policy_store".to_string()

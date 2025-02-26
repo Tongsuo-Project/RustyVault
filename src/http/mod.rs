@@ -199,6 +199,9 @@ pub fn response_json_ok<T: Serialize>(cookie: Option<Cookie>, body: T) -> HttpRe
 
 pub async fn handle_request(core: web::Data<Arc<RwLock<Core>>>, req: &mut Request) -> Result<HttpResponse, RvError> {
     let core = core.read()?;
+    #[cfg(feature = "sync_handler")]
+    let resp = core.handle_request(req)?;
+    #[cfg(not(feature = "sync_handler"))]
     let resp = core.handle_request(req).await?;
     if resp.is_none() {
         Ok(response_ok(None, None))
