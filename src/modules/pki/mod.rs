@@ -598,7 +598,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_sm2_generate_root() {
-        let (root_token, c) = test_rusty_vault_init("test_pki_generate_root");
+        let (root_token, c) = test_rusty_vault_init("test_pki_sm2_generate_root");
         let token = &root_token;
         let core = c.read().unwrap();
         let path = "sm2pki/";
