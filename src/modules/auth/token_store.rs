@@ -36,7 +36,7 @@ use crate::{
     storage::{Storage, StorageEntry},
     utils::{
         deserialize_duration, deserialize_system_time, generate_uuid, is_str_subset,
-        policy::sanitize_policies,
+        default_system_time, policy::sanitize_policies,
         serialize_duration, serialize_system_time, sha1,
         token_util::{DEFAULT_LEASE_TTL, MAX_LEASE_TTL},
     },
@@ -94,11 +94,11 @@ pub struct TokenEntry {
     pub num_uses: u32,
     pub ttl: u64,
     #[default(SystemTime::now())]
-    #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    #[serde(default = "default_system_time", serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
     pub creation_time: SystemTime,
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub period: Duration,
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub explicit_max_ttl: Duration,
 }
 
