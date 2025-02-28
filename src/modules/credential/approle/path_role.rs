@@ -916,6 +916,7 @@ or 'secret_id_ttl' option on the role, and/or the backend mount's maximum TTL va
     }
 }
 
+#[allow(clippy::assigning_clones)]
 impl AppRoleBackendInner {
     pub fn get_role_id(&self, req: &mut Request, role_id: &str) -> Result<Option<RoleIdEntry>, RvError> {
         if role_id.is_empty() {
@@ -995,7 +996,7 @@ impl AppRoleBackendInner {
         }
 
         if !role_entry.bound_cidr_list.is_empty() {
-            role_entry.secret_id_bound_cidrs = role_entry.bound_cidr_list.clone();
+            role_entry.secret_id_bound_cidrs.clone_from(&role_entry.bound_cidr_list);
             role_entry.bound_cidr_list.clear();
         }
 
@@ -1090,7 +1091,7 @@ impl AppRoleBackendInner {
             role_entry.policies = role_entry.token_policies.clone();
         } else if let Ok(policies_value) = req.get_data("policies") {
             let policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-            role_entry.policies = policies.clone();
+            role_entry.policies.clone_from(&policies);
             role_entry.token_policies = policies;
         }
 
@@ -1284,7 +1285,7 @@ impl AppRoleBackendInner {
 
         if let Some(mut role) = self.get_role(req, &role_name)? {
             sanitize_policies(&mut token_policies, false);
-            role.policies = token_policies.clone();
+            role.policies.clone_from(&token_policies);
             role.token_policies = token_policies;
             self.set_role(req, &role_name, &role, "")?;
         } else {
@@ -1455,7 +1456,7 @@ impl AppRoleBackendInner {
                     }
                 }
                 "role_id" => {
-                    previous_role_id = role.role_id.clone();
+                    previous_role_id.clone_from(&role.role_id);
                     role.role_id = field_value.as_str().ok_or(RvError::ErrLogicalOperationUnsupported)?.to_string();
                     if role.role_id.as_str() == "" {
                         return Err(RvError::ErrResponse("missing role_id".to_string()));
@@ -2090,7 +2091,7 @@ impl AppRoleBackendInner {
                 &role_name_hmac,
                 &accessor_entry.secret_id_hmac,
             )? {
-                let data = serde_json::to_value(&secret_id_entry)?;
+                let data = serde_json::to_value(secret_id_entry)?;
                 return Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))));
             }
         } else {

@@ -273,7 +273,7 @@ impl Core {
             let mut table = self.mounts.entries.write()?;
             let mut entry = me.clone();
 
-            if !entry.path.ends_with("/") {
+            if !entry.path.ends_with('/') {
                 entry.path += "/";
             }
 
@@ -316,7 +316,7 @@ impl Core {
 
     pub fn unmount(&self, path: &str) -> Result<(), RvError> {
         let mut path = path.to_string();
-        if !path.ends_with("/") {
+        if !path.ends_with('/') {
             path += "/";
         }
 
@@ -350,11 +350,11 @@ impl Core {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
-        if !src.ends_with("/") {
+        if !src.ends_with('/') {
             src += "/";
         }
 
-        if !dst.ends_with("/") {
+        if !dst.ends_with('/') {
             dst += "/";
         }
 
@@ -382,7 +382,7 @@ impl Core {
         }
 
         let src_path = src_entry.path.clone();
-        src_entry.path = dst.clone();
+        src_entry.path.clone_from(&dst);
         src_entry.tainted = false;
         src_entry.calc_hmac(&self.hmac_key)?;
 

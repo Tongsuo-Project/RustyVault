@@ -52,11 +52,11 @@ async fn logical_request_handler(
     let mut req_conn = ReqConnection::default();
     req_conn.peer_addr = conn.peer.to_string();
     if conn.tls.is_some() {
-        req_conn.peer_tls_cert = conn.tls.as_ref().unwrap().client_cert_chain.clone();
+        req_conn.peer_tls_cert.clone_from(&conn.tls.as_ref().unwrap().client_cert_chain);
     }
 
     let mut r = request_auth(&req);
-    r.path = path.into_inner().clone();
+    r.path.clone_from(&path.into_inner());
     r.connection = Some(req_conn);
 
     match method {
@@ -103,7 +103,7 @@ fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError
     let mut no_content = true;
 
     if let Some(ref secret) = &resp.secret {
-        logical_resp.lease_id = secret.lease_id.clone();
+        logical_resp.lease_id.clone_from(&secret.lease_id);
         logical_resp.renewable = secret.lease.renewable;
         logical_resp.lease_duration = secret.lease.ttl.as_secs();
         no_content = false;

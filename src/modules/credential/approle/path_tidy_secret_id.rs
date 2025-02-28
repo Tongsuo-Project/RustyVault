@@ -141,7 +141,7 @@ impl AppRoleBackendInner {
 
             let role_name_hmacs = storage.list(secret_id_prefix_to_use)?;
             for item in role_name_hmacs.iter() {
-                let role_name_hmac = item.trim_end_matches("/");
+                let role_name_hmac = item.trim_end_matches('/');
                 log::info!("listing secret id HMACs, role_hame: {}", role_name_hmac);
                 let key = format!("{}{}/", secret_id_prefix_to_use, role_name_hmac);
                 let secret_id_hmacs = storage.list(&key)?;
@@ -157,7 +157,7 @@ impl AppRoleBackendInner {
                 // mean that we fail to clean up something we ought to.
                 let mut all_secret_id_hmacs: HashMap<String, bool> = HashMap::new();
                 for item in role_name_hmacs.iter() {
-                    let role_name_hmac = item.trim_end_matches("/");
+                    let role_name_hmac = item.trim_end_matches('/');
                     let key = format!("{}{}/", secret_id_prefix_to_use, role_name_hmac);
                     let secret_id_hmacs = storage.list(&key)?;
                     for secret_id_hmac in secret_id_hmacs.iter() {

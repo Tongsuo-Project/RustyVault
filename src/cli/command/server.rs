@@ -88,7 +88,7 @@ impl Server {
 
         let mut work_dir = WORK_DIR_PATH_DEFAULT.to_string();
         if !config.work_dir.is_empty() {
-            work_dir = config.work_dir.clone();
+            work_dir.clone_from(&config.work_dir);
         }
 
         if !Path::new(work_dir.as_str()).exists() {
@@ -101,18 +101,18 @@ impl Server {
             // start daemon
             let log_path = format!("{}/rusty_vault.log", work_dir);
             let mut pid_path = config.pid_file.clone();
-            if !config.pid_file.starts_with("/") {
+            if !config.pid_file.starts_with('/') {
                 pid_path = work_dir.clone() + pid_path.as_str();
             }
 
             let mut user = "onbody".to_owned();
             if !config.daemon_user.is_empty() {
-                user = config.daemon_user.clone();
+                user.clone_from(&config.daemon_user);
             }
 
             let mut group = "onbody".to_owned();
             if !config.daemon_group.is_empty() {
-                group = config.daemon_group.clone();
+                group.clone_from(&config.daemon_group);
             }
 
             let log_file = std::fs::OpenOptions::new()

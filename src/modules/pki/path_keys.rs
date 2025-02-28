@@ -359,7 +359,7 @@ impl PkiBackendInner {
         let result = key_bundle.sign(&decoded_data)?;
 
         let resp_data = json!({
-            "result": hex::encode(&result),
+            "result": hex::encode(result),
         })
         .as_object()
         .unwrap()
@@ -404,7 +404,7 @@ impl PkiBackendInner {
         let result = key_bundle.encrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
 
         let resp_data = json!({
-            "result": hex::encode(&result),
+            "result": hex::encode(result),
         })
         .as_object()
         .unwrap()
@@ -426,7 +426,7 @@ impl PkiBackendInner {
         let result = key_bundle.decrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
 
         let resp_data = json!({
-            "result": hex::encode(&result),
+            "result": hex::encode(result),
         })
         .as_object()
         .unwrap()

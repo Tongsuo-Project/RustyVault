@@ -202,7 +202,7 @@ impl FromStr for Policy {
 
         let mut policy = Policy::default();
         policy.raw = s.to_string();
-        policy.name = policy_config.name.clone();
+        policy.name.clone_from(&policy_config.name);
 
         policy.init(&policy_config)?;
 
@@ -229,7 +229,7 @@ impl Policy {
         for attribute in body.attributes() {
             if attribute.key.as_str() == "name" {
                 if let Expression::String(name) = &attribute.expr {
-                    policy_config.name = name.clone();
+                    policy_config.name.clone_from(name);
                 }
             }
         }
@@ -310,7 +310,7 @@ impl Policy {
         for (path, pc) in policy_config.path.iter() {
             let mut rules = PolicyPathRules::default();
             rules.path = ensure_no_leading_slash(path);
-            rules.capabilities = pc.capabilities.clone();
+            rules.capabilities.clone_from(&pc.capabilities);
             rules.min_wrapping_ttl = pc.min_wrapping_ttl;
             rules.max_wrapping_ttl = pc.max_wrapping_ttl;
 
@@ -320,8 +320,8 @@ impl Policy {
 
             // If there are segment wildcards, don't actually strip the
             // trailing asterisk, but don't want to hit the default case
-            if rules.path.ends_with("*") && !rules.has_segment_wildcards {
-                rules.path = rules.path.trim_end_matches("*").to_string();
+            if rules.path.ends_with('*') && !rules.has_segment_wildcards {
+                rules.path = rules.path.trim_end_matches('*').to_string();
                 rules.is_prefix = true;
             }
 
@@ -366,9 +366,9 @@ impl Policy {
             permissions.min_wrapping_ttl = pc.min_wrapping_ttl;
             permissions.max_wrapping_ttl = pc.max_wrapping_ttl;
 
-            permissions.allowed_parameters = pc.allowed_parameters.clone();
-            permissions.denied_parameters = pc.denied_parameters.clone();
-            permissions.required_parameters = pc.required_parameters.clone();
+            permissions.allowed_parameters.clone_from(&pc.allowed_parameters);
+            permissions.denied_parameters.clone_from(&pc.denied_parameters);
+            permissions.required_parameters.clone_from(&pc.required_parameters);
 
             self.paths.push(rules);
         }
@@ -407,7 +407,7 @@ impl Permissions {
         }
 
         if let Some(value) = self.granting_policies_map.get(&cap.to_bits()) {
-            ret.granting_policies = value.clone();
+            ret.granting_policies.clone_from(&value);
         }
 
         let zero_ttl = Duration::from_secs(0);
@@ -532,7 +532,7 @@ impl Permissions {
 
         if !other.allowed_parameters.is_empty() {
             if self.allowed_parameters.is_empty() {
-                self.allowed_parameters = other.allowed_parameters.clone();
+                self.allowed_parameters.clone_from(&other.allowed_parameters);
             } else {
                 for (key, value) in other.allowed_parameters.iter() {
                     if let Some(dst_vec) = self.allowed_parameters.get_mut(key) {
@@ -550,7 +550,7 @@ impl Permissions {
 
         if !other.denied_parameters.is_empty() {
             if self.denied_parameters.is_empty() {
-                self.denied_parameters = other.denied_parameters.clone();
+                self.denied_parameters.clone_from(&other.denied_parameters);
             } else {
                 for (key, value) in other.denied_parameters.iter() {
                     if let Some(dst_vec) = self.denied_parameters.get_mut(key) {

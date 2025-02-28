@@ -84,8 +84,7 @@ impl CertBackendInner {
             return Ok(None);
         }
 
-        let cfg = config.unwrap();
-        let cfg_data = serde_json::to_value(&cfg)?;
+        let cfg_data = serde_json::to_value(config.unwrap())?;
 
         Ok(Some(Response::data_response(Some(cfg_data.as_object().unwrap().clone()))))
     }

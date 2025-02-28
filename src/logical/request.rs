@@ -174,7 +174,7 @@ impl Request {
         if self.data.is_some() {
             if let Some(secret_str) = self.data.as_mut().unwrap().get_mut(key) {
                 if let Value::String(ref mut s) = *secret_str {
-                    *s = "".to_owned();
+                    "".clone_into(s);
                 }
             }
         }
@@ -182,7 +182,7 @@ impl Request {
         if self.body.is_some() {
             if let Some(secret_str) = self.body.as_mut().unwrap().get_mut(key) {
                 if let Value::String(ref mut s) = *secret_str {
-                    *s = "".to_owned();
+                    "".clone_into(s);
                 }
             }
         }

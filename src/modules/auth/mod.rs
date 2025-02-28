@@ -87,7 +87,7 @@ impl AuthModule {
             let mut auth_table = router_store.mounts.entries.write()?;
             let mut entry = me.clone();
 
-            if !entry.path.ends_with("/") {
+            if !entry.path.ends_with('/') {
                 entry.path += "/";
             }
 
@@ -142,7 +142,7 @@ impl AuthModule {
         let router_store = self.router_store.read()?;
 
         let mut path = path.to_string();
-        if !path.ends_with("/") {
+        if !path.ends_with('/') {
             path += "/";
         }
 
@@ -172,11 +172,11 @@ impl AuthModule {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
-        if !src.ends_with("/") {
+        if !src.ends_with('/') {
             src += "/";
         }
 
-        if !dst.ends_with("/") {
+        if !dst.ends_with('/') {
             dst += "/";
         }
 

@@ -157,7 +157,7 @@ impl Client {
     }
 
     pub fn request(&self, method: &str, path: &str, data: Option<Map<String, Value>>) -> Result<HttpResponse, RvError> {
-        let url = if path.starts_with("/") {
+        let url = if path.starts_with('/') {
             format!("{}{}", self.address, path)
         } else {
             format!("{}/{}", self.address, path)

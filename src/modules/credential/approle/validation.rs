@@ -381,7 +381,7 @@ pub fn verify_cidr_role_secret_id_subset(
     if !secret_id_cidrs.is_empty() && !role_bound_cidr_list.is_empty() {
         let cidr_list: Vec<String> = role_bound_cidr_list
             .iter()
-            .map(|cidr| if cidr.contains("/") { cidr.clone() } else { format!("{}/32", cidr) })
+            .map(|cidr| if cidr.contains('/') { cidr.clone() } else { format!("{}/32", cidr) })
             .collect();
 
         let cidr_list_ref: Vec<&str> = cidr_list.iter().map(String::as_str).collect();

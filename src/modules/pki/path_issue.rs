@@ -159,7 +159,7 @@ impl PkiBackendInner {
         let cert_bundle = cert.to_cert_bundle(Some(&ca_bundle.certificate), Some(&ca_bundle.private_key))?;
 
         if !role_entry.no_store {
-            let serial_number_hex = cert_bundle.serial_number.replace(":", "-").to_lowercase();
+            let serial_number_hex = cert_bundle.serial_number.replace(':', "-").to_lowercase();
             self.store_cert(req, &serial_number_hex, &cert_bundle.certificate)?;
         }
 

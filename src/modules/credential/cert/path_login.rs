@@ -658,7 +658,7 @@ impl CertBackendInner {
         let mut allowed_oid_map: HashMap<String, String> = HashMap::new();
 
         for oid_string in config.entry.allowed_metadata_extensions.iter() {
-            allowed_oid_map.insert(oid_string.clone(), oid_string.replace(".", "-"));
+            allowed_oid_map.insert(oid_string.clone(), oid_string.replace('.', "-"));
         }
 
         unsafe {
