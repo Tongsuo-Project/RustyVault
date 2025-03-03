@@ -232,6 +232,7 @@ then the next renew will cause the lease to expire.
     }
 }
 
+#[allow(clippy::assigning_clones)]
 impl CertBackendInner {
     pub fn get_cert(&self, req: &Request, name: &str) -> Result<Option<CertEntry>, RvError> {
         let key = format!("cert/{}", name.to_lowercase());
@@ -308,7 +309,7 @@ impl CertBackendInner {
         if entry.is_some() {
             cert_entry = entry.unwrap();
         } else {
-            cert_entry.name = name.clone();
+            cert_entry.name.clone_from(&name);
         }
 
         if let Ok(certificate_raw) = req.get_data("certificate") {
@@ -395,7 +396,7 @@ impl CertBackendInner {
             cert_entry.policies = cert_entry.token_policies.clone();
         } else if let Ok(policies_value) = req.get_data("policies") {
             let policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.policies = policies.clone();
+            cert_entry.policies.clone_from(&policies);
             cert_entry.token_policies = policies;
         }
 
@@ -439,7 +440,7 @@ impl CertBackendInner {
         }
 
         if cert_entry.display_name.is_empty() {
-            cert_entry.display_name = name.clone();
+            cert_entry.display_name.clone_from(&name);
         }
 
         //TODO: TTL check

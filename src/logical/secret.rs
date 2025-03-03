@@ -40,7 +40,7 @@ impl Secret {
         let mut secret = SecretData { lease, lease_id: String::new(), internal_data: Map::new() };
 
         if internal.is_some() {
-            secret.internal_data = internal.as_ref().unwrap().clone();
+            secret.internal_data.clone_from(internal.as_ref().unwrap());
         }
 
         secret.internal_data.insert("secret_type".to_owned(), Value::String(self.secret_type.clone()));

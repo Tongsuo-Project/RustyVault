@@ -227,7 +227,7 @@ impl ExpirationManager {
 
         le.data = resp.data.clone().unwrap_or(Map::new());
         le.expire_time = resp.secret.as_ref().unwrap().expiration_time();
-        le.secret = resp.secret.clone();
+        le.secret.clone_from(&resp.secret);
 
         self.persist_lease_entry(&le)?;
         self.register_lease_entry(Arc::new(le))?;
@@ -278,7 +278,7 @@ impl ExpirationManager {
             auth.explicit_max_ttl,
             le.issue_time,
         )?;
-        auth.client_token = te.id.clone();
+        auth.client_token.clone_from(&te.id);
 
         le.expire_time = auth.expiration_time();
         le.auth = Some(auth.clone());
@@ -305,7 +305,7 @@ impl ExpirationManager {
 
             let lease_id = format!("{}/{}", req.path, generate_uuid());
 
-            secret.lease_id = lease_id.clone();
+            secret.lease_id.clone_from(&lease_id);
 
             let le = LeaseEntry {
                 lease_id: lease_id.clone(),
@@ -401,7 +401,7 @@ impl ExpirationManager {
     /// Revokes all lease entries with a given prefix.
     pub fn revoke_prefix(&self, prefix: &str) -> Result<(), RvError> {
         let mut prefix = prefix.to_string();
-        if !prefix.ends_with("/") {
+        if !prefix.ends_with('/') {
             prefix += "/";
         }
 
@@ -655,7 +655,7 @@ impl ExpirationManager {
         if le.auth.is_some() {
             let mut au = le.auth.as_ref().unwrap().clone();
             if le.path.starts_with("auth/token/") {
-                au.client_token = le.client_token.clone();
+                au.client_token.clone_from(&le.client_token);
             } else {
                 au.client_token = "".to_string();
             }

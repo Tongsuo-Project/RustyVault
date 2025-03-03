@@ -317,7 +317,7 @@ impl PkiBackendInner {
 
     pub fn read_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let role_entry = self.get_role(req, req.get_data("name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
-        let data = serde_json::to_value(&role_entry)?;
+        let data = serde_json::to_value(role_entry)?;
         Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))))
     }
 

@@ -131,6 +131,7 @@ then the next renew will cause the lease to expire.
     }
 }
 
+#[allow(clippy::assigning_clones)]
 impl UserPassBackendInner {
     pub fn get_user(&self, req: &mut Request, name: &str) -> Result<Option<UserEntry>, RvError> {
         let key = format!("user/{}", name.to_lowercase());
@@ -239,7 +240,7 @@ impl UserPassBackendInner {
             user_entry.policies = user_entry.token_policies.clone();
         } else if let Ok(policies_value) = req.get_data("policies") {
             let policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-            user_entry.policies = policies.clone();
+            user_entry.policies.clone_from(&policies);
             user_entry.token_policies = policies;
         }
 

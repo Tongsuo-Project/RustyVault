@@ -312,8 +312,8 @@ fn load_config_file(path: &str) -> Result<Config, RvError> {
 }
 
 fn set_config_type_field(config: &mut Config) -> Result<(), RvError> {
-    config.storage.iter_mut().for_each(|(key, value)| value.stype = key.clone());
-    config.listener.iter_mut().for_each(|(key, value)| value.ltype = key.clone());
+    config.storage.iter_mut().for_each(|(key, value)| value.stype.clone_from(key));
+    config.listener.iter_mut().for_each(|(key, value)| value.ltype.clone_from(key));
     Ok(())
 }
 

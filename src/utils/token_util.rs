@@ -198,7 +198,7 @@ impl TokenParams {
     pub fn populate_token_auth(&self, auth: &mut Auth) {
         auth.ttl = self.token_ttl;
         auth.max_ttl = self.token_max_ttl;
-        auth.policies = self.token_policies.clone();
+        auth.policies.clone_from(&self.token_policies);
         auth.no_default_policy = self.token_no_default_policy;
         auth.renewable = true;
     }

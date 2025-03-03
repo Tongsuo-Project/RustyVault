@@ -251,7 +251,7 @@ impl ACL {
         }
 
         if req.operation == Operation::List {
-            if let Some(perm) = self.exact_rules.get(path.trim_end_matches("/")) {
+            if let Some(perm) = self.exact_rules.get(path.trim_end_matches('/')) {
                 return perm.check(req, check_only);
             }
         }

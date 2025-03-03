@@ -45,7 +45,7 @@ impl Salt {
         let mut salt = Salt::default();
         if let Some(c) = config {
             if salt.config.location != c.location && !c.location.is_empty() {
-                salt.config.location = c.location.clone();
+                salt.config.location.clone_from(&c.location);
             }
 
             if salt.config.hash_type != c.hash_type {

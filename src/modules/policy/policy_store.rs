@@ -451,7 +451,7 @@ impl PolicyStore {
         }
 
         let mut policy = Policy::from_str(policy_text)?;
-        policy.name = name.clone();
+        policy.name.clone_from(&name);
         policy.policy_type = PolicyType::Acl;
 
         self.set_policy_internal(Arc::new(policy))

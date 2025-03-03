@@ -21,7 +21,7 @@ pub struct FileBackend {
 
 impl Backend for FileBackend {
     fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
-        if prefix.starts_with("/") {
+        if prefix.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendPrefixInvalid);
         }
 
@@ -51,7 +51,7 @@ impl Backend for FileBackend {
     }
 
     fn get(&self, k: &str) -> Result<Option<BackendEntry>, RvError> {
-        if k.starts_with("/") {
+        if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
 
@@ -60,7 +60,7 @@ impl Backend for FileBackend {
 
         let _lock = self.lock.lock().unwrap();
 
-        match File::open(&path) {
+        match File::open(path) {
             Ok(mut file) => {
                 let mut buffer = String::new();
                 file.read_to_string(&mut buffer)?;
@@ -79,29 +79,29 @@ impl Backend for FileBackend {
 
     fn put(&self, entry: &BackendEntry) -> Result<(), RvError> {
         let k = entry.key.as_str();
-        if k.starts_with("/") {
+        if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
 
         let _lock = self.lock.lock().unwrap();
         let (path, key) = self.path_key(k);
         fs::create_dir_all(&path)?;
-        let file_path = path.join(&key);
-        let mut file = File::create(&file_path)?;
+        let file_path = path.join(key);
+        let mut file = File::create(file_path)?;
         let serialized_entry = serde_json::to_string(entry)?;
         file.write_all(serialized_entry.as_bytes())?;
         Ok(())
     }
 
     fn delete(&self, k: &str) -> Result<(), RvError> {
-        if k.starts_with("/") {
+        if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
 
         let _lock = self.lock.lock().unwrap();
         let (path, key) = self.path_key(k);
         let file_path = path.join(key);
-        if let Err(err) = fs::remove_file(&file_path) {
+        if let Err(err) = fs::remove_file(file_path) {
             if err.kind() == io::ErrorKind::NotFound {
                 return Ok(());
             } else {
