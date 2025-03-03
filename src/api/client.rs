@@ -93,18 +93,16 @@ impl TLSConfigBuilder {
         let builder = if self.insecure {
             log::debug!("Certificate verification disabled");
             builder.dangerous().with_custom_certificate_verifier(Arc::new(DisabledVerifier))
-        } else {
-            if let Some(server_ca) = &self.server_ca_pem {
-                let mut cert_reader = BufReader::new(&server_ca[..]);
-                let root_certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
+        } else if let Some(server_ca) = &self.server_ca_pem {
+            let mut cert_reader = BufReader::new(&server_ca[..]);
+            let root_certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>()?;
 
-                let mut root_store = RootCertStore::empty();
-                let (_added, _ignored) = root_store.add_parsable_certificates(root_certs);
-                builder.with_root_certificates(root_store)
-            } else {
-                let root_store = RootCertStore { roots: TLS_SERVER_ROOTS.to_vec() };
-                builder.with_root_certificates(root_store)
-            }
+            let mut root_store = RootCertStore::empty();
+            let (_added, _ignored) = root_store.add_parsable_certificates(root_certs);
+            builder.with_root_certificates(root_store)
+        } else {
+            let root_store = RootCertStore { roots: TLS_SERVER_ROOTS.to_vec() };
+            builder.with_root_certificates(root_store)
         };
 
         let client_config =
@@ -159,7 +157,7 @@ impl Client {
     }
 
     pub fn request(&self, method: &str, path: &str, data: Option<Map<String, Value>>) -> Result<HttpResponse, RvError> {
-        let url = if path.starts_with("/") {
+        let url = if path.starts_with('/') {
             format!("{}{}", self.address, path)
         } else {
             format!("{}/{}", self.address, path)
@@ -185,18 +183,18 @@ impl Client {
                 }
                 let json: Value = response.into_json()?;
                 ret.response_data = Some(json);
-                return Ok(ret.clone());
+                Ok(ret.clone())
             }
             Err(ureq::Error::Status(status, response)) => {
                 ret.response_status = status;
                 if let Ok(response_data) = response.into_json() {
                     ret.response_data = Some(response_data);
                 }
-                return Ok(ret.clone());
+                Ok(ret.clone())
             }
             Err(e) => {
                 log::error!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }

@@ -545,9 +545,9 @@ mod crypto_test {
         let mut v1: Vec<u8> = vec![0; data_len + 16];
         let mut v2: Vec<u8> = vec![0; data_len + 16];
         let mut v3: Vec<u8> = vec![0; data_len + 16];
-        let mut count = aes_encrypter.encrypt_update((&data[0]).to_vec(), &mut v1).unwrap();
+        let mut count = aes_encrypter.encrypt_update(data[0].to_vec(), &mut v1).unwrap();
         v1.truncate(count);
-        count = aes_encrypter.encrypt_update((&data[1]).to_vec(), &mut v2).unwrap();
+        count = aes_encrypter.encrypt_update(data[1].to_vec(), &mut v2).unwrap();
         v2.truncate(count);
         count = aes_encrypter.encrypt_final(&mut v3).unwrap();
         v3.truncate(count);
@@ -563,9 +563,9 @@ mod crypto_test {
         // separate ciphertext into 2 pieces.
         let cts = [&ct[..9], &ct[9..]];
 
-        count = aes_decrypter.decrypt_update((&cts[0]).to_vec(), &mut pt1).unwrap();
+        count = aes_decrypter.decrypt_update(cts[0].to_vec(), &mut pt1).unwrap();
         pt1.truncate(count);
-        count = aes_decrypter.decrypt_update((&cts[1]).to_vec(), &mut pt2).unwrap();
+        count = aes_decrypter.decrypt_update(cts[1].to_vec(), &mut pt2).unwrap();
         pt2.truncate(count);
         count = aes_decrypter.decrypt_final(&mut pt3).unwrap();
         pt3.truncate(count);
@@ -597,9 +597,9 @@ mod crypto_test {
         let mut v1: Vec<u8> = vec![0; data_len + 16];
         let mut v2: Vec<u8> = vec![0; data_len + 16];
         let mut v3: Vec<u8> = vec![0; data_len + 16];
-        let mut count = aes_encrypter.encrypt_update((&data[0]).to_vec(), &mut v1).unwrap();
+        let mut count = aes_encrypter.encrypt_update(data[0].to_vec(), &mut v1).unwrap();
         v1.truncate(count);
-        count = aes_encrypter.encrypt_update((&data[1]).to_vec(), &mut v2).unwrap();
+        count = aes_encrypter.encrypt_update(data[1].to_vec(), &mut v2).unwrap();
         v2.truncate(count);
         count = aes_encrypter.encrypt_final(&mut v3).unwrap();
         v3.truncate(count);
@@ -618,9 +618,9 @@ mod crypto_test {
         let mut pt3: Vec<u8> = vec![0; data_len2 + 16];
         let mut pt: Vec<u8> = vec![];
         let cts = [&ct[..9], &ct[9..]];
-        count = aes_decrypter.decrypt_update((&cts[0]).to_vec(), &mut pt1).unwrap();
+        count = aes_decrypter.decrypt_update(cts[0].to_vec(), &mut pt1).unwrap();
         pt1.truncate(count);
-        count = aes_decrypter.decrypt_update((&cts[1]).to_vec(), &mut pt2).unwrap();
+        count = aes_decrypter.decrypt_update(cts[1].to_vec(), &mut pt2).unwrap();
         pt2.truncate(count);
         count = aes_decrypter.decrypt_final(&mut pt3).unwrap();
         pt3.truncate(count);

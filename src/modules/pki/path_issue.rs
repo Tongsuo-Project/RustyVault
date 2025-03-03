@@ -70,13 +70,13 @@ impl PkiBackendInner {
 
         let common_name_value = req.get_data_or_default("common_name")?;
         let common_name = common_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if common_name != "" {
+        if !common_name.is_empty() {
             common_names.push(common_name.to_string());
         }
 
         if let Ok(alt_names_value) = req.get_data("alt_names") {
             let alt_names = alt_names_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if alt_names != "" {
+            if !alt_names.is_empty() {
                 for v in alt_names.split(',') {
                     common_names.push(v.to_string());
                 }
@@ -93,7 +93,7 @@ impl PkiBackendInner {
         let mut ip_sans = Vec::new();
         if let Ok(ip_sans_value) = req.get_data("ip_sans") {
             let ip_sans_str = ip_sans_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if ip_sans_str != "" {
+            if !ip_sans_str.is_empty() {
                 for v in ip_sans_str.split(',') {
                     ip_sans.push(v.to_string());
                 }
@@ -125,22 +125,22 @@ impl PkiBackendInner {
         }
 
         let mut subject_name = X509NameBuilder::new().unwrap();
-        if role_entry.country.len() > 0 {
+        if !role_entry.country.is_empty() {
             subject_name.append_entry_by_text("C", &role_entry.country).unwrap();
         }
-        if role_entry.province.len() > 0 {
+        if !role_entry.province.is_empty() {
             subject_name.append_entry_by_text("ST", &role_entry.province).unwrap();
         }
-        if role_entry.locality.len() > 0 {
+        if !role_entry.locality.is_empty() {
             subject_name.append_entry_by_text("L", &role_entry.locality).unwrap();
         }
-        if role_entry.organization.len() > 0 {
+        if !role_entry.organization.is_empty() {
             subject_name.append_entry_by_text("O", &role_entry.organization).unwrap();
         }
-        if role_entry.ou.len() > 0 {
+        if !role_entry.ou.is_empty() {
             subject_name.append_entry_by_text("OU", &role_entry.ou).unwrap();
         }
-        if common_name != "" {
+        if !common_name.is_empty() {
             subject_name.append_entry_by_text("CN", common_name).unwrap();
         }
         let subject = subject_name.build();
@@ -159,7 +159,7 @@ impl PkiBackendInner {
         let cert_bundle = cert.to_cert_bundle(Some(&ca_bundle.certificate), Some(&ca_bundle.private_key))?;
 
         if !role_entry.no_store {
-            let serial_number_hex = cert_bundle.serial_number.replace(":", "-").to_lowercase();
+            let serial_number_hex = cert_bundle.serial_number.replace(':', "-").to_lowercase();
             self.store_cert(req, &serial_number_hex, &cert_bundle.certificate)?;
         }
 
@@ -197,9 +197,9 @@ impl PkiBackendInner {
             secret.lease.ttl = Duration::from_secs(cert_expiration as u64) - now_timestamp;
             secret.lease.renewable = true;
 
-            return Ok(Some(resp));
+            Ok(Some(resp))
         } else {
-            return Ok(Some(Response::data_response(Some(resp_data))));
+            Ok(Some(Response::data_response(Some(resp_data))))
         }
     }
 }

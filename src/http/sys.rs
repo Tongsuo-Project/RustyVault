@@ -107,10 +107,8 @@ async fn sys_init_put_request_handler(
     let mut core = core.write()?;
     let result = core.init(&seal_config)?;
 
-    let resp = InitResponse {
-        keys: result.secret_shares.iter().map(|key| hex::encode(key)).collect(),
-        root_token: result.root_token,
-    };
+    let resp =
+        InitResponse { keys: result.secret_shares.iter().map(hex::encode).collect(), root_token: result.root_token };
 
     Ok(response_json_ok(None, resp))
 }
@@ -170,7 +168,7 @@ async fn sys_mount_request_handler(
     let payload = serde_json::from_slice(&body)?;
     body.clear();
     let mount_path = path.into_inner();
-    if mount_path.len() == 0 {
+    if mount_path.is_empty() {
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 
@@ -188,7 +186,7 @@ async fn sys_unmount_request_handler(
     core: web::Data<Arc<RwLock<Core>>>,
 ) -> Result<HttpResponse, RvError> {
     let mount_path = path.into_inner();
-    if mount_path.len() == 0 {
+    if mount_path.is_empty() {
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 
@@ -237,7 +235,7 @@ async fn sys_auth_enable_request_handler(
     let payload = serde_json::from_slice(&body)?;
     body.clear();
     let mount_path = path.into_inner();
-    if mount_path.len() == 0 {
+    if mount_path.is_empty() {
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 
@@ -255,7 +253,7 @@ async fn sys_auth_disable_request_handler(
     core: web::Data<Arc<RwLock<Core>>>,
 ) -> Result<HttpResponse, RvError> {
     let mount_path = path.into_inner();
-    if mount_path.len() == 0 {
+    if mount_path.is_empty() {
         return Ok(response_error(StatusCode::NOT_FOUND, ""));
     }
 

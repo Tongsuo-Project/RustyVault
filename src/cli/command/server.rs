@@ -59,7 +59,7 @@ impl Server {
                 Ok(_) => EXIT_CODE_OK,
                 Err(e) => {
                     println!("server error: {:?}", e);
-                    EXIT_CODE_LOAD_CONFIG_FAILURE
+                    std::process::exit(EXIT_CODE_LOAD_CONFIG_FAILURE as i32);
                 }
             };
         }
@@ -68,7 +68,7 @@ impl Server {
     }
 
     pub fn main(&self, config_path: &PathBuf) -> Result<(), RvError> {
-        let config = config::load_config(&*config_path.to_string_lossy())?;
+        let config = config::load_config(&config_path.to_string_lossy())?;
 
         if config.storage.len() != 1 {
             return Err(RvError::ErrConfigStorageNotFound);
@@ -88,7 +88,7 @@ impl Server {
 
         let mut work_dir = WORK_DIR_PATH_DEFAULT.to_string();
         if !config.work_dir.is_empty() {
-            work_dir = config.work_dir.clone();
+            work_dir.clone_from(&config.work_dir);
         }
 
         if !Path::new(work_dir.as_str()).exists() {
@@ -101,23 +101,22 @@ impl Server {
             // start daemon
             let log_path = format!("{}/rusty_vault.log", work_dir);
             let mut pid_path = config.pid_file.clone();
-            if !config.pid_file.starts_with("/") {
+            if !config.pid_file.starts_with('/') {
                 pid_path = work_dir.clone() + pid_path.as_str();
             }
 
             let mut user = "onbody".to_owned();
             if !config.daemon_user.is_empty() {
-                user = config.daemon_user.clone();
+                user.clone_from(&config.daemon_user);
             }
 
             let mut group = "onbody".to_owned();
             if !config.daemon_group.is_empty() {
-                group = config.daemon_group.clone();
+                group.clone_from(&config.daemon_group);
             }
 
             let log_file = std::fs::OpenOptions::new()
                 .read(true)
-                .write(true)
                 .append(true)
                 .create(true)
                 .truncate(false)
@@ -170,7 +169,7 @@ impl Server {
                 .app_data(web::Data::new(Arc::clone(&core)))
                 .app_data(web::Data::new(Arc::clone(&metrics_manager)))
                 .configure(http::init_service)
-                .default_service(web::to(|| HttpResponse::NotFound()))
+                .default_service(web::to(HttpResponse::NotFound))
         })
         .on_connect(http::request_on_connect_handler);
 
@@ -213,11 +212,9 @@ impl Server {
             }
 
             if listener.tls_require_and_verify_client_cert {
-                builder.set_verify_callback(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT, move |p, _x| {
-                    return p;
-                });
+                builder.set_verify_callback(SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT, move |p, _x| p);
 
-                if listener.tls_client_ca_file.len() > 0 {
+                if !listener.tls_client_ca_file.is_empty() {
                     let mut store = X509StoreBuilder::new()?;
 
                     let mut client_ca_file = File::open(&listener.tls_client_ca_file)?;

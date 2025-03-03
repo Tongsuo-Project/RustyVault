@@ -56,7 +56,7 @@ impl BarrierView {
             let items = self.list(curr.as_str())?;
             for p in items {
                 let path = format!("{}{}", curr, p);
-                if p.ends_with("/") {
+                if p.ends_with('/') {
                     paths.push(path);
                 } else {
                     keys.push(path.to_owned());
@@ -80,7 +80,7 @@ impl BarrierView {
     }
 
     fn sanity_check(&self, key: &str) -> Result<(), RvError> {
-        if key.contains("..") || key.starts_with("/") {
+        if key.contains("..") || key.starts_with('/') {
             Err(RvError::ErrBarrierKeySanityCheckFailed)
         } else {
             Ok(())
@@ -93,9 +93,9 @@ impl BarrierView {
 
     fn truncate_key(&self, full: &str) -> String {
         if let Some(result) = full.strip_prefix(self.prefix.as_str()) {
-            return result.to_string();
+            result.to_string()
         } else {
-            return full.to_string();
+            full.to_string()
         }
     }
 }

@@ -130,7 +130,7 @@ impl CertBackendInner {
         auth.metadata.insert("subject_key_id".into(), skid_hex);
         auth.metadata.insert("authority_key_id".into(), akid_hex);
 
-        auth.metadata.extend(self.certificate_extensions_metadata(&client_cert, &matched));
+        auth.metadata.extend(self.certificate_extensions_metadata(client_cert, &matched));
 
         auth.internal_data.insert("subject_key_id".into(), skid_base64);
         auth.internal_data.insert("authority_key_id".into(), akid_base64);
@@ -246,7 +246,7 @@ impl CertBackendInner {
             if crt.serial_number() == client_cert.serial_number()
                 && crt_key_id.unwrap().as_slice() == client_key_id.unwrap().as_slice()
             {
-                match self.matches_constraints(&client_cert, &trust.certs, trust, &ocsp_config) {
+                match self.matches_constraints(client_cert, &trust.certs, trust, &ocsp_config) {
                     Ok(true) => return Ok(trust.clone()),
                     Err(e) => ret_err.push(e),
                     _ => {}
@@ -267,7 +267,7 @@ impl CertBackendInner {
 
         for trust in trusted.iter() {
             if trust.certs.iter().any(|crt| trusted_chains.contains(crt)) {
-                match self.matches_constraints(&client_cert, &trusted_chains, trust, &ocsp_config) {
+                match self.matches_constraints(client_cert, &trusted_chains, trust, &ocsp_config) {
                     Ok(true) => return Ok(trust.clone()),
                     Err(e) => ret_err.push(e),
                     _ => {}
@@ -283,7 +283,7 @@ impl CertBackendInner {
             )));
         }
 
-        return Err(rv_error_response!("no chain matching all constraints could be found for this login certificate"));
+        Err(rv_error_response!("no chain matching all constraints could be found for this login certificate"))
     }
 
     fn load_trusted_certs(
@@ -358,7 +358,7 @@ impl CertBackendInner {
                         })
                         .collect()
                 })
-                .unwrap_or_else(Vec::new);
+                .unwrap_or_default();
 
             Ok((ret, ctx.error(), verified_chains))
         })?;
@@ -402,7 +402,7 @@ impl CertBackendInner {
             ret = ret && ocsp_ret;
         }
 
-        return Ok(ret);
+        Ok(ret)
     }
 
     fn matches_names(&self, client_cert: &X509, config: &ParsedCert) -> bool {
@@ -636,7 +636,7 @@ impl CertBackendInner {
                 let is_match = client_ext_map
                     .get(req_ext[0])
                     .and_then(|client_ext_value| {
-                        Pattern::new(&req_ext[1]).ok().filter(|pattern| pattern.matches(client_ext_value))
+                        Pattern::new(req_ext[1]).ok().filter(|pattern| pattern.matches(client_ext_value))
                     })
                     .is_some();
 
@@ -646,7 +646,7 @@ impl CertBackendInner {
             }
         }
 
-        return true;
+        true
     }
 
     fn certificate_extensions_metadata(&self, client_cert: &X509, config: &ParsedCert) -> HashMap<String, String> {
@@ -658,7 +658,7 @@ impl CertBackendInner {
         let mut allowed_oid_map: HashMap<String, String> = HashMap::new();
 
         for oid_string in config.entry.allowed_metadata_extensions.iter() {
-            allowed_oid_map.insert(oid_string.clone(), oid_string.replace(".", "-"));
+            allowed_oid_map.insert(oid_string.clone(), oid_string.replace('.', "-"));
         }
 
         unsafe {
@@ -683,7 +683,7 @@ impl CertBackendInner {
             }
         }
 
-        return metadata_map;
+        metadata_map
     }
 
     fn check_for_cert_in_ocsp(
@@ -698,7 +698,7 @@ impl CertBackendInner {
 
         //TODO
         //let err = self.ocsp_client.verify_leaf_certificate(client_cert, chain, ocsp_config)?;
-        return Ok(true);
+        Ok(true)
     }
 
     fn check_for_chain_in_crls(&self, chain: &[X509]) -> bool {

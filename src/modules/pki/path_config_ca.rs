@@ -127,7 +127,7 @@ impl PkiBackendInner {
         entry.value = ca_bundle.certificate.to_pem().unwrap();
         req.storage_put(&entry)?;
 
-        let serial_number_hex = ca_bundle.serial_number.replace(":", "-").to_lowercase();
+        let serial_number_hex = ca_bundle.serial_number.replace(':', "-").to_lowercase();
         self.store_cert(req, &serial_number_hex, &ca_bundle.certificate)?;
 
         Ok(())
@@ -135,7 +135,7 @@ impl PkiBackendInner {
 
     pub fn delete_ca_bundle(&self, req: &Request) -> Result<(), RvError> {
         let ca_bundle = self.fetch_ca_bundle(req)?;
-        let serial_number_hex = ca_bundle.serial_number.replace(":", "-").to_lowercase();
+        let serial_number_hex = ca_bundle.serial_number.replace(':', "-").to_lowercase();
 
         self.delete_cert(req, &serial_number_hex)?;
 

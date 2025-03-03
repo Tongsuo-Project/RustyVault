@@ -151,7 +151,7 @@ impl AppRoleModule {
 
 impl Module for AppRoleModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {
@@ -216,6 +216,7 @@ mod test {
         test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
     };
 
+    #[maybe_async::maybe_async]
     pub async fn test_read_role(
         core: &Core,
         token: &str,
@@ -227,6 +228,7 @@ mod test {
         resp
     }
 
+    #[maybe_async::maybe_async]
     pub async fn test_write_role(
         core: &Core,
         token: &str,
@@ -248,7 +250,7 @@ mod test {
         .unwrap()
         .clone();
 
-        if role_id == "" {
+        if role_id.is_empty() {
             role_data.remove("role_id");
         }
 
@@ -257,12 +259,13 @@ mod test {
                 .await;
     }
 
+    #[maybe_async::maybe_async]
     pub async fn test_delete_role(core: &Core, token: &str, path: &str, role_name: &str) {
-        assert!(test_delete_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None)
-            .await
-            .is_ok());
+        let resp = test_delete_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None).await;
+        assert!(resp.is_ok());
     }
 
+    #[maybe_async::maybe_async]
     pub async fn generate_secret_id(core: &Core, token: &str, path: &str, role_name: &str) -> (String, String) {
         let resp =
             test_write_api(core, token, format!("auth/{}/role/{}/secret-id", path, role_name).as_str(), true, None)
@@ -275,6 +278,7 @@ mod test {
         (secret_id.to_string(), secret_id_accessor.to_string())
     }
 
+    #[maybe_async::maybe_async]
     pub async fn test_login(
         core: &Core,
         path: &str,
@@ -308,6 +312,7 @@ mod test {
         resp
     }
 
+    #[maybe_async::maybe_async]
     async fn test_approle(core: &Core, token: &str, path: &str, role_name: &str) {
         // Create a role
         let resp = test_write_api(core, token, format!("auth/{}/role/{}", path, role_name).as_str(), true, None).await;
@@ -460,6 +465,7 @@ mod test {
         let _ = test_login(core, path, role_id, &secret_id, false).await;
     }
 
+    #[maybe_async::maybe_async]
     async fn test_approle_role_service(core: &Core, token: &str, path: &str, role_name: &str) {
         // Create a role
         let mut data = json!({
@@ -549,7 +555,7 @@ mod test {
         println!("resp_data: {:?}", resp_data);
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_credential_approle_module() {
         let (root_token, core) = test_rusty_vault_init("test_approle_module");
         let core = core.read().unwrap();

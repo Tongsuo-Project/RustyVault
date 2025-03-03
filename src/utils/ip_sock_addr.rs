@@ -23,11 +23,7 @@ impl IpSockAddr {
         } else if let Ok(ip_addr) = IpNetwork::from_str(s) {
             return Ok(IpSockAddr { addr: ip_addr, port: 0 });
         }
-        return Err(RvError::ErrResponse(format!("Unable to parse {} to an IP address:", s)));
-    }
-
-    pub fn to_string(&self) -> String {
-        format!("{}", self)
+        Err(RvError::ErrResponse(format!("Unable to parse {} to an IP address:", s)))
     }
 }
 

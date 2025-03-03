@@ -93,9 +93,9 @@ pub struct RoleIdEntry {
 impl RoleEntry {
     pub fn validate_role_constraints(&self) -> Result<(), RvError> {
         if self.bind_secret_id
-            || self.bound_cidr_list.len() > 0
-            || self.secret_id_bound_cidrs.len() > 0
-            || self.token_bound_cidrs.len() > 0
+            || !self.bound_cidr_list.is_empty()
+            || !self.secret_id_bound_cidrs.is_empty()
+            || !self.token_bound_cidrs.is_empty()
         {
             return Ok(());
         }
@@ -889,35 +889,37 @@ or 'secret_id_ttl' option on the role, and/or the backend mount's maximum TTL va
     }
 
     pub fn role_paths(&self) -> Vec<Path> {
-        let mut paths: Vec<Path> = Vec::with_capacity(21);
-        paths.push(self.role_path());
-        paths.push(self.role_name_path());
-        paths.push(self.role_policies_path());
-        paths.push(self.role_local_secret_ids_path());
-        paths.push(self.role_bound_cidr_list_path());
-        paths.push(self.role_secret_id_bound_cidrs_path());
-        paths.push(self.role_token_bound_cidrs_path());
-        paths.push(self.role_bind_secret_id_path());
-        paths.push(self.role_secret_id_num_uses_path());
-        paths.push(self.role_secret_id_ttl_path());
-        paths.push(self.role_period_path());
-        paths.push(self.role_token_num_uses_path());
-        paths.push(self.role_token_ttl_path());
-        paths.push(self.role_token_max_ttl_path());
-        paths.push(self.role_role_id_path());
-        paths.push(self.role_secret_id_path());
-        paths.push(self.role_secret_id_lookup_path());
-        paths.push(self.role_secret_id_destroy_path());
-        paths.push(self.role_secret_id_accessor_lookup_path());
-        paths.push(self.role_secret_id_accessor_destroy_path());
-        paths.push(self.role_custom_secret_id_path());
+        let paths: Vec<Path> = vec![
+            self.role_path(),
+            self.role_name_path(),
+            self.role_policies_path(),
+            self.role_local_secret_ids_path(),
+            self.role_bound_cidr_list_path(),
+            self.role_secret_id_bound_cidrs_path(),
+            self.role_token_bound_cidrs_path(),
+            self.role_bind_secret_id_path(),
+            self.role_secret_id_num_uses_path(),
+            self.role_secret_id_ttl_path(),
+            self.role_period_path(),
+            self.role_token_num_uses_path(),
+            self.role_token_ttl_path(),
+            self.role_token_max_ttl_path(),
+            self.role_role_id_path(),
+            self.role_secret_id_path(),
+            self.role_secret_id_lookup_path(),
+            self.role_secret_id_destroy_path(),
+            self.role_secret_id_accessor_lookup_path(),
+            self.role_secret_id_accessor_destroy_path(),
+            self.role_custom_secret_id_path(),
+        ];
         paths
     }
 }
 
+#[allow(clippy::assigning_clones)]
 impl AppRoleBackendInner {
     pub fn get_role_id(&self, req: &mut Request, role_id: &str) -> Result<Option<RoleIdEntry>, RvError> {
-        if role_id == "" {
+        if role_id.is_empty() {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
@@ -952,7 +954,7 @@ impl AppRoleBackendInner {
     }
 
     pub fn delete_role_id(&self, req: &mut Request, role_id: &str) -> Result<(), RvError> {
-        if role_id == "" {
+        if role_id.is_empty() {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
@@ -983,18 +985,18 @@ impl AppRoleBackendInner {
             role_entry.name = name.to_lowercase();
         }
 
-        if role_entry.secret_id_prefix == "" {
+        if role_entry.secret_id_prefix.is_empty() {
             role_entry.secret_id_prefix = SECRET_ID_PREFIX.to_string();
         }
 
-        if role_entry.bound_cidr_list_old != "" {
+        if !role_entry.bound_cidr_list_old.is_empty() {
             role_entry.secret_id_bound_cidrs =
                 role_entry.bound_cidr_list_old.split(',').map(|s| s.to_string()).collect();
             role_entry.bound_cidr_list_old.clear();
         }
 
-        if role_entry.bound_cidr_list.len() != 0 {
-            role_entry.secret_id_bound_cidrs = role_entry.bound_cidr_list.clone();
+        if !role_entry.bound_cidr_list.is_empty() {
+            role_entry.secret_id_bound_cidrs.clone_from(&role_entry.bound_cidr_list);
             role_entry.bound_cidr_list.clear();
         }
 
@@ -1002,7 +1004,7 @@ impl AppRoleBackendInner {
             role_entry.token_period = role_entry.period;
         }
 
-        if role_entry.token_policies.len() == 0 && role_entry.policies.len() > 0 {
+        if role_entry.token_policies.is_empty() && !role_entry.policies.is_empty() {
             role_entry.token_policies = role_entry.policies.clone();
         }
 
@@ -1016,7 +1018,7 @@ impl AppRoleBackendInner {
         role_entry: &RoleEntry,
         previous_role_id: &str,
     ) -> Result<(), RvError> {
-        if name == "" {
+        if name.is_empty() {
             return Err(RvError::ErrResponse("missing role name".to_string()));
         }
 
@@ -1030,7 +1032,7 @@ impl AppRoleBackendInner {
 
         let mut create_role_id = true;
 
-        if previous_role_id != "" {
+        if !previous_role_id.is_empty() {
             if previous_role_id != role_entry.role_id.as_str() {
                 self.delete_role_id(req, previous_role_id)?;
             } else {
@@ -1067,7 +1069,7 @@ impl AppRoleBackendInner {
         let mut role_entry = RoleEntry::default();
         let mut create = false;
 
-        let lock_entry = self.role_locks.get_lock(&role_name);
+        let lock_entry = self.role_locks.get_lock(role_name);
         let _locked = lock_entry.lock.write()?;
 
         let entry = self.get_role(req, role_name)?;
@@ -1081,7 +1083,7 @@ impl AppRoleBackendInner {
         }
 
         let old_token_policies = role_entry.token_policies.clone();
-        let old_token_period = role_entry.token_period.clone();
+        let old_token_period = role_entry.token_period;
 
         role_entry.parse_token_fields(req)?;
 
@@ -1089,15 +1091,15 @@ impl AppRoleBackendInner {
             role_entry.policies = role_entry.token_policies.clone();
         } else if let Ok(policies_value) = req.get_data("policies") {
             let policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-            role_entry.policies = policies.clone();
+            role_entry.policies.clone_from(&policies);
             role_entry.token_policies = policies;
         }
 
         if old_token_period != role_entry.token_period {
-            role_entry.period = role_entry.token_period.clone();
+            role_entry.period = role_entry.token_period;
         } else if let Ok(period_value) = req.get_data("period") {
             let period = period_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            role_entry.period = period.clone();
+            role_entry.period = period;
             role_entry.token_period = period;
         }
 
@@ -1121,7 +1123,7 @@ impl AppRoleBackendInner {
             role_entry.role_id = utils::generate_uuid();
         }
 
-        if role_entry.role_id == "" {
+        if role_entry.role_id.is_empty() {
             return Err(RvError::ErrResponse("invalid role_id supplied, or failed to generate a role_id".to_string()));
         }
 
@@ -1137,7 +1139,7 @@ impl AppRoleBackendInner {
                 bound_cidr_list_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         }
 
-        if role_entry.secret_id_bound_cidrs.len() != 0 {
+        if !role_entry.secret_id_bound_cidrs.is_empty() {
             let cidrs: Vec<&str> = role_entry.secret_id_bound_cidrs.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("invalid CIDR blocks".to_string()));
@@ -1193,7 +1195,7 @@ impl AppRoleBackendInner {
                 data.insert("period".to_string(), Value::from(entry.period.as_secs()));
             }
 
-            if entry.policies.len() > 0 {
+            if !entry.policies.is_empty() {
                 data.insert("policies".to_string(), Value::from(entry.policies.clone()));
             }
 
@@ -1262,13 +1264,13 @@ impl AppRoleBackendInner {
             .unwrap()
             .clone();
 
-            if role.policies.len() > 0 {
+            if !role.policies.is_empty() {
                 data.insert("policies".to_string(), Value::from(role.policies));
             }
 
-            return Ok(Some(Response::data_response(Some(data))));
+            Ok(Some(Response::data_response(Some(data))))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -1283,7 +1285,7 @@ impl AppRoleBackendInner {
 
         if let Some(mut role) = self.get_role(req, &role_name)? {
             sanitize_policies(&mut token_policies, false);
-            role.policies = token_policies.clone();
+            role.policies.clone_from(&token_policies);
             role.token_policies = token_policies;
             self.set_role(req, &role_name, &role, "")?;
         } else {
@@ -1397,9 +1399,9 @@ impl AppRoleBackendInner {
                     return Err(RvError::ErrResponse("unrecognized field".to_string()));
                 }
             };
-            return Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))));
+            Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))))
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 
@@ -1416,7 +1418,7 @@ impl AppRoleBackendInner {
         match field {
             "bound_cidr_list" | "secret_id_bound_cidrs" | "token_bound_cidrs" => {
                 cidr_list = field_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-                if cidr_list.len() == 0 {
+                if cidr_list.is_empty() {
                     return Err(RvError::ErrResponse(format!("missing {}", field).to_string()));
                 }
 
@@ -1454,7 +1456,7 @@ impl AppRoleBackendInner {
                     }
                 }
                 "role_id" => {
-                    previous_role_id = role.role_id.clone();
+                    previous_role_id.clone_from(&role.role_id);
                     role.role_id = field_value.as_str().ok_or(RvError::ErrLogicalOperationUnsupported)?.to_string();
                     if role.role_id.as_str() == "" {
                         return Err(RvError::ErrResponse("missing role_id".to_string()));
@@ -1564,7 +1566,7 @@ impl AppRoleBackendInner {
             self.set_role(req, &role_name, &role, "")?;
         }
 
-        return Ok(None);
+        Ok(None)
     }
 
     pub fn read_role_bound_cidr_list(
@@ -1816,7 +1818,7 @@ impl AppRoleBackendInner {
                 // corresponding lock many times using secret_id is not
                 // possible. Also, indexing it everywhere using secret_id_hmacs
                 // makes listing operation easier.
-                let lock_entry = self.secret_id_locks.get_lock(&secret_id_hmac);
+                let lock_entry = self.secret_id_locks.get_lock(secret_id_hmac);
                 let _locked = lock_entry.lock.read()?;
                 let storage_entry = req.storage_get(&entry_index)?;
                 if storage_entry.is_none() {
@@ -1832,7 +1834,7 @@ impl AppRoleBackendInner {
             return Ok(Some(Response::list_response(&list_items)));
         }
 
-        return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+        Err(RvError::ErrResponse(format!("role {} does not exist", role_name)))
     }
 
     pub fn update_role_secret_id_common(
@@ -1842,7 +1844,7 @@ impl AppRoleBackendInner {
     ) -> Result<Option<Response>, RvError> {
         let role_name = req.get_data_as_str("role_name")?;
 
-        if secret_id == "" {
+        if secret_id.is_empty() {
             return Err(RvError::ErrResponse("missing secret_id".to_string()));
         }
 
@@ -1863,7 +1865,7 @@ impl AppRoleBackendInner {
         let cidr_list_value = req.get_data_or_default("cidr_list")?;
         let cidr_list = cidr_list_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         // Validate the list of CIDR blocks
-        if cidr_list.len() != 0 {
+        if !cidr_list.is_empty() {
             let cidrs: Vec<&str> = cidr_list.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("failed to validate CIDR blocks".to_string()));
@@ -1877,7 +1879,7 @@ impl AppRoleBackendInner {
         let token_bound_cidrs =
             token_bound_cidrs_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
         // Validate the list of CIDR blocks
-        if token_bound_cidrs.len() != 0 {
+        if !token_bound_cidrs.is_empty() {
             let cidrs: Vec<&str> = token_bound_cidrs.iter().map(AsRef::as_ref).collect();
             if !utils::cidr::validate_cidrs(&cidrs)? {
                 return Err(RvError::ErrResponse("failed to validate CIDR blocks".to_string()));
@@ -1897,9 +1899,7 @@ impl AppRoleBackendInner {
                 return Err(RvError::ErrResponse("num_uses cannot be negative".to_string()));
             }
             // If the specified num_uses is higher than the role's secret_id_num_uses, throw an error rather than implicitly overriding
-            if (num_uses == 0 && role.secret_id_num_uses > 0)
-                || (role.secret_id_num_uses > 0 && num_uses > role.secret_id_num_uses)
-            {
+            if role.secret_id_num_uses > 0 && (num_uses == 0 || num_uses > role.secret_id_num_uses) {
                 return Err(RvError::ErrResponse(
                     "num_uses cannot be higher than the role's secret_id_num_uses".to_string(),
                 ));
@@ -1937,7 +1937,7 @@ impl AppRoleBackendInner {
         self.register_secret_id_entry(
             storage,
             &role.name,
-            &secret_id,
+            secret_id,
             &role.hmac_key,
             &role.secret_id_prefix,
             &mut secret_id_storage,
@@ -2091,7 +2091,7 @@ impl AppRoleBackendInner {
                 &role_name_hmac,
                 &accessor_entry.secret_id_hmac,
             )? {
-                let data = serde_json::to_value(&secret_id_entry)?;
+                let data = serde_json::to_value(secret_id_entry)?;
                 return Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))));
             }
         } else {
@@ -2210,7 +2210,7 @@ mod test {
         },
     };
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_read_local_secret_ids() {
         let (root_token, core) = test_rusty_vault_init("test_approle_read_local_secret_ids");
         let core = core.read().unwrap();
@@ -2236,7 +2236,7 @@ mod test {
         assert_eq!(resp_data["local_secret_ids"].as_bool().unwrap(), data["local_secret_ids"].as_bool().unwrap());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_local_non_secret_ids() {
         let (root_token, core) = test_rusty_vault_init("test_approle_local_non_secret_ids");
         let core = core.read().unwrap();
@@ -2270,9 +2270,8 @@ mod test {
         // Create secret IDs on testrole1
         let len = 10;
         for _i in 0..len {
-            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None)
-                .await
-                .is_ok());
+            let ret = test_write_api(&core, &root_token, "auth/approle/role/testrole1/secret-id", true, None).await;
+            assert!(ret.is_ok());
         }
 
         // Check the number of secret IDs generated
@@ -2283,9 +2282,8 @@ mod test {
 
         // Create secret IDs on testrole2
         for _i in 0..len {
-            assert!(test_write_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true, None)
-                .await
-                .is_ok());
+            let ret = test_write_api(&core, &root_token, "auth/approle/role/testrole2/secret-id", true, None).await;
+            assert!(ret.is_ok());
         }
 
         // Check the number of secret IDs generated
@@ -2295,7 +2293,7 @@ mod test {
         assert_eq!(resp_data["keys"].as_array().unwrap().len(), len);
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_upgrade_secret_id_prefix() {
         let (root_token, core) = test_rusty_vault_init("test_approle_upgrade_secret_id_prefix");
         let core = core.read().unwrap();
@@ -2341,7 +2339,7 @@ mod test {
         assert!(!resp_data["local_secret_ids"].as_bool().unwrap());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_local_secret_id_immutablility() {
         let (root_token, core) = test_rusty_vault_init("test_approle_local_secret_id_immutablility");
         let core = core.read().unwrap();
@@ -2366,7 +2364,7 @@ mod test {
         let _ = test_write_api(&core, &root_token, "auth/approle/role/testrole", false, Some(data.clone())).await;
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_upgrade_bound_cidr_list() {
         let (root_token, core) = test_rusty_vault_init("test_approle_upgrade_bound_cidr_list");
         let core = core.read().unwrap();
@@ -2437,7 +2435,7 @@ mod test {
         assert_ne!(secret_id, "");
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_name_lower_casing() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_name_lower_casing");
         let core = core.read().unwrap();
@@ -2554,7 +2552,7 @@ mod test {
         let role_id = resp_data["role_id"].as_str().unwrap();
 
         // Login should pass
-        let _ = test_login(&core, "approle", &role_id, &secret_id, true).await;
+        let _ = test_login(&core, "approle", role_id, secret_id, true).await;
 
         // Lookup of secret ID should work in case-insensitive manner
         let data = json!({
@@ -2576,7 +2574,7 @@ mod test {
         assert_eq!(keys.len(), 1);
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_read_set_index() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_read_set_index");
         let core = core.read().unwrap();
@@ -2620,7 +2618,7 @@ mod test {
         req.client_token = root_token.to_string();
         let _resp = core.handle_request(&mut req).await;
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
-        let resp = approle_module.delete_role_id(&mut req, &role_id);
+        let resp = approle_module.delete_role_id(&mut req, role_id);
         assert!(resp.is_ok());
 
         // Read the role again. This should add the index and return a warning
@@ -2636,7 +2634,7 @@ mod test {
 
         // Check if the index has been successfully created
         req.storage = core.get_system_view().map(|arc| arc as Arc<dyn Storage>);
-        let role_id_entry = approle_module.get_role_id(&mut req, &role_id);
+        let role_id_entry = approle_module.get_role_id(&mut req, role_id);
         assert!(role_id_entry.is_ok());
         let role_id_entry = role_id_entry.unwrap().unwrap();
         assert_eq!(role_id_entry.name, "testrole");
@@ -2656,7 +2654,7 @@ mod test {
         assert!(resp.is_ok());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_cidr_subset() {
         let (root_token, core) = test_rusty_vault_init("test_approle_cidr_subset");
         let core = core.read().unwrap();
@@ -2705,7 +2703,7 @@ mod test {
         assert!(resp.is_ok());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_token_bound_cidr_subset_32_mask() {
         let (root_token, core) = test_rusty_vault_init("test_approle_token_bound_cidr_subset_32_mask");
         let core = core.read().unwrap();
@@ -2750,7 +2748,7 @@ mod test {
         assert!(resp.is_err());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_constraints() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_constraints");
         let core = core.read().unwrap();
@@ -2785,7 +2783,7 @@ mod test {
         assert!(resp.is_err());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_update_role_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_update_role_id");
         let core = core.read().unwrap();
@@ -2812,13 +2810,13 @@ mod test {
         let secret_id = resp_data["secret_id"].as_str().unwrap();
 
         // Login should fail
-        let _ = test_login(&core, "approle", "role-id-123", &secret_id, false).await;
+        let _ = test_login(&core, "approle", "role-id-123", secret_id, false).await;
 
         // Login should pass
-        let _ = test_login(&core, "approle", "customroleid", &secret_id, true).await;
+        let _ = test_login(&core, "approle", "customroleid", secret_id, true).await;
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_id_uniqueness() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_id_uniqueness");
         let core = core.read().unwrap();
@@ -2876,7 +2874,7 @@ mod test {
         assert!(resp.is_ok());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_delete_secret_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_delete_secret_id");
         let core = core.read().unwrap();
@@ -2900,7 +2898,7 @@ mod test {
         let _ = test_list_api(&core, &root_token, "auth/approle/role/role1/secret-id", false).await;
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_and_destroy_role_secret_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_lookup_and_destroy_role_secret_id");
         let core = core.read().unwrap();
@@ -2947,7 +2945,7 @@ mod test {
         assert!(resp.unwrap().is_none());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_and_destroy_role_secret_id_accessor() {
         let (root_token, core) = test_rusty_vault_init("test_approle_lookup_and_destroy_role_secret_id_accessor");
         let core = core.read().unwrap();
@@ -3000,7 +2998,7 @@ mod test {
         .await;
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_role_secret_id_accessor() {
         let (root_token, core) = test_rusty_vault_init("test_approle_lookup_role_secret_id_accessor");
         let core = core.read().unwrap();
@@ -3027,7 +3025,7 @@ mod test {
         // TODO: resp should ok
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_list_role_secret_id() {
         let (root_token, core) = test_rusty_vault_init("test_approle_list_role_secret_id");
         let core = core.read().unwrap();
@@ -3051,7 +3049,7 @@ mod test {
         assert_eq!(keys.len(), 5);
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_list_role() {
         let (root_token, core) = test_rusty_vault_init("test_approle_list_role");
         let core = core.read().unwrap();
@@ -3075,7 +3073,7 @@ mod test {
         assert_eq!(expect.as_array().unwrap().clone(), keys);
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_without_fields() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_without_fields");
         let core = core.read().unwrap();
@@ -3129,7 +3127,7 @@ mod test {
         assert_eq!(secret_id_num_uses, role_data["secret_id_num_uses"].as_int().unwrap());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_valid_fields() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_valid_fields");
         let core = core.read().unwrap();
@@ -3194,7 +3192,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_invalid_fields() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_invalid_fields");
         let core = core.read().unwrap();
@@ -3308,7 +3306,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_crud() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_crud");
         let core = core.read().unwrap();
@@ -3639,7 +3637,7 @@ mod test {
         assert!(resp.unwrap().is_none());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_bound_cidrs_crud() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_token_bound_cidrs_crud");
         let core = core.read().unwrap();
@@ -3806,7 +3804,7 @@ mod test {
         assert!(resp.unwrap().is_none());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_type_crud() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_token_type_crud");
         let core = core.read().unwrap();
@@ -3892,7 +3890,7 @@ mod test {
         assert!(resp.unwrap().is_none());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_util_upgrade() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_token_util_upgrade");
         let core = core.read().unwrap();
@@ -4016,7 +4014,7 @@ mod test {
         assert!(resp.unwrap().is_none());
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_ttl() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_ttl");
         let core = core.read().unwrap();
@@ -4069,7 +4067,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_accessor_cross_delete() {
         let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_accessor_cross_delete");
         let core = core.read().unwrap();

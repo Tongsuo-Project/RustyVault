@@ -9,7 +9,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use async_trait::async_trait;
 use better_default::Default;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
@@ -479,7 +478,7 @@ impl TokenStore {
 
         let children = view.list(&path)?;
         for child in children.iter() {
-            self.revoke_tree_salted(&child)?;
+            self.revoke_tree_salted(child)?;
         }
 
         self.revoke_salted(salted_id)
@@ -526,11 +525,11 @@ impl TokenStore {
             if !is_root {
                 return Err(RvError::ErrRequestInvalid);
             }
-            te.id = data.id.clone();
+            te.id.clone_from(&data.id);
         }
 
         if data.policies.is_empty() {
-            data.policies = parent.policies.clone();
+            data.policies.clone_from(&parent.policies);
             sanitize_policies(&mut data.policies, false);
         }
 
@@ -538,7 +537,7 @@ impl TokenStore {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        te.policies = data.policies.clone();
+        te.policies.clone_from(&data.policies);
 
         for policy in te.policies.iter() {
             if NON_ASSIGNABLE_POLICIES.contains(&policy.as_str()) {
@@ -546,12 +545,8 @@ impl TokenStore {
             }
         }
 
-        if te.policies.contains(&"root".into()) {
-            if !parent.policies.contains(&"root".into()) {
-                return Err(rv_error_response!("root tokens may not be created without parent token being root"));
-            }
-
-            // TODO: batch tokens cannot be root tokens
+        if te.policies.contains(&"root".into()) && !parent.policies.contains(&"root".into()) {
+            return Err(rv_error_response!("root tokens may not be created without parent token being root"));
         }
 
         if data.no_parent {
@@ -662,7 +657,7 @@ impl TokenStore {
         log::debug!("lookup token");
         let mut id = req.get_data_as_str("token")?;
         if id.is_empty() {
-            id = req.client_token.clone();
+            id.clone_from(&req.client_token);
         }
 
         if id.is_empty() {
@@ -731,7 +726,7 @@ impl TokenStore {
     }
 }
 
-#[async_trait]
+#[maybe_async::maybe_async]
 impl Handler for TokenStore {
     fn name(&self) -> String {
         "auth_token".to_string()
@@ -776,7 +771,7 @@ impl Handler for TokenStore {
             return Err(RvError::ErrPermissionDenied);
         }
 
-        req.name = auth.as_ref().unwrap().display_name.clone();
+        req.name.clone_from(&auth.as_ref().unwrap().display_name);
         req.auth = auth;
 
         req.handle_phase = HandlePhase::PostAuth;
@@ -831,13 +826,11 @@ impl Handler for TokenStore {
         if let Some(auth) = resp.auth.as_mut() {
             if is_unauth_path {
                 let source = self.router.matching_mount(&req.path)?;
-                let source = source.as_str().trim_start_matches(AUTH_ROUTER_PREFIX).replace("/", "-");
-                auth.display_name = (source + &auth.display_name).trim_end_matches("-").to_string();
-                req.name = auth.display_name.clone();
-            } else {
-                if !req.path.starts_with("auth/token/") {
-                    return Err(RvError::ErrPermissionDenied);
-                }
+                let source = source.as_str().trim_start_matches(AUTH_ROUTER_PREFIX).replace('/', "-");
+                auth.display_name = (source + &auth.display_name).trim_end_matches('-').to_string();
+                req.name.clone_from(&auth.display_name);
+            } else if !req.path.starts_with("auth/token/") {
+                return Err(RvError::ErrPermissionDenied);
             }
 
             if auth.ttl.as_secs() == 0 {
@@ -859,7 +852,7 @@ impl Handler for TokenStore {
                 SystemTime::now(),
             )?;
 
-            auth.token_policies = auth.policies.clone();
+            auth.token_policies.clone_from(&auth.policies);
             sanitize_policies(&mut auth.token_policies, !auth.no_default_policy);
 
             let all_policies = auth.token_policies.clone();
@@ -883,7 +876,7 @@ impl Handler for TokenStore {
 
             self.create(&mut te)?;
 
-            auth.client_token = te.id.clone();
+            auth.client_token.clone_from(&te.id);
             auth.ttl = Duration::from_secs(te.ttl);
 
             self.expiration.register_auth(&te, auth)?;

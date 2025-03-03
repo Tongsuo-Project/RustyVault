@@ -112,8 +112,7 @@ impl MountEntry {
         let mut msg = format!("{}-{}-{}-{}", self.table, self.path, self.logical_type, self.description);
 
         if let Some(options) = &self.options {
-            let options_btree: BTreeMap<String, String> =
-                options.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let options_btree: BTreeMap<String, String> = options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             for (key, value) in options_btree.iter() {
                 msg = format!("{}-{}:{}", msg, key, value);
             }
@@ -159,7 +158,7 @@ impl MountTable {
                 return false;
             }
         }
-        return false;
+        false
     }
 
     pub fn set_default(&self, mounts: Vec<MountEntry>, hmac_key: Option<&[u8]>) -> Result<(), RvError> {
@@ -186,7 +185,7 @@ impl MountTable {
             return Ok(());
         }
 
-        self.load(storage, CORE_MOUNT_CONFIG_PATH, hmac_key, hmac_level.clone())?;
+        self.load(storage, CORE_MOUNT_CONFIG_PATH, hmac_key, hmac_level)?;
 
         self.mount_update(storage, hmac_key, hmac_level)
     }
@@ -249,12 +248,12 @@ impl MountTable {
 
         for mount_entry in mounts.values() {
             let mut entry = mount_entry.write()?;
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = MOUNT_TABLE_TYPE.to_string();
                 need_persist = true;
             }
 
-            if entry.hmac == "" && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
+            if entry.hmac.is_empty() && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
                 entry.calc_hmac(hmac_key.unwrap())?;
                 need_persist = true;
             }
@@ -274,7 +273,7 @@ impl Core {
             let mut table = self.mounts.entries.write()?;
             let mut entry = me.clone();
 
-            if !entry.path.ends_with("/") {
+            if !entry.path.ends_with('/') {
                 entry.path += "/";
             }
 
@@ -282,12 +281,12 @@ impl Core {
                 return Err(RvError::ErrMountPathProtected);
             }
 
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = MOUNT_TABLE_TYPE.to_string();
             }
 
             let match_mount_path = self.router.matching_mount(&entry.path)?;
-            if match_mount_path.len() != 0 {
+            if !match_mount_path.is_empty() {
                 return Err(RvError::ErrMountPathExist);
             }
 
@@ -317,7 +316,7 @@ impl Core {
 
     pub fn unmount(&self, path: &str) -> Result<(), RvError> {
         let mut path = path.to_string();
-        if !path.ends_with("/") {
+        if !path.ends_with('/') {
             path += "/";
         }
 
@@ -326,7 +325,7 @@ impl Core {
         }
 
         let match_mount = self.router.matching_mount(&path)?;
-        if match_mount.len() == 0 || match_mount != path {
+        if match_mount.is_empty() || match_mount != path {
             return Err(RvError::ErrMountNotMatch);
         }
 
@@ -351,11 +350,11 @@ impl Core {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
-        if !src.ends_with("/") {
+        if !src.ends_with('/') {
             src += "/";
         }
 
-        if !dst.ends_with("/") {
+        if !dst.ends_with('/') {
             dst += "/";
         }
 
@@ -364,7 +363,7 @@ impl Core {
         }
 
         let dst_match = self.router.matching_mount(&dst)?;
-        if dst_match.len() != 0 {
+        if !dst_match.is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
@@ -378,12 +377,12 @@ impl Core {
 
         self.router.taint(&src)?;
 
-        if self.router.matching_mount(&dst)? != "" {
+        if !(self.router.matching_mount(&dst)?).is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
         let src_path = src_entry.path.clone();
-        src_entry.path = dst.clone();
+        src_entry.path.clone_from(&dst);
         src_entry.tainted = false;
         src_entry.calc_hmac(&self.hmac_key)?;
 

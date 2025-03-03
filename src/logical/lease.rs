@@ -30,7 +30,7 @@ impl Lease {
     }
 
     pub fn renewable(&self) -> bool {
-        return self.renewable;
+        self.renewable
     }
 
     pub fn enabled(&self) -> bool {

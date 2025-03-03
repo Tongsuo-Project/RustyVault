@@ -251,7 +251,7 @@ impl ACL {
         }
 
         if req.operation == Operation::List {
-            if let Some(perm) = self.exact_rules.get(path.trim_end_matches("/")) {
+            if let Some(perm) = self.exact_rules.get(path.trim_end_matches('/')) {
                 return perm.check(req, check_only);
             }
         }
@@ -356,12 +356,11 @@ impl ACL {
 
                 if bare_mount && i == path_parts.len() - 2 {
                     let joined_path = segments.join("/") + "/";
-                    if joined_path.starts_with(path) {
-                        if permissions.capabilities_bitmap & Capability::Deny.to_bits() == 0
-                            && permissions.capabilities_bitmap > 0
-                        {
-                            return Some(permissions.clone());
-                        }
+                    if joined_path.starts_with(path)
+                        && permissions.capabilities_bitmap & Capability::Deny.to_bits() == 0
+                        && permissions.capabilities_bitmap > 0
+                    {
+                        return Some(permissions.clone());
                     }
                     skip = true;
                     break;
@@ -806,7 +805,7 @@ path "kv/deny" {
         if !name.is_empty() {
             policy.name = name.into();
         }
-        return policy;
+        policy
     }
 
     #[derive(Debug)]

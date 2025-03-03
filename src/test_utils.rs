@@ -380,7 +380,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
@@ -432,15 +432,15 @@ impl TestHttpServer {
                     return Ok((status, json!("")));
                 }
                 let json: Value = response.into_json()?;
-                return Ok((status, json));
+                Ok((status, json))
             }
             Err(ureq::Error::Status(code, response)) => {
                 let json: Value = response.into_json()?;
-                return Ok((code, json));
+                Ok((code, json))
             }
             Err(e) => {
                 println!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }
@@ -472,7 +472,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
@@ -525,15 +525,15 @@ impl TestHttpServer {
                 }
                 let text = response.into_string()?;
                 let wrapped_json = json!({"metrics":text});
-                return Ok((status, wrapped_json));
+                Ok((status, wrapped_json))
             }
             Err(ureq::Error::Status(code, response)) => {
                 let json: Value = response.into_json()?;
-                return Ok((code, json));
+                Ok((code, json))
             }
             Err(e) => {
                 println!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }
@@ -546,13 +546,13 @@ impl TestHttpServer {
         }
 
         if self.tls_enable {
-            cmd.arg(&format!("--address=https://{}", self.listen_addr));
-            cmd.arg(&format!("--ca-cert={}/ca.crt", self.cert_dir));
-            cmd.arg(&format!("--client-cert={}/server.crt", self.cert_dir));
-            cmd.arg(&format!("--client-key={}/key.pem", self.cert_dir));
+            cmd.arg(format!("--address=https://{}", self.listen_addr));
+            cmd.arg(format!("--ca-cert={}/ca.crt", self.cert_dir));
+            cmd.arg(format!("--client-cert={}/server.crt", self.cert_dir));
+            cmd.arg(format!("--client-key={}/key.pem", self.cert_dir));
             cmd.arg("--tls-skip-verify");
         } else {
-            cmd.arg(&format!("--address=http://{}", self.listen_addr));
+            cmd.arg(format!("--address=http://{}", self.listen_addr));
         }
 
         for arg in args {
@@ -886,7 +886,7 @@ pub unsafe fn new_test_crl(revoked_cert_pem: &str, ca_cert_pem: &str, ca_key_pem
     openssl_sys::BIO_free_all(bio);
     openssl_sys::X509_CRL_free(crl);
 
-    return Ok(String::from_utf8_lossy(&buffer).into());
+    Ok(String::from_utf8_lossy(&buffer).into())
 }
 
 pub fn test_backend(name: &str) -> Arc<dyn Backend> {
@@ -969,7 +969,7 @@ pub fn new_test_http_server(
             .wrap(middleware::Logger::default())
             .app_data(web::Data::new(core.clone()))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 
@@ -1019,7 +1019,7 @@ pub fn new_test_http_server_with_prometheus(
             .app_data(web::Data::new(core.clone()))
             .app_data(web::Data::new(Arc::clone(&metrics_manager)))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 
@@ -1075,7 +1075,7 @@ pub fn start_test_http_server(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = stop_future => {
@@ -1084,7 +1084,7 @@ pub fn start_test_http_server(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 
@@ -1114,7 +1114,7 @@ pub fn start_test_http_server_with_prometheus(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = system_metrics_fucture => {},
@@ -1124,13 +1124,14 @@ pub fn start_test_http_server_with_prometheus(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 
     server_thread
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::List;
@@ -1141,6 +1142,7 @@ pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::Read;
@@ -1151,6 +1153,7 @@ pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_write_api(
     core: &Core,
     token: &str,
@@ -1169,6 +1172,7 @@ pub async fn test_write_api(
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_delete_api(
     core: &Core,
     token: &str,
@@ -1186,6 +1190,7 @@ pub async fn test_delete_api(
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     let data = json!({
         "type": mtype,
@@ -1198,6 +1203,7 @@ pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     assert!(resp.is_ok());
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &str) {
     let auth_data = json!({
         "type": atype,
@@ -1251,9 +1257,9 @@ impl Clone for NoopBackend {
             response: self.response.clone(),
             request_handler: self.request_handler.clone(),
             invalidations: self.invalidations.clone(),
-            default_lease_ttl: self.default_lease_ttl.clone(),
-            max_lease_ttl: self.max_lease_ttl.clone(),
-            rollback_errs: self.rollback_errs.clone(),
+            default_lease_ttl: self.default_lease_ttl,
+            max_lease_ttl: self.max_lease_ttl,
+            rollback_errs: self.rollback_errs,
         }
     }
 }

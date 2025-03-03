@@ -159,8 +159,8 @@ pub fn globbed_strings_match(item: &str, val: &str) -> bool {
         return item == val;
     }
 
-    let has_prefix = item.starts_with("*");
-    let has_suffix = item.ends_with("*");
+    let has_prefix = item.starts_with('*');
+    let has_suffix = item.ends_with('*');
 
     if has_prefix && has_suffix {
         return val.contains(&item[1..item.len() - 1]);

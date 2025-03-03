@@ -107,7 +107,7 @@ pub mod test {
         assert!(backend.is_ok());
 
         let backend = new_backend("foo", &conf);
-        assert!(!backend.is_ok());
+        assert!(backend.is_err());
     }
 
     pub fn test_backend_curd(backend: &dyn Backend) {

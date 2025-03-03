@@ -76,7 +76,7 @@ where
 {
     let input: &str = Deserialize::deserialize(deserializer)?;
     let parsed_time = parse_rfc3339(input).map_err(serde::de::Error::custom)?;
-    let system_time: SystemTime = parsed_time.into();
+    let system_time: SystemTime = parsed_time;
     Ok(system_time)
 }
 
@@ -94,7 +94,7 @@ where
 {
     struct DurationVisitor;
 
-    impl<'de> serde::de::Visitor<'de> for DurationVisitor {
+    impl serde::de::Visitor<'_> for DurationVisitor {
         type Value = Duration;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -150,5 +150,5 @@ pub fn is_protect_path(protected: &[&str], paths: &[&str]) -> bool {
         }
     }
 
-    return false;
+    false
 }

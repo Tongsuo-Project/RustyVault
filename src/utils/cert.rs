@@ -149,7 +149,7 @@ impl CertBundle {
 
         let cert_chain = self.get_cert_chain();
 
-        if cert_chain.len() > 0 {
+        if !cert_chain.is_empty() {
             for (i, ca_cert) in cert_chain[1..].iter().enumerate() {
                 if !is_ca_cert(ca_cert) {
                     return Err(RvError::ErrPkiCertIsNotCA);
@@ -176,7 +176,7 @@ impl CertBundle {
 
         cert_chain.push(&self.certificate);
 
-        if self.ca_chain.len() > 0 {
+        if !self.ca_chain.is_empty() {
             // Root CA puts itself in the chain
             if self.ca_chain[0].serial_number() != self.certificate.serial_number() {
                 cert_chain.extend(self.ca_chain.iter());

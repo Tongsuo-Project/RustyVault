@@ -87,7 +87,7 @@ impl AuthModule {
             let mut auth_table = router_store.mounts.entries.write()?;
             let mut entry = me.clone();
 
-            if !entry.path.ends_with("/") {
+            if !entry.path.ends_with('/') {
                 entry.path += "/";
             }
 
@@ -111,7 +111,7 @@ impl AuthModule {
             }
 
             let match_mount_path = router_store.router.matching_mount(&entry.path)?;
-            if match_mount_path.len() != 0 {
+            if !match_mount_path.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path is already in use at {}", match_mount_path)));
             }
 
@@ -142,7 +142,7 @@ impl AuthModule {
         let router_store = self.router_store.read()?;
 
         let mut path = path.to_string();
-        if !path.ends_with("/") {
+        if !path.ends_with('/') {
             path += "/";
         }
 
@@ -172,11 +172,11 @@ impl AuthModule {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
-        if !src.ends_with("/") {
+        if !src.ends_with('/') {
             src += "/";
         }
 
-        if !dst.ends_with("/") {
+        if !dst.ends_with('/') {
             dst += "/";
         }
 
@@ -198,7 +198,7 @@ impl AuthModule {
         let router_store = self.router_store.read()?;
 
         let dst_match = router_store.router.matching_mount(&dst)?;
-        if dst_match.len() != 0 {
+        if !dst_match.is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
@@ -212,7 +212,7 @@ impl AuthModule {
 
         router_store.router.taint(&src)?;
 
-        if router_store.router.matching_mount(&dst)? != "" {
+        if !(router_store.router.matching_mount(&dst)?).is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
@@ -261,8 +261,7 @@ impl AuthModule {
 
     pub fn load_auth(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
         let router_store = self.router_store.read()?;
-        if router_store.mounts.load(self.barrier.as_storage(), AUTH_CONFIG_PATH, hmac_key, hmac_level.clone()).is_err()
-        {
+        if router_store.mounts.load(self.barrier.as_storage(), AUTH_CONFIG_PATH, hmac_key, hmac_level).is_err() {
             router_store.mounts.set_default(DEFAULT_AUTH_MOUNTS.to_vec(), hmac_key)?;
             router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())?;
         }
@@ -331,12 +330,12 @@ impl AuthModule {
 
         for mount_entry in mounts.values() {
             let mut entry = mount_entry.write()?;
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = AUTH_TABLE_TYPE.to_string();
                 need_persist = true;
             }
 
-            if entry.hmac == "" && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
+            if entry.hmac.is_empty() && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
                 entry.calc_hmac(hmac_key.unwrap())?;
                 need_persist = true;
             }
@@ -352,7 +351,7 @@ impl AuthModule {
 
 impl Module for AuthModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {
@@ -380,7 +379,7 @@ impl Module for AuthModule {
         };
 
         self.add_auth_backend("token", Arc::new(token_backend_new_func))?;
-        self.load_auth(Some(&core.hmac_key), core.mount_entry_hmac_level.clone())?;
+        self.load_auth(Some(&core.hmac_key), core.mount_entry_hmac_level)?;
         self.setup_auth()?;
 
         expiration.restore()?;

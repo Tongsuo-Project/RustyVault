@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "v0.2" ]
     paths-ignore:
       - "docs/**"
       - ".github/workflows/website.yml"
@@ -35,13 +35,19 @@ jobs:
       run: ulimit -n 65535
     - name: Run tests
       run: cargo test --verbose
-    - name: debug with ssh tunnel
-      if: ${{ failure() }}
-      uses: wa5i/ssh-to-actions@main
+    - name: Run tests with sync_handler features
+      run: cargo test --features sync_handler --verbose
+    - name: Run Clippy
+      run: cargo clippy -- -D warnings
+    - name: Install tarpaulin
+      run: cargo install cargo-tarpaulin
+    - name: Generate coverage report
+      run: CARGO_BIN_NAME=rvault cargo tarpaulin --out Lcov
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
       with:
-        SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
-        NPS_SERVER: ${{ secrets.NPS_SERVER }}
-        NPS_VKEY: ${{ secrets.NPS_VKEY }}
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: wa5i/RustyVault
 
   unix-tongsuo-test:
     strategy:
@@ -70,13 +76,10 @@ jobs:
       run : |
         export LD_LIBRARY_PATH=${RUNNER_TEMP}/tongsuo/lib
         OPENSSL_DIR=${RUNNER_TEMP}/tongsuo RUSTFLAGS="-C link-args=-Wl,-rpath,${RUNNER_TEMP}/tongsuo/lib" cargo test --verbose --features crypto_adaptor_tongsuo --no-default-features
-    - name: debug with ssh tunnel
-      if: ${{ failure() }}
-      uses: wa5i/ssh-to-actions@main
-      with:
-        SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
-        NPS_SERVER: ${{ secrets.NPS_SERVER }}
-        NPS_VKEY: ${{ secrets.NPS_VKEY }}
+    - name: Run tests with sync_handler features
+      run : |
+        export LD_LIBRARY_PATH=${RUNNER_TEMP}/tongsuo/lib
+        OPENSSL_DIR=${RUNNER_TEMP}/tongsuo RUSTFLAGS="-C link-args=-Wl,-rpath,${RUNNER_TEMP}/tongsuo/lib" cargo test --verbose --features crypto_adaptor_tongsuo --features sync_handler --no-default-features
 
   unix-mysql-test:
     strategy:
@@ -129,6 +132,8 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Run tests with sync_handler features
+      run: cargo test --features sync_handler --verbose
 
   windows-mysql-test:
     strategy:

@@ -52,11 +52,11 @@ async fn logical_request_handler(
     let mut req_conn = ReqConnection::default();
     req_conn.peer_addr = conn.peer.to_string();
     if conn.tls.is_some() {
-        req_conn.peer_tls_cert = conn.tls.as_ref().unwrap().client_cert_chain.clone();
+        req_conn.peer_tls_cert.clone_from(&conn.tls.as_ref().unwrap().client_cert_chain);
     }
 
     let mut r = request_auth(&req);
-    r.path = path.into_inner().clone();
+    r.path.clone_from(&path.into_inner());
     r.connection = Some(req_conn);
 
     match method {
@@ -65,7 +65,7 @@ async fn logical_request_handler(
         }
         Method::POST | Method::PUT => {
             r.operation = Operation::Write;
-            if body.len() > 0 {
+            if !body.is_empty() {
                 let payload = serde_json::from_slice(&body)?;
                 r.body = Some(payload);
                 body.clear();
@@ -81,8 +81,12 @@ async fn logical_request_handler(
             r.operation = Operation::List;
         }
     }
+    #[cfg(feature = "sync_handler")]
+    let ret = core.read()?.handle_request(&mut r)?;
+    #[cfg(not(feature = "sync_handler"))]
+    let ret = core.read()?.handle_request(&mut r).await?;
 
-    match core.read()?.handle_request(&mut r).await? {
+    match ret {
         Some(resp) => response_logical(&resp, &r.path),
         None => {
             if matches!(r.operation, Operation::Read | Operation::List) {
@@ -99,7 +103,7 @@ fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError
     let mut no_content = true;
 
     if let Some(ref secret) = &resp.secret {
-        logical_resp.lease_id = secret.lease_id.clone();
+        logical_resp.lease_id.clone_from(&secret.lease_id);
         logical_resp.renewable = secret.lease.renewable;
         logical_resp.lease_duration = secret.lease.ttl.as_secs();
         no_content = false;
@@ -134,9 +138,9 @@ fn response_logical(resp: &Response, path: &str) -> Result<HttpResponse, RvError
     }
 
     if no_content {
-        return Ok(response_ok(cookie, None));
+        Ok(response_ok(cookie, None))
     } else {
-        return Ok(response_json_ok(cookie, logical_resp));
+        Ok(response_json_ok(cookie, logical_resp))
     }
 }
 

@@ -310,11 +310,11 @@ impl SystemBackendInner {
         let logical_type = logical_type.as_str().unwrap();
         let description = description.as_str().unwrap();
 
-        if logical_type == "" {
+        if logical_type.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let mut me = MountEntry::new(&MOUNT_TABLE_TYPE, path, logical_type, description);
+        let mut me = MountEntry::new(MOUNT_TABLE_TYPE, path, logical_type, description);
         me.options = options.as_map();
 
         let core = self.core.read()?;
@@ -324,12 +324,12 @@ impl SystemBackendInner {
 
     pub fn handle_unmount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let suffix = req.path.trim_start_matches("mounts/");
-        if suffix.len() == 0 {
+        if suffix.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
         let core = self.core.read()?;
-        core.unmount(&suffix)?;
+        core.unmount(suffix)?;
         Ok(None)
     }
 
@@ -339,7 +339,7 @@ impl SystemBackendInner {
 
         let from = from.as_str().unwrap();
         let to = to.as_str().unwrap();
-        if from.len() == 0 || to.len() == 0 {
+        if from.is_empty() || to.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -350,8 +350,8 @@ impl SystemBackendInner {
         if let Some(me) = core.router.matching_mount_entry(&from_path)? {
             let mount_entry = me.read()?;
 
-            let dst_path_match = core.router.matching_mount(&to)?;
-            if dst_path_match.len() != 0 {
+            let dst_path_match = core.router.matching_mount(to)?;
+            if !dst_path_match.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path already in use at {}", dst_path_match)));
             }
 
@@ -418,7 +418,7 @@ impl SystemBackendInner {
             data.insert(entry.path.clone(), info);
         }
 
-        return Ok(Some(Response::data_response(Some(data))));
+        Ok(Some(Response::data_response(Some(data))))
     }
 
     pub fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -431,11 +431,11 @@ impl SystemBackendInner {
         let logical_type = logical_type.as_str().unwrap();
         let description = description.as_str().unwrap();
 
-        if logical_type == "" {
+        if logical_type.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let mut me = MountEntry::new(&AUTH_TABLE_TYPE, &path, logical_type, description);
+        let mut me = MountEntry::new(AUTH_TABLE_TYPE, &path, logical_type, description);
 
         me.options = options.as_map();
 
@@ -450,7 +450,7 @@ impl SystemBackendInner {
 
     pub fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = sanitize_path(req.path.trim_start_matches("auth/"));
-        if path.len() == 0 {
+        if path.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -586,7 +586,7 @@ impl SystemModule {
 
 impl Module for SystemModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {

@@ -54,14 +54,14 @@ mod test {
         sleep(Duration::from_secs(5));
         let mut num = data.num.write().unwrap();
         *num = *num * 2;
-        return *num;
+        *num
     }
 
     fn read_case(data: Arc<MyTestData>) -> u32 {
         let lock_entry = data.lock.get_lock("test");
         let _locked = lock_entry.lock.read().unwrap();
         let num = data.num.read().unwrap();
-        return *num;
+        *num
     }
 
     #[test]

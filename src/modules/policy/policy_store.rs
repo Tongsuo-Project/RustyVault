@@ -23,7 +23,6 @@ use std::{
     sync::{Arc, RwLock, Weak},
 };
 
-use async_trait::async_trait;
 use better_default::Default;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
@@ -398,14 +397,10 @@ impl PolicyStore {
             PolicyType::Acl => {
                 let mut keys = view.get_keys()?;
                 keys.retain(|s| !NON_ASSIGNABLE_POLICIES.iter().any(|&x| s == x));
-                return Ok(keys);
+                Ok(keys)
             }
-            PolicyType::Rgp | PolicyType::Egp => {
-                return view.get_keys();
-            }
-            _ => {
-                return Err(rv_error_string!("invalid type of policy"));
-            }
+            PolicyType::Rgp | PolicyType::Egp => view.get_keys(),
+            _ => Err(rv_error_string!("invalid type of policy")),
         }
     }
 
@@ -451,14 +446,12 @@ impl PolicyStore {
     pub fn load_acl_policy(&self, policy_name: &str, policy_text: &str) -> Result<(), RvError> {
         let name = self.sanitize_name(policy_name);
         let policy = self.get_policy(&name, PolicyType::Acl)?;
-        if !policy.is_none() {
-            if !IMMUTABLE_POLICIES.contains(&name.as_str()) || policy_text == policy.unwrap().raw {
-                return Ok(());
-            }
+        if policy.is_some() && (!IMMUTABLE_POLICIES.contains(&name.as_str()) || policy_text == policy.unwrap().raw) {
+            return Ok(());
         }
 
         let mut policy = Policy::from_str(policy_text)?;
-        policy.name = name.clone();
+        policy.name.clone_from(&name);
         policy.policy_type = PolicyType::Acl;
 
         self.set_policy_internal(Arc::new(policy))
@@ -490,7 +483,7 @@ impl PolicyStore {
             all_policies.extend(ap);
         }
 
-        Ok(ACL::new(&all_policies)?)
+        ACL::new(&all_policies)
     }
 
     fn set_policy_internal(&self, policy: Arc<Policy>) -> Result<(), RvError> {
@@ -511,7 +504,7 @@ impl PolicyStore {
             PolicyType::Acl => {
                 let rgp_view = self.get_rgp_view()?;
                 let rgp = rgp_view.get(&policy.name)?;
-                if !rgp.is_none() {
+                if rgp.is_some() {
                     return Err(rv_error_string!("cannot reuse policy names between ACLs and RGPs"));
                 }
 
@@ -524,7 +517,7 @@ impl PolicyStore {
             PolicyType::Rgp => {
                 let acl_view = self.get_acl_view()?;
                 let acl = acl_view.get(&policy.name)?;
-                if !acl.is_none() {
+                if acl.is_some() {
                     return Err(rv_error_string!("cannot reuse policy names between ACLs and RGPs"));
                 }
 
@@ -635,7 +628,7 @@ impl PolicyStore {
     }
 }
 
-#[async_trait]
+#[maybe_async::maybe_async]
 impl AuthHandler for PolicyStore {
     fn name(&self) -> String {
         "policy_store".to_string()

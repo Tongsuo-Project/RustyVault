@@ -10,6 +10,10 @@ use serde_json::{json, Map, Value};
 
 use crate::{api::secret::Secret, errors::RvError, rv_error_string};
 
+lazy_static! {
+    static ref UNDERSCORE_REGEX: Regex = Regex::new(r"_(\w)").unwrap();
+}
+
 #[derive(Args)]
 #[group(required = false, multiple = true)]
 pub struct OutputOptions {
@@ -133,8 +137,7 @@ pub fn convert_keys(value: &Value) -> Value {
         Value::Object(map) => {
             let mut new_map = Map::new();
             for (key, value) in map {
-                let new_key = Regex::new(r"_(\w)")
-                    .unwrap()
+                let new_key = UNDERSCORE_REGEX
                     .replace_all(&key.to_string(), |caps: &regex::Captures| {
                         let captured_char = caps.get(1).unwrap().as_str();
                         format!(" {}", captured_char.to_ascii_uppercase())
@@ -160,7 +163,7 @@ pub fn convert_keys(value: &Value) -> Value {
     }
 }
 
-static SEPS: [&'static str; 15] = [
+static SEPS: [&str; 15] = [
     "",
     "-",
     "--",

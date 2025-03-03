@@ -46,9 +46,7 @@ compile_error! {
 }
 
 fn main() {
-    if let Ok(_) = env::var("DEP_OPENSSL_TONGSUO") {
-        println!("cargo:rustc-cfg=tongsuo");
-    } else if cfg!(feature = "crypto_adaptor_tongsuo") {
+    if env::var("DEP_OPENSSL_TONGSUO").is_ok() || cfg!(feature = "crypto_adaptor_tongsuo") {
         println!("cargo:rustc-cfg=tongsuo");
     }
 

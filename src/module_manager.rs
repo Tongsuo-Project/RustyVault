@@ -37,7 +37,7 @@ impl ModuleManager {
         for it in &self.modules {
             let m = it.read().unwrap();
             if m.name().as_str() == name {
-                return Some(Arc::clone(&it));
+                return Some(Arc::clone(it));
             }
         }
 
