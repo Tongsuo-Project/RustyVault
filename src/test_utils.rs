@@ -1130,6 +1130,7 @@ pub fn start_test_http_server_with_prometheus(
     server_thread
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::List;
@@ -1140,6 +1141,7 @@ pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::Read;
@@ -1150,6 +1152,7 @@ pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_write_api(
     core: &Core,
     token: &str,
@@ -1168,6 +1171,7 @@ pub async fn test_write_api(
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_delete_api(
     core: &Core,
     token: &str,
@@ -1185,6 +1189,7 @@ pub async fn test_delete_api(
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     let data = json!({
         "type": mtype,
@@ -1197,6 +1202,7 @@ pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     assert!(resp.is_ok());
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &str) {
     let auth_data = json!({
         "type": atype,

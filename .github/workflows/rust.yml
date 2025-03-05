@@ -8,7 +8,7 @@ on:
       - ".github/workflows/website.yml"
       - ".github/workflows/deploy-website.yml"
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "v0.2" ]
     paths-ignore:
       - "docs/**"
       - ".github/workflows/website.yml"
@@ -35,6 +35,8 @@ jobs:
       run: ulimit -n 65535
     - name: Run tests
       run: cargo test --verbose
+    - name: Run tests with sync_handler features
+      run: cargo test --features sync_handler --verbose
     - name: debug with ssh tunnel
       if: ${{ failure() }}
       uses: wa5i/ssh-to-actions@main
@@ -77,6 +79,10 @@ jobs:
       run : |
         export LD_LIBRARY_PATH=${RUNNER_TEMP}/tongsuo/lib
         OPENSSL_DIR=${RUNNER_TEMP}/tongsuo RUSTFLAGS="-C link-args=-Wl,-rpath,${RUNNER_TEMP}/tongsuo/lib" cargo test --verbose --features crypto_adaptor_tongsuo --no-default-features
+    - name: Run tests with sync_handler features
+      run : |
+        export LD_LIBRARY_PATH=${RUNNER_TEMP}/tongsuo/lib
+        OPENSSL_DIR=${RUNNER_TEMP}/tongsuo RUSTFLAGS="-C link-args=-Wl,-rpath,${RUNNER_TEMP}/tongsuo/lib" cargo test --verbose --features crypto_adaptor_tongsuo --features sync_handler --no-default-features
     - name: debug with ssh tunnel
       if: ${{ failure() }}
       uses: wa5i/ssh-to-actions@main
@@ -136,6 +142,8 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Run tests with sync_handler features
+      run: cargo test --features sync_handler --verbose
 
   windows-mysql-test:
     strategy:
