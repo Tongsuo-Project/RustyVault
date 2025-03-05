@@ -13,6 +13,7 @@ use crate::{
     errors::RvError,
     handler::AuthHandler,
     logical::{Backend, Request, Response},
+    rv_error_response_status,
 };
 
 #[allow(clippy::module_inception)]
@@ -81,12 +82,12 @@ impl PolicyModule {
 
             return Ok(Some(resp));
         }
-        Ok(None)
+        Err(rv_error_response_status!(404, &format!("No policy named: {}", name)))
     }
 
     pub fn handle_policy_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
-        let policy_str = req.get_data_as_str("policy")?;
+        let policy_str = req.get_data("policy")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
         let policy_raw = if let Ok(policy_bytes) = STANDARD.decode(&policy_str) {
             String::from_utf8_lossy(&policy_bytes).to_string()
         } else {
@@ -255,7 +256,7 @@ mod mod_policy_tests {
         assert!(policy1.data.is_some());
         let policy1 = policy1.data.unwrap();
         assert_eq!(policy1["name"], policy1_name);
-        assert_eq!(policy1["rules"], policy1_hcl.trim());
+        assert_eq!(policy1["rules"], policy1_hcl);
 
         // List
         let policies = test_list_api(&core, &root_token, "sys/policy", true).await;
@@ -272,9 +273,11 @@ mod mod_policy_tests {
         test_delete_policy(&core, &root_token, policy1_name).await;
 
         // Read again
-        let policy1 = test_read_policy(&core, &root_token, policy1_name).await;
-        let policy1 = policy1.unwrap();
-        assert!(policy1.is_none());
+        let policy1 = test_read_api(&core, &root_token, format!("sys/policy/{}", policy1_name).as_str(), false).await;
+        let policy1 = policy1.unwrap_err();
+        assert!(policy1.to_string().contains("status: 404,"));
+        assert!(policy1.to_string().contains("No policy named: "));
+        assert!(policy1.to_string().contains(policy1_name));
 
         // List again
         let policies = test_list_api(&core, &root_token, "sys/policy", true).await;
@@ -318,7 +321,7 @@ mod mod_policy_tests {
         // Read policy1
         let ret = test_http_server.read("sys/policy/policy1", None);
         assert!(ret.is_ok());
-        assert_eq!(ret.unwrap().1, json!({"name": "policy1", "rules": policy1_hcl.trim()}));
+        assert_eq!(ret.unwrap().1, json!({"name": "policy1", "rules": policy1_hcl}));
 
         // List policies again
         let ret = test_http_server.read("sys/policy", None);

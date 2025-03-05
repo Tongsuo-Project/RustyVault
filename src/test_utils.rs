@@ -4,7 +4,7 @@ use std::{
     env, fs,
     io::prelude::*,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     sync::{Arc, Barrier, RwLock},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -43,6 +43,7 @@ use tokio::sync::oneshot;
 use ureq::AgentBuilder;
 
 use crate::{
+    api::{client::TLSConfigBuilder, Client},
     core::{Core, InitResult, SealConfig},
     errors::RvError,
     http,
@@ -539,6 +540,10 @@ impl TestHttpServer {
     }
 
     pub fn cli(&self, commands: &[&str], args: &[&str]) -> Result<String, RvError> {
+        self.cli_with_input(commands, args, None)
+    }
+
+    pub fn cli_with_input(&self, commands: &[&str], args: &[&str], input: Option<&str>) -> Result<String, RvError> {
         let mut cmd = Command::new(&self.binary_path);
 
         for command in commands {
@@ -563,7 +568,17 @@ impl TestHttpServer {
 
         println!("cmd: {}, args: {:?}", self.binary_path, cmd.get_args());
 
-        match cmd.output() {
+        let ret = if let Some(input_value) = input {
+            let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+            let mut stdin = child.stdin.take().unwrap();
+            stdin.write_all(input_value.as_bytes())?;
+            drop(stdin);
+            child.wait_with_output()
+        } else {
+            cmd.output()
+        };
+
+        match ret {
             Ok(output) => {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -576,6 +591,30 @@ impl TestHttpServer {
             }
             Err(e) => Err(rv_error_string!(format!("Failed to execute command: {}", e))),
         }
+    }
+
+    pub fn client(&self) -> Result<Client, RvError> {
+        let mut client = Client::new().with_token(&self.token);
+
+        if self.tls_enable {
+            let mut tls_config_builder = TLSConfigBuilder::new().with_insecure(true);
+
+            tls_config_builder =
+                tls_config_builder.with_server_ca_path(&PathBuf::from(&format!("{}/ca.crt", self.cert_dir)))?;
+
+            tls_config_builder = tls_config_builder.with_client_cert_path(
+                &PathBuf::from(&format!("{}/server.crt", self.cert_dir)),
+                &PathBuf::from(&format!("{}/key.pem", self.cert_dir)),
+            )?;
+
+            let tls_config = tls_config_builder.build()?;
+
+            client = client.with_addr(&format!("https://{}", self.listen_addr)).with_tls_config(tls_config);
+        } else {
+            client = client.with_addr(&format!("http://{}", self.listen_addr));
+        }
+
+        Ok(client.build())
     }
 }
 
