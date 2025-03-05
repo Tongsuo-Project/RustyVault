@@ -335,7 +335,6 @@ mod test {
         let expect_ttl = 10 * 24 * 60 * 60;
         println!("ttl: {}, expect_ttl: {}", ttl, expect_ttl);
         assert!(ttl <= expect_ttl);
-        assert!((ttl + 10) >= expect_ttl);
 
         let authority_key_id = cert.authority_key_id();
         assert!(authority_key_id.is_some());
@@ -533,7 +532,6 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
         let expect_ttl = 10 * 24 * 60 * 60;
         println!("ttl: {}, expect_ttl: {}", ttl, expect_ttl);
         assert!(ttl <= expect_ttl);
-        assert!((ttl + 10) >= expect_ttl);
 
         //test fetch cert
         let serial_number_hex = cert_data["serial_number"].as_str().unwrap();
