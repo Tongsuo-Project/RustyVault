@@ -129,3 +129,7 @@ pub fn is_protect_path(protected: &[&str], paths: &[&str]) -> bool {
 
     return false;
 }
+
+pub fn default_system_time() -> SystemTime {
+    SystemTime::UNIX_EPOCH
+}
