@@ -55,16 +55,17 @@ fn establish_mysql_connection(conf: &HashMap<String, Value>) -> Result<MysqlDbPo
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, env};
 
     use super::*;
 
     #[test]
     fn test_establish_mysql_connection() {
+        let mysql_pwd = env::var("CARGO_TEST_MYSQL_PASSWORD").unwrap_or("password".into());
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("address".to_string(), Value::String("127.0.0.1:3306".to_string()));
         conf.insert("username".to_string(), Value::String("root".to_string()));
-        conf.insert("password".to_string(), Value::String("password".to_string()));
+        conf.insert("password".to_string(), Value::String(mysql_pwd));
 
         let pool = establish_mysql_connection(&conf);
 

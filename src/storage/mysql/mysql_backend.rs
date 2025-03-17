@@ -126,19 +126,32 @@ impl MysqlBackend {
 #[cfg(test)]
 mod test {
 
-    use std::collections::HashMap;
+    use std::{collections::HashMap, env};
 
+    use diesel::{prelude::*, MysqlConnection};
     use serde_json::Value;
 
     use super::MysqlBackend;
-    use crate::storage::test::{test_backend, test_backend_list_prefix};
+
+    use crate::errors::RvError;
+    use crate::storage::test::{test_backend_curd, test_backend_list_prefix};
+
+    fn mysql_table_clear(backend: &MysqlBackend) -> Result<(), RvError> {
+        let conn: &mut MysqlConnection = &mut backend.pool.lock().unwrap().get().unwrap();
+
+        match diesel::sql_query("TRUNCATE TABLE vault").execute(conn) {
+            Ok(_) => return Ok(()),
+            Err(e) => return Err(RvError::ErrDatabaseExecuteEntry { source: (e) }),
+        }
+    }
 
     #[test]
     fn test_mysql_backend() {
+        let mysql_pwd = env::var("CARGO_TEST_MYSQL_PASSWORD").unwrap_or("password".into());
         let mut conf: HashMap<String, Value> = HashMap::new();
         conf.insert("address".to_string(), Value::String("127.0.0.1:3306".to_string()));
         conf.insert("username".to_string(), Value::String("root".to_string()));
-        conf.insert("password".to_string(), Value::String("password".to_string()));
+        conf.insert("password".to_string(), Value::String(mysql_pwd));
 
         let backend = MysqlBackend::new(&conf);
 
@@ -146,7 +159,9 @@ mod test {
 
         let backend = backend.unwrap();
 
-        test_backend(&backend);
+        assert!(mysql_table_clear(&backend).is_ok());
+
+        test_backend_curd(&backend);
         test_backend_list_prefix(&backend);
     }
 }
