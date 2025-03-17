@@ -14,7 +14,7 @@ type MysqlDbPool = r2d2::Pool<ConnectionManager<MysqlConnection>>;
 
 pub mod mysql_backend;
 
-pub fn new(conf: &HashMap<String, Value>) -> Result<MysqlDbPool, RvError> {
+pub fn new_db_pool(conf: &HashMap<String, Value>) -> Result<MysqlDbPool, RvError> {
     let pool = establish_mysql_connection(conf);
     match pool {
         Ok(pool) => Ok(pool),

@@ -2206,13 +2206,13 @@ mod test {
         modules::auth::expiration::MAX_LEASE_DURATION_SECS,
         storage::Storage,
         test_utils::{
-            test_delete_api, test_list_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api,
+            init_test_rusty_vault, test_delete_api, test_list_api, test_mount_auth_api, test_read_api, test_write_api,
         },
     };
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_read_local_secret_ids() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_read_local_secret_ids");
+        let (root_token, core) = init_test_rusty_vault("test_approle_read_local_secret_ids");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2238,7 +2238,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_local_non_secret_ids() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_local_non_secret_ids");
+        let (root_token, core) = init_test_rusty_vault("test_approle_local_non_secret_ids");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2295,7 +2295,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_upgrade_secret_id_prefix() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_upgrade_secret_id_prefix");
+        let (root_token, core) = init_test_rusty_vault("test_approle_upgrade_secret_id_prefix");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2341,7 +2341,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_local_secret_id_immutablility() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_local_secret_id_immutablility");
+        let (root_token, core) = init_test_rusty_vault("test_approle_local_secret_id_immutablility");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2366,7 +2366,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_upgrade_bound_cidr_list() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_upgrade_bound_cidr_list");
+        let (root_token, core) = init_test_rusty_vault("test_approle_upgrade_bound_cidr_list");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2437,7 +2437,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_name_lower_casing() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_name_lower_casing");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_name_lower_casing");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2576,7 +2576,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_read_set_index() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_read_set_index");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_read_set_index");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2656,7 +2656,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_cidr_subset() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_cidr_subset");
+        let (root_token, core) = init_test_rusty_vault("test_approle_cidr_subset");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2705,7 +2705,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_token_bound_cidr_subset_32_mask() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_token_bound_cidr_subset_32_mask");
+        let (root_token, core) = init_test_rusty_vault("test_approle_token_bound_cidr_subset_32_mask");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2750,7 +2750,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_constraints() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_constraints");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_constraints");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2785,7 +2785,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_update_role_id() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_update_role_id");
+        let (root_token, core) = init_test_rusty_vault("test_approle_update_role_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2818,7 +2818,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_id_uniqueness() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_id_uniqueness");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_id_uniqueness");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2876,7 +2876,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_delete_secret_id() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_delete_secret_id");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_delete_secret_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2900,7 +2900,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_and_destroy_role_secret_id() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_lookup_and_destroy_role_secret_id");
+        let (root_token, core) = init_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -2947,7 +2947,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_and_destroy_role_secret_id_accessor() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_lookup_and_destroy_role_secret_id_accessor");
+        let (root_token, core) = init_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id_accessor");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3000,7 +3000,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_role_secret_id_accessor() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_lookup_role_secret_id_accessor");
+        let (root_token, core) = init_test_rusty_vault("test_approle_lookup_role_secret_id_accessor");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3027,7 +3027,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_list_role_secret_id() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_list_role_secret_id");
+        let (root_token, core) = init_test_rusty_vault("test_approle_list_role_secret_id");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3051,7 +3051,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_list_role() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_list_role");
+        let (root_token, core) = init_test_rusty_vault("test_approle_list_role");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3075,7 +3075,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_without_fields() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_without_fields");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_without_fields");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3129,7 +3129,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_valid_fields() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_valid_fields");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_with_valid_fields");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3194,7 +3194,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_invalid_fields() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_invalid_fields");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_with_invalid_fields");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3308,7 +3308,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_crud() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_crud");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_crud");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3639,7 +3639,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_bound_cidrs_crud() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_token_bound_cidrs_crud");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_token_bound_cidrs_crud");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3806,7 +3806,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_type_crud() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_token_type_crud");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_token_type_crud");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -3892,7 +3892,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_util_upgrade() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_token_util_upgrade");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_token_util_upgrade");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -4016,7 +4016,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_ttl() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_with_ttl");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_with_ttl");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -4069,7 +4069,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_accessor_cross_delete() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_role_secret_id_accessor_cross_delete");
+        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_accessor_cross_delete");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle

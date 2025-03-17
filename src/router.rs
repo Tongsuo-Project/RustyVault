@@ -88,6 +88,12 @@ impl Router {
         }
     }
 
+    pub fn clear(&self) -> Result<(), RvError> {
+        let mut trie_write = self.root.write()?;
+        *trie_write = Trie::new();
+        Ok(())
+    }
+
     pub fn taint(&self, path: &str) -> Result<(), RvError> {
         let mut root = self.root.write()?;
         if let Some(raw) = root.get_mut(path) {

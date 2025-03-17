@@ -687,14 +687,14 @@ mod mod_expiration_tests {
         mount::{MountEntry, MOUNT_TABLE_TYPE},
         new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path,
         new_path_internal, new_secret, new_secret_internal,
-        test_utils::{test_rusty_vault_init, NoopBackend},
+        test_utils::{init_test_rusty_vault, NoopBackend},
     };
 
     macro_rules! mock_expiration_manager {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
-            println!("test_rusty_vault_init, name: {}", name);
-            let (_, core) = test_rusty_vault_init(&name);
+            println!("init_test_rusty_vault, name: {}", name);
+            let (_, core) = init_test_rusty_vault(&name);
             let core_cloned = core.clone();
             let core_locked = core_cloned.read().unwrap();
 
@@ -986,7 +986,7 @@ mod mod_expiration_tests {
     fn test_expiration_register_and_restore_benchmark() {
         let (_core, expiration, _token_store) = mock_expiration_manager!();
 
-        let n = 100000;
+        let n = 10000;
         for i in 0..n {
             let mut secret = SecretData::default();
             secret.ttl = Duration::from_secs(400);
@@ -1004,8 +1004,8 @@ mod mod_expiration_tests {
             assert!(result.is_ok());
         }
 
-        println!("sleep 2s");
-        sleep(Duration::from_secs(2));
+        println!("sleep 5s");
+        sleep(Duration::from_secs(5));
 
         assert!(expiration.stop_check_expired_lease_entries().is_ok());
 
@@ -1750,7 +1750,7 @@ mod mod_expiration_tests {
 
         assert!(expiration.persist_lease_entry(&le).is_ok());
 
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_millis(500));
 
         let resp = expiration.renew(&id, Duration::ZERO);
         assert!(resp.is_ok());

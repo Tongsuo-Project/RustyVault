@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use super::{barrier::SecurityBarrier, Storage, StorageEntry};
 use crate::errors::RvError;
@@ -33,6 +33,10 @@ impl Storage for BarrierView {
     fn delete(&self, key: &str) -> Result<(), RvError> {
         self.sanity_check(key)?;
         self.barrier.delete(self.expand_key(key).as_str())
+    }
+
+    fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+        self.barrier.lock(lock_name)
     }
 }
 
@@ -107,11 +111,11 @@ mod test {
     use rand::{thread_rng, Rng};
 
     use super::{super::*, *};
-    use crate::test_utils::test_backend;
+    use crate::test_utils::new_test_backend;
 
     #[test]
     fn test_new_barrier_view() {
-        let backend = test_backend("test_new_barrier_view");
+        let backend = new_test_backend("test_new_barrier_view");
 
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());

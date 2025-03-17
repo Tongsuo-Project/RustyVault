@@ -2,6 +2,7 @@
 //! decrypt data before writing or reading data to or from specific storage backend.
 
 use std::{
+    any::Any,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
 };
@@ -104,6 +105,10 @@ impl Storage for AESGCMBarrier {
             return Err(RvError::ErrBarrierSealed);
         }
         self.backend.delete(key)
+    }
+
+    fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+        self.backend.lock(lock_name)
     }
 }
 
@@ -345,11 +350,11 @@ impl AESGCMBarrier {
 #[cfg(test)]
 mod test {
     use super::{super::*, *};
-    use crate::test_utils::test_backend;
+    use crate::test_utils::new_test_backend;
 
     #[test]
     fn test_barrier_encrypt_decrypt() {
-        let backend = test_backend("test_encrypt_decrypt");
+        let backend = new_test_backend("test_encrypt_decrypt");
 
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
@@ -374,7 +379,7 @@ mod test {
 
     #[test]
     fn test_barrier_decrypt() {
-        let backend = test_backend("test_decrypt");
+        let backend = new_test_backend("test_decrypt");
 
         let key = vec![
             121, 133, 170, 204, 71, 77, 160, 134, 22, 37, 254, 206, 120, 206, 143, 197, 150, 83, 5, 45, 121, 51, 124,
@@ -409,7 +414,7 @@ mod test {
 
     #[test]
     fn test_barrier_aes256_gcm() {
-        let backend = test_backend("test_barriew_aes256_gcm");
+        let backend = new_test_backend("test_barriew_aes256_gcm");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 
@@ -447,7 +452,7 @@ mod test {
 
     #[test]
     fn test_barrier_storage_api() {
-        let backend = test_backend("test_barriew_storage_api");
+        let backend = new_test_backend("test_barriew_storage_api");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 

@@ -214,13 +214,13 @@ mod test {
     use crate::{
         logical::{Operation, Path},
         storage::barrier_aes_gcm::AESGCMBarrier,
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     #[test]
     fn test_token_util() {
         // init the storage backend
-        let backend = test_backend("test_token_util");
+        let backend = new_test_backend("test_token_util");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 

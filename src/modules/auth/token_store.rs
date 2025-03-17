@@ -898,14 +898,14 @@ mod mod_token_store_tests {
     use crate::{
         context::Context,
         logical::{Backend, Request, Response, Secret},
-        test_utils::test_rusty_vault_init,
+        test_utils::init_test_rusty_vault,
     };
 
     macro_rules! mock_token_store {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
-            println!("test_rusty_vault_init, name: {}", name);
-            let (_, core) = test_rusty_vault_init(&name);
+            println!("init_test_rusty_vault, name: {}", name);
+            let (_, core) = init_test_rusty_vault(&name);
             let core = core.read().unwrap();
 
             let expiration = ExpirationManager::new(&core).unwrap().wrap();

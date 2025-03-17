@@ -150,12 +150,10 @@ impl Server {
 
         let backend = storage::new_backend(storage.stype.as_str(), &storage.config).unwrap();
 
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-
         let metrics_manager = Arc::new(RwLock::new(MetricsManager::new(config.collection_interval)));
         let system_metrics = Arc::clone(&metrics_manager.read().unwrap().system_metrics);
 
-        let core = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
+        let core = Arc::new(RwLock::new(Core::new(backend)));
 
         {
             let mut c = core.write()?;
