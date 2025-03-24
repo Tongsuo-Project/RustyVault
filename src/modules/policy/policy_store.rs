@@ -680,11 +680,11 @@ impl AuthHandler for PolicyStore {
 #[cfg(test)]
 mod mod_policy_store_tests {
     use super::{super::policy::Capability, *};
-    use crate::test_utils::test_rusty_vault_init;
+    use crate::test_utils::init_test_rusty_vault;
 
     #[test]
     fn test_policy_store_crud() {
-        let (_, core) = test_rusty_vault_init("test_policy_store_crud");
+        let (_, core) = init_test_rusty_vault("test_policy_store_crud");
         let core = core.read().unwrap();
 
         let policy_store = PolicyStore::new(&core).unwrap();
@@ -743,7 +743,7 @@ mod mod_policy_store_tests {
 
     #[test]
     fn test_policy_load_default() {
-        let (_, core) = test_rusty_vault_init("test_policy_load_default");
+        let (_, core) = init_test_rusty_vault("test_policy_load_default");
         let core = core.read().unwrap();
 
         let policy_store = PolicyStore::new(&core).unwrap();
@@ -764,7 +764,7 @@ mod mod_policy_store_tests {
 
     #[test]
     fn test_policy_root() {
-        let (_, core) = test_rusty_vault_init("test_policy_root");
+        let (_, core) = init_test_rusty_vault("test_policy_root");
         let core = core.read().unwrap();
 
         let policy_store = PolicyStore::new(&core).unwrap();
@@ -784,7 +784,7 @@ mod mod_policy_store_tests {
 
     #[test]
     fn test_policy_new_acl() {
-        let (_, core) = test_rusty_vault_init("test_policy_new_acl");
+        let (_, core) = init_test_rusty_vault("test_policy_new_acl");
         let core = core.read().unwrap();
 
         let policy_store = PolicyStore::new(&core).unwrap();

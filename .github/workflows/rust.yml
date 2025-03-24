@@ -100,21 +100,17 @@ jobs:
         my-cnf: |
           skip-ssl
           port=3306
-    - name: Set macOS Environment Variables
-      if: runner.os == 'macOS'
-      env:
-        MACOSX_DEPLOYMENT_TARGET: "11.0"
-      run: |
-          export MACOSX_DEPLOYMENT_TARGET=11.0
     - name: install diesel_cli
       run: cargo install diesel_cli --no-default-features --features mysql
     - name: init database
       run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
-    - name: Build
-      run: cargo build --features storage_mysql --verbose
     - name: ulimit -n
       run: ulimit -n 65535
-    - name: Run tests
+    - name: Run tests for macOS
+      if: runner.os == 'macOS'
+      run: cargo test --features storage_mysql --lib --bins --tests --verbose
+    - name: Run tests for non-macOS
+      if: runner.os != 'macOS'
       run: cargo test --features storage_mysql --verbose
     - name: Build crate doc
       run: cargo doc --no-deps

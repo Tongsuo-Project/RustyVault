@@ -148,7 +148,7 @@ mod mod_policy_tests {
     use crate::{
         logical::{Operation, Request},
         test_utils::{
-            test_delete_api, test_list_api, test_mount_api, test_mount_auth_api, test_read_api, test_rusty_vault_init,
+            init_test_rusty_vault, test_delete_api, test_list_api, test_mount_api, test_mount_auth_api, test_read_api,
             test_write_api, TestHttpServer,
         },
     };
@@ -234,7 +234,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_curd_api() {
-        let (root_token, core) = test_rusty_vault_init("test_policy_curd_api");
+        let (root_token, core) = init_test_rusty_vault("test_policy_curd_api");
         let core = core.read().unwrap();
 
         let policy1_name = "policy1";
@@ -343,7 +343,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check() {
-        let (root_token, core) = test_rusty_vault_init("test_policy_acl_check");
+        let (root_token, core) = init_test_rusty_vault("test_policy_acl_check");
         let core = core.read().unwrap();
 
         let policy1_name = "policy1";
@@ -437,7 +437,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check_with_policy_parameters() {
-        let (root_token, core) = test_rusty_vault_init("test_policy_acl_check_with_policy_parameters");
+        let (root_token, core) = init_test_rusty_vault("test_policy_acl_check_with_policy_parameters");
         let core = core.read().unwrap();
 
         let policy1_name = "policy1";

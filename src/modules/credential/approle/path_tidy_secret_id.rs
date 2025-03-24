@@ -259,12 +259,12 @@ mod test {
     use crate::{
         logical::{Operation, Request},
         storage::{Storage, StorageEntry},
-        test_utils::{test_mount_auth_api, test_rusty_vault_init},
+        test_utils::{init_test_rusty_vault, test_mount_auth_api},
     };
 
     #[actix_rt::test]
     async fn test_approle_tidy_dangling_accessors_normal() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_tidy_dangling_accessors_normal");
+        let (root_token, core) = init_test_rusty_vault("test_approle_tidy_dangling_accessors_normal");
         let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle
@@ -352,7 +352,7 @@ mod test {
 
     #[actix_rt::test]
     async fn test_approle_tidy_dangling_accessors_race() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_tidy_dangling_accessors_race");
+        let (root_token, core) = init_test_rusty_vault("test_approle_tidy_dangling_accessors_race");
         let c = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle

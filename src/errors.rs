@@ -173,6 +173,12 @@ pub enum RvError {
     ErrCredentailInvalid,
     #[error("Credentail is not config.")]
     ErrCredentailNotConfig,
+    #[error("Storage backend doesn't require a lock.")]
+    ErrStorageBackendLockless,
+    #[error("Storage backend lock failed.")]
+    ErrStorageBackendLockFailed,
+    #[error("Storage backend unlock failed.")]
+    ErrStorageBackendUnlockFailed,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -293,6 +299,12 @@ pub enum RvError {
     StringUtf8Error {
         #[from]
         source: std::string::FromUtf8Error,
+    },
+
+    #[error("Some lockfile error happened, {:?}", .source)]
+    LockfileError {
+        #[from]
+        source: lockfile::Error,
     },
 
     /// Database Errors Begin

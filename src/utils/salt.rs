@@ -123,13 +123,13 @@ mod test {
     use super::*;
     use crate::{
         storage::{barrier::SecurityBarrier, barrier_aes_gcm, barrier_view},
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     #[test]
     fn test_salt() {
         // init the storage backend
-        let backend = test_backend("test_salt");
+        let backend = new_test_backend("test_salt");
 
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());

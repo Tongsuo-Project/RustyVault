@@ -261,7 +261,7 @@ mod test {
     use crate::{
         logical::{field::FieldTrait, Field, FieldType, PathOperation},
         new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal, storage,
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     struct MyTest;
@@ -304,7 +304,7 @@ mod test {
 
     #[test]
     fn test_logical_backend_api() {
-        let backend = test_backend("test_logical_backend_api");
+        let backend = new_test_backend("test_logical_backend_api");
 
         let t = MyTest::new();
 
@@ -461,7 +461,7 @@ mod test {
 
     #[test]
     fn test_logical_path_field() {
-        let backend = test_backend("test_logical_path_field");
+        let backend = new_test_backend("test_logical_path_field");
 
         let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 

@@ -124,7 +124,7 @@ mod test {
     use crate::{
         core::Core,
         logical::{Operation, Request},
-        test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
+        test_utils::{init_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api},
     };
 
     #[maybe_async::maybe_async]
@@ -186,7 +186,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_userpass_module() {
-        let (root_token, core) = test_rusty_vault_init("test_userpass_module");
+        let (root_token, core) = init_test_rusty_vault("test_userpass_module");
         let core = core.read().unwrap();
 
         // mount userpass auth to path: auth/pass

@@ -40,6 +40,8 @@ pub struct Config {
     pub collection_interval: u64,
     #[serde(default = "default_hmac_level")]
     pub mount_entry_hmac_level: MountEntryHMACLevel,
+    #[serde(default = "default_mounts_monitor_interval")]
+    pub mounts_monitor_interval: u64,
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
@@ -56,6 +58,10 @@ fn default_hmac_level() -> MountEntryHMACLevel {
 
 fn default_collection_interval() -> u64 {
     15
+}
+
+fn default_mounts_monitor_interval() -> u64 {
+    5
 }
 
 /// A struct that contains several configurable options for networking stuffs

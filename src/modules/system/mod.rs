@@ -316,7 +316,7 @@ impl SystemBackendInner {
         let core = self.core.read()?;
         let mut data: Map<String, Value> = Map::new();
 
-        let mounts = core.mounts.entries.read()?;
+        let mounts = core.mounts_router.entries.read()?;
 
         for mount_entry in mounts.values() {
             let entry = mount_entry.read()?;
@@ -436,8 +436,7 @@ impl SystemBackendInner {
         let auth_mod = module.read()?;
         let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
 
-        let router_store = auth_module.router_store.read()?;
-        let mounts = router_store.mounts.entries.read()?;
+        let mounts = auth_module.mounts_router.entries.read()?;
 
         for mount_entry in mounts.values() {
             let entry = mount_entry.read()?;
