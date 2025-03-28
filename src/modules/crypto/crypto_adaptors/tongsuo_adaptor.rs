@@ -3,12 +3,26 @@
 use openssl::{
     rand::rand_priv_bytes,
     symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher, Crypter, Mode},
+    rsa::{Rsa, Padding},
+    pkey::{PKey, Private},
+    pkey_ctx::PkeyCtx,
+    nid::Nid,
+    ec::{EcGroup, EcKey},
 };
 
 use crate::{
     errors::RvError,
-    modules::crypto::{crypto_adaptors::common, AEADCipher, AESKeySize, BlockCipher, CipherMode, AES, SM4},
+    modules::crypto::{
+        crypto_adaptors::common,
+        AEADCipher, AESKeySize, BlockCipher, CipherMode, AES, SM4,
+        RSA, RSAKeySize,
+        PublicKey, PublicKeyType,
+        Signature, Encryption,
+        ECDSA, ECCurveName,
+    },
 };
+
+use zeroize::{Zeroize, Zeroizing};
 
 pub struct AdaptorCTX {
     ctx: Crypter,
@@ -349,3 +363,250 @@ impl AEADCipher for SM4 {
         Ok(())
     }
 }
+
+pub struct AdaptorPKeyCTX {
+    // The private key in OpenSSL context contains also the public key
+    private_key: PKey<Private>,
+}
+
+// Simply do nothing since OpenSSL will safely clean the memory of a PKEY object (Drop trait)
+impl Zeroize for AdaptorPKeyCTX {
+    fn zeroize(&mut self) {}
+}
+
+impl RSA {
+    /// This function is the constructor of the RSA struct, it returns a new RSA object on success.
+    ///
+    /// size: RSA key size. Valid options are RSA2048 (default), RSA3072, RSA4096, RSA8192.
+    /// prime: for multi-prime RSA usage (RFC 8017), default is 2.
+    pub fn new(
+        prime: Option<u8>,
+        size: Option<RSAKeySize>,
+    ) -> Result<Self, RvError> {
+        return Ok(
+            RSA {
+                key_type: PublicKeyType::RSA,
+                prime: prime.unwrap_or(2),
+                size: size.unwrap_or(RSAKeySize::RSA2048),
+                ctx: None,
+            }
+        );
+    }
+}
+
+impl PublicKey for RSA {
+    fn keygen(&mut self) -> Result<(), RvError> {
+        let bits: u32;
+        match &self.size {
+            RSAKeySize::RSA2048 =>  bits = 2048,
+            RSAKeySize::RSA3072 =>  bits = 3072,
+            RSAKeySize::RSA4096 =>  bits = 4096,
+            RSAKeySize::RSA8192 =>  bits = 8192,
+        }
+
+        let rsa = match Rsa::generate(bits) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyRSAKeyGenFailed),
+        };
+
+        let pkey = match PKey::from_rsa(rsa) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyRSAKeyGenFailed),
+        };
+
+        let adaptor_ctx = AdaptorPKeyCTX { private_key: pkey };
+        self.ctx = Some(adaptor_ctx);
+
+        return Ok(());
+    }
+
+    fn get_key_type(&self) -> Result<&PublicKeyType, RvError> {
+        return Ok(&self.key_type);
+    }
+}
+
+impl Signature for RSA {
+    fn sign(&self, data: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.sign_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignInitFailed),
+        }
+
+        let mut signature: Vec<u8> = Vec::new();
+        match ctx.sign_to_vec(data, &mut signature) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignFailed),
+        }
+
+        return Ok(signature);
+    }
+
+    fn verify(&self, data: &Vec<u8>, sig: &Vec<u8>) -> Result<bool, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.verify_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyInitFailed),
+        }
+
+        let valid = match ctx.verify(data, sig) {
+            Ok(ret) => ret,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyFailed),
+        };
+
+        return Ok(valid);
+    }
+}
+
+impl Encryption for RSA {
+    fn encrypt(&self, plaintext: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.encrypt_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyEncInitFailed),
+        }
+
+        let mut ciphertext: Vec<u8> = Vec::new();
+        match ctx.encrypt_to_vec(plaintext, &mut ciphertext) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyEncFailed),
+        }
+
+        return Ok(ciphertext);
+    }
+
+    fn decrypt(&self, ciphertext: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.decrypt_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyDecInitFailed),
+        }
+
+        let mut plaintext: Vec<u8> = Vec::new();
+        match ctx.decrypt_to_vec(ciphertext, &mut plaintext) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyDecFailed),
+        }
+
+        return Ok(plaintext);
+    }
+}
+
+impl ECDSA {
+    /// This function is the constructor of the ECDSA struct, it returns a new ECDSA object
+    /// on success.
+    ///
+    /// curve: RSA key size. Valid options are RSA2048 (default), RSA3072, RSA4096, RSA8192.
+    /// prime: for multi-prime RSA usage (RFC 8017), default is 2.
+    pub fn new(
+        curve: Option<ECCurveName>,
+    ) -> Result<Self, RvError> {
+        return Ok(
+            ECDSA {
+                key_type: PublicKeyType::ECDSA,
+                curve: curve.unwrap_or(ECCurveName::Prime256v1),
+                ctx: None,
+            }
+        );
+    }
+}
+
+impl PublicKey for ECDSA {
+    fn keygen(&mut self) -> Result<(), RvError> {
+        let nid: Nid;
+        match &self.curve {
+            ECCurveName::Prime256v1 => nid = Nid::X9_62_PRIME256V1,
+        }
+
+        let group = EcGroup::from_curve_name(nid)?;
+        let ec = match EcKey::generate(&group) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyECKeyGenFailed),
+        };
+
+        let pkey = match PKey::from_ec_key(ec) {
+            Ok(r) => r,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyECKeyGenFailed),
+        };
+
+        let adaptor_ctx = AdaptorPKeyCTX { private_key: pkey };
+        self.ctx = Some(adaptor_ctx);
+
+        return Ok(());
+    }
+
+    fn get_key_type(&self) -> Result<&PublicKeyType, RvError> {
+        return Ok(&self.key_type);
+    }
+}
+
+impl Signature for ECDSA {
+    fn sign(&self, data: &Vec<u8>) -> Result<Vec<u8>, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.sign_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignInitFailed),
+        }
+
+        let mut signature: Vec<u8> = Vec::new();
+        match ctx.sign_to_vec(data, &mut signature) {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeySignFailed),
+        }
+
+        return Ok(signature);
+    }
+
+    fn verify(&self, data: &Vec<u8>, sig: &Vec<u8>) -> Result<bool, RvError> {
+        let key = &self.ctx.as_ref().unwrap().private_key;
+
+        let mut ctx = match PkeyCtx::new(&key) {
+            Ok(ctx) => ctx,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
+        };
+
+        match ctx.verify_init() {
+            Ok(_ret) => {},
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyInitFailed),
+        }
+
+        let valid = match ctx.verify(data, sig) {
+            Ok(ret) => ret,
+            Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyFailed),
+        };
+
+        return Ok(valid);
+    }
+}
+
+// TODO: implement SM2 after necessary functions are supported in rust-tongsuo
