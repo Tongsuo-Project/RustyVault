@@ -105,10 +105,9 @@ impl PkiBackendInner {
             "serial_number": cert_bundle.serial_number.clone(),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(resp_data))))
+        Ok(Some(Response::data_response(resp_data)))
     }
 
     pub fn read_path_fetch_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -144,10 +143,9 @@ impl PkiBackendInner {
             "serial_number": serial_number,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(resp_data))))
+        Ok(Some(Response::data_response(resp_data)))
     }
 
     pub fn read_path_fetch_cert_crl(

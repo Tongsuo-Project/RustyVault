@@ -134,12 +134,10 @@ mod test {
             "ttl": ttl,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         let resp =
-            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data))
-                .await;
+            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, user_data).await;
         assert!(resp.is_ok());
     }
 
@@ -168,12 +166,11 @@ mod test {
             "password": password,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         let mut req = Request::new(format!("auth/{}/login/{}", path, username).as_str());
         req.operation = Operation::Write;
-        req.body = Some(login_data);
+        req.body = login_data;
 
         let resp = core.handle_request(&mut req).await;
         assert!(resp.is_ok());
