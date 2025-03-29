@@ -136,6 +136,10 @@ impl Sys<'_> {
         self.request_write("/v1/sys/remount", data.as_object().cloned())
     }
 
+    pub fn list_mounts(&self) -> Result<HttpResponse, RvError> {
+        self.request_read("/v1/sys/mounts")
+    }
+
     pub fn list_policy(&self) -> Result<HttpResponse, RvError> {
         self.request_read("/v1/sys/policies/acl")
     }
