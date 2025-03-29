@@ -245,7 +245,7 @@ mod test {
             "token_policies": "aa,bb,cc",
             "token_bound_cidrs": ["192.168.1.1:8080","10.0.0.1:80"],
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
 
         let mut token_params = TokenParams::new("tt1");
         let ret = token_params.parse_token_fields(&req);
@@ -280,7 +280,7 @@ mod test {
             "token_no_default_policy": true,
             "token_num_uses": 100,
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
 
         let mut token_params = TokenParams::new("tt2");
         let ret = token_params.parse_token_fields(&req);

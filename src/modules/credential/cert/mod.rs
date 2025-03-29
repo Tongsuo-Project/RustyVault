@@ -226,10 +226,9 @@ mod test {
                 "lease": 900,
             })
             .as_object()
-            .unwrap()
-            .clone();
+            .cloned();
 
-            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), Some(data), None);
+            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), data, None);
             assert!(ret.is_ok());
             let (status, _) = ret.unwrap();
             assert!(status == 200 || status == 204);
@@ -242,10 +241,9 @@ mod test {
                 "certificate": cert,
             })
             .as_object()
-            .unwrap()
-            .clone();
+            .cloned();
 
-            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), Some(data), None);
+            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), data, None);
             assert!(ret.is_ok());
             let (status, _) = ret.unwrap();
             assert!(status == 200 || status == 204);
@@ -259,10 +257,9 @@ mod test {
                 "ttl": "900s",
             })
             .as_object()
-            .unwrap()
-            .clone();
+            .cloned();
 
-            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), Some(data), None);
+            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), data, None);
             assert!(ret.is_ok());
             let (status, _) = ret.unwrap();
             assert!(status == 200 || status == 204);
@@ -277,10 +274,9 @@ mod test {
                 "max_ttl": "1200s",
             })
             .as_object()
-            .unwrap()
-            .clone();
+            .cloned();
 
-            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), Some(data), None);
+            let ret = self.write(&format!("auth/{}/certs/{}", &self.mount_path, name), data, None);
             assert!(ret.is_ok());
             let (status, _) = ret.unwrap();
             assert!(status == 200 || status == 204);
@@ -318,9 +314,8 @@ mod test {
                 "name": name,
             })
             .as_object()
-            .unwrap()
-            .clone();
-            let ret = self.login(&format!("auth/{}/login", &self.mount_path), Some(data), Some(tls_client_auth));
+            .cloned();
+            let ret = self.login(&format!("auth/{}/login", &self.mount_path), data, Some(tls_client_auth));
             assert!(ret.is_ok());
             let (status, resp) = ret.unwrap();
             match expect_err {
@@ -357,9 +352,8 @@ mod test {
                 "metadata": meta_data,
             })
             .as_object()
-            .unwrap()
-            .clone();
-            let ret = self.login(&format!("auth/{}/login", &self.mount_path), Some(data), Some(tls_client_auth));
+            .cloned();
+            let ret = self.login(&format!("auth/{}/login", &self.mount_path), data, Some(tls_client_auth));
             assert!(ret.is_ok());
             let (status, resp) = ret.unwrap();
             match expect_err {
@@ -389,9 +383,8 @@ mod test {
                 "crl": crl_pem,
             })
             .as_object()
-            .unwrap()
-            .clone();
-            let ret = self.write(&format!("auth/{}/crls/test", &self.mount_path), Some(crl_data), None);
+            .cloned();
+            let ret = self.write(&format!("auth/{}/crls/test", &self.mount_path), crl_data, None);
             assert!(ret.is_ok());
             let (status, _) = ret.unwrap();
             assert!(status == 200 || status == 204);

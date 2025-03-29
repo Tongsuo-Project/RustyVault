@@ -9,7 +9,9 @@ use super::{auth_disable, auth_enable, auth_help, auth_list, auth_move};
 use crate::{
     api::auth::LoginHandler,
     cli::command::CommandExecutor,
-    modules::credential::{cert::cli::CertAuthCliHandler, userpass::cli::UsesPassCliHandler},
+    modules::credential::{
+        cert::cli::CertAuthCliHandler, token::cli::TokenCliHandler, userpass::cli::UsesPassCliHandler,
+    },
     EXIT_CODE_INSUFFICIENT_PARAMS,
 };
 
@@ -17,6 +19,7 @@ lazy_static! {
     pub static ref LoginHandlers: DashMap<String, Arc<dyn LoginHandler>> = {
         let map: DashMap<String, Arc<dyn LoginHandler>> = DashMap::new();
 
+        map.insert("token".into(), Arc::new(TokenCliHandler));
         map.insert("userpass".into(), Arc::new(UsesPassCliHandler::default()));
         map.insert("cert".into(), Arc::new(CertAuthCliHandler::default()));
 
@@ -32,7 +35,7 @@ lazy_static! {
     long_about = r#"This command groups subcommands for interacting with RustyVault's auth methods.
 Users can list, enable, disable, and get help for different auth methods.
 
-To authenticate to RustyVault as a user or machine, use the "rvault login" command instead. 
+To authenticate to RustyVault as a user or machine, use the "rvault login" command instead.
 This command is for interacting with the auth methods themselves, not authenticating to RustyVault.
 
 List all enabled auth methods:
@@ -81,5 +84,169 @@ impl Auth {
         }
 
         EXIT_CODE_INSUFFICIENT_PARAMS
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::{Map, Value};
+
+    use crate::test_utils::TestHttpServer;
+
+    #[test]
+    fn test_cli_auth_help() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_help", true);
+        test_http_server.token = test_http_server.root_token.clone();
+
+        // auth help token/
+        let ret = test_http_server.cli(&["auth", "help", "token/"], &[]);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().contains("Usage: rvault login TOKEN"));
+
+        // auth enable
+        let ret = test_http_server.cli(
+            &["auth", "enable", "userpass"],
+            &["--path=up1", "--description=userpass_test", "--options", "u1=p1", "--options", "u2=p2"],
+        );
+        assert!(ret.is_ok());
+        assert_eq!(ret, Ok("Success! Enabled userpass auth method at: up1/\n".to_string()));
+
+        // auth help up1/
+        let ret = test_http_server.cli(&["auth", "help", "up1/"], &[]);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().contains("Usage: rvault login -method=userpass"));
+
+        // auth help cert
+        let ret = test_http_server.cli(&["auth", "help", "cert"], &[]);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().contains("Usage: rvault login -method=cert"));
+    }
+
+    #[test]
+    fn test_cli_auth_list() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_list", true);
+        test_http_server.token = test_http_server.root_token.clone();
+
+        // test auth list
+        let ret = test_http_server.cli(&["auth", "list"], &["--format=json"]);
+        assert!(ret.is_ok());
+        println!("ret: {:?}", ret);
+        let ret = ret.unwrap();
+        let list: Map<String, Value> = serde_json::from_str(&ret).unwrap();
+        assert!(list["token/"].is_object());
+        assert_eq!(list["token/"]["type"], Value::String("token".into()));
+    }
+
+    #[test]
+    fn test_cli_auth_enable_disable() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_enable_disable", true);
+        test_http_server.token = test_http_server.root_token.clone();
+
+        // test auth enable
+        let ret = test_http_server.cli(
+            &["auth", "enable", "userpass"],
+            &["--path=up1", "--description=userpass_test", "--options", "u1=p1", "--options", "u2=p2"],
+        );
+        assert!(ret.is_ok());
+        assert_eq!(ret, Ok("Success! Enabled userpass auth method at: up1/\n".to_string()));
+
+        // test auth list
+        let ret = test_http_server.cli(&["auth", "list"], &["--format=json"]);
+        assert!(ret.is_ok());
+        let ret = ret.unwrap();
+        let list: Map<String, Value> = serde_json::from_str(&ret).unwrap();
+        assert!(list["token/"].is_object());
+        assert_eq!(list["token/"]["type"], Value::String("token".into()));
+
+        assert!(list["up1/"].is_object());
+        assert_eq!(list["up1/"]["type"], Value::String("userpass".into()));
+        assert_eq!(list["up1/"]["description"], Value::String("userpass_test".into()));
+
+        // add user
+        let username = "jinjiu";
+        let password = "123123";
+        let ret = test_http_server
+            .cli(&["write"], &[&format!("auth/up1/users/{}", username), &format!("password={}", password), "ttl=600"]);
+        println!("add user ret: {:?}", ret);
+        assert!(ret.is_ok());
+
+        // clear token
+        test_http_server.token.clear();
+
+        // test login
+        let ret = test_http_server.cli(
+            &["login"],
+            &["--method=userpass", "--path=up1", &format!("username={}", username), &format!("password={}", password)],
+        );
+        assert!(ret.is_ok());
+
+        // test auth disable
+        test_http_server.token = test_http_server.root_token.clone();
+        let ret = test_http_server.cli(&["auth", "disable"], &["up1"]);
+        assert_eq!(ret, Ok("Success! Disabled the auth method (if it existed) at: up1/\n".to_string()));
+
+        // clear token
+        test_http_server.token.clear();
+
+        // test login again
+        let ret = test_http_server.cli(
+            &["login"],
+            &["--method=userpass", "--path=up1", &format!("username={}", username), &format!("password={}", password)],
+        );
+        assert!(ret.is_err());
+    }
+
+    #[test]
+    fn test_cli_auth_move() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_move", true);
+        test_http_server.token = test_http_server.root_token.clone();
+
+        // test auth enable
+        let ret = test_http_server.cli(
+            &["auth", "enable", "userpass"],
+            &["--path=up1", "--description=userpass_test", "--options", "u1=p1", "--options", "u2=p2"],
+        );
+        assert!(ret.is_ok());
+        assert_eq!(ret, Ok("Success! Enabled userpass auth method at: up1/\n".to_string()));
+
+        // add user
+        let username = "jinjiu";
+        let password = "123123";
+        let ret = test_http_server
+            .cli(&["write"], &[&format!("auth/up1/users/{}", username), &format!("password={}", password), "ttl=600"]);
+        println!("add user ret: {:?}", ret);
+        assert!(ret.is_ok());
+
+        // test auth move
+        test_http_server.token = test_http_server.root_token.clone();
+        let ret = test_http_server.cli(&["auth", "move"], &["up1", "up2"]).unwrap();
+        assert!(ret.starts_with("Success! Finished moving auth method"));
+
+        // clear token
+        test_http_server.token.clear();
+
+        // test login on up1/ should fail
+        let ret = test_http_server.cli(
+            &["login"],
+            &["--method=userpass", "--path=up1", &format!("username={}", username), &format!("password={}", password)],
+        );
+        assert!(ret.is_err());
+
+        // test login on up2/ should ok
+        let ret = test_http_server.cli(
+            &["login"],
+            &["--method=userpass", "--path=up2", &format!("username={}", username), &format!("password={}", password)],
+        );
+        assert!(ret.is_ok());
+
+        // test auth list
+        test_http_server.token = test_http_server.root_token.clone();
+        let ret = test_http_server.cli(&["auth", "list"], &["--format=json"]);
+        assert!(ret.is_ok());
+        let ret = ret.unwrap();
+        let list: Map<String, Value> = serde_json::from_str(&ret).unwrap();
+        assert!(list["up2/"].is_object());
+        assert_eq!(list["up2/"]["type"], Value::String("userpass".into()));
+        assert_eq!(list["up2/"]["description"], Value::String("userpass_test".into()));
     }
 }

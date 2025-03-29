@@ -182,14 +182,13 @@ impl PkiBackendInner {
             "serial_number": cert_bundle.serial_number.clone(),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         if role_entry.generate_lease {
             let mut secret_data: Map<String, Value> = Map::new();
             secret_data.insert("serial_number".to_string(), Value::String(cert_bundle.serial_number.clone()));
 
-            let mut resp = backend.secret("pki").unwrap().response(Some(resp_data), Some(secret_data));
+            let mut resp = backend.secret("pki").unwrap().response(resp_data, Some(secret_data));
             let secret = resp.secret.as_mut().unwrap();
 
             let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?;
@@ -199,7 +198,7 @@ impl PkiBackendInner {
 
             Ok(Some(resp))
         } else {
-            Ok(Some(Response::data_response(Some(resp_data))))
+            Ok(Some(Response::data_response(resp_data)))
         }
     }
 }

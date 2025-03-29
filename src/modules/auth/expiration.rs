@@ -819,7 +819,7 @@ mod mod_expiration_tests {
         let mut request = Request::new("mytest/tt");
         request.client_token = "mytest".into();
 
-        let mut response = secret_cloned.response(Some(json!({"key": "test"}).as_object().unwrap().clone()), None);
+        let mut response = secret_cloned.response(json!({"key": "test"}).as_object().cloned(), None);
 
         let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0);
 
@@ -995,7 +995,7 @@ mod mod_expiration_tests {
 
             let mut response = Response {
                 secret: Some(secret),
-                data: Some(json!({"access_key": "xyz", "secret_key": "abc"}).as_object().unwrap().clone()),
+                data: json!({"access_key": "xyz", "secret_key": "abc"}).as_object().cloned(),
                 ..Default::default()
             };
 
@@ -1109,15 +1109,12 @@ mod mod_expiration_tests {
                 lease: Lease { ttl: Duration::from_secs(60 * 60), ..Default::default() },
                 ..Default::default()
             }),
-            data: Some(
-                json!({
-                    "access_key": "xyz",
-                    "secret_key": "abcd",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            data: json!({
+                "access_key": "xyz",
+                "secret_key": "abcd",
+            })
+            .as_object()
+            .cloned(),
             ..Default::default()
         };
 
@@ -1162,15 +1159,12 @@ mod mod_expiration_tests {
                 lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
                 ..Default::default()
             }),
-            data: Some(
-                json!({
-                    "access_key": "xyz",
-                    "secret_key": "abcd",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            data: json!({
+                "access_key": "xyz",
+                "secret_key": "abcd",
+            })
+            .as_object()
+            .cloned(),
             ..Default::default()
         };
 
@@ -1217,15 +1211,12 @@ mod mod_expiration_tests {
                     lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
                     ..Default::default()
                 }),
-                data: Some(
-                    json!({
-                        "access_key": "xyz",
-                        "secret_key": "abcd",
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
+                data: json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .cloned(),
                 ..Default::default()
             };
 
@@ -1283,15 +1274,12 @@ mod mod_expiration_tests {
                     lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
                     ..Default::default()
                 }),
-                data: Some(
-                    json!({
-                        "access_key": "xyz",
-                        "secret_key": "abcd",
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
+                data: json!({
+                    "access_key": "xyz",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .cloned(),
                 ..Default::default()
             };
 
@@ -1490,15 +1478,12 @@ mod mod_expiration_tests {
                     lease: Lease { ttl: Duration::from_secs(10), ..Default::default() },
                     ..Default::default()
                 }),
-                data: Some(
-                    json!({
-                        "access_key": "123",
-                        "secret_key": "abcd",
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
+                data: json!({
+                    "access_key": "123",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .cloned(),
                 ..Default::default()
             }),
             ..Default::default()
@@ -1526,15 +1511,12 @@ mod mod_expiration_tests {
                 lease: Lease { ttl: Duration::from_secs(1), renewable: true, ..Default::default() },
                 ..Default::default()
             }),
-            data: Some(
-                json!({
-                    "access_key": "xyz",
-                    "secret_key": "abcd",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            data: json!({
+                "access_key": "xyz",
+                "secret_key": "abcd",
+            })
+            .as_object()
+            .cloned(),
             ..Default::default()
         };
 
@@ -1583,15 +1565,12 @@ mod mod_expiration_tests {
                 lease: Lease { ttl: Duration::from_secs(1), renewable: false, ..Default::default() },
                 ..Default::default()
             }),
-            data: Some(
-                json!({
-                    "access_key": "xyz",
-                    "secret_key": "abcd",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            data: json!({
+                "access_key": "xyz",
+                "secret_key": "abcd",
+            })
+            .as_object()
+            .cloned(),
             ..Default::default()
         };
 
@@ -1619,15 +1598,12 @@ mod mod_expiration_tests {
                     lease: Lease { ttl: Duration::from_secs(1), ..Default::default() },
                     ..Default::default()
                 }),
-                data: Some(
-                    json!({
-                        "access_key": "123",
-                        "secret_key": "abcd",
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
+                data: json!({
+                    "access_key": "123",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .cloned(),
                 ..Default::default()
             }),
             ..Default::default()
@@ -1655,15 +1631,12 @@ mod mod_expiration_tests {
                 lease: Lease { ttl: Duration::from_secs(1), renewable: true, ..Default::default() },
                 ..Default::default()
             }),
-            data: Some(
-                json!({
-                    "access_key": "xyz",
-                    "secret_key": "abcd",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            data: json!({
+                "access_key": "xyz",
+                "secret_key": "abcd",
+            })
+            .as_object()
+            .cloned(),
             ..Default::default()
         };
 
@@ -1693,15 +1666,12 @@ mod mod_expiration_tests {
                     lease: Lease { ttl: Duration::from_secs(2), max_ttl: Duration::from_secs(2), ..Default::default() },
                     ..Default::default()
                 }),
-                data: Some(
-                    json!({
-                        "access_key": "123",
-                        "secret_key": "abcd",
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
+                data: json!({
+                    "access_key": "123",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .cloned(),
                 ..Default::default()
             }),
             ..Default::default()
@@ -1729,15 +1699,12 @@ mod mod_expiration_tests {
                 lease: Lease { ttl: Duration::from_secs(2), renewable: true, ..Default::default() },
                 ..Default::default()
             }),
-            data: Some(
-                json!({
-                    "access_key": "xyz",
-                    "secret_key": "abcd",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            data: json!({
+                "access_key": "xyz",
+                "secret_key": "abcd",
+            })
+            .as_object()
+            .cloned(),
             ..Default::default()
         };
 
@@ -1788,15 +1755,12 @@ mod mod_expiration_tests {
                 lease: Lease { ttl: Duration::from_secs(2), renewable: true, ..Default::default() },
                 ..Default::default()
             }),
-            data: Some(
-                json!({
-                    "access_key": "xyz",
-                    "secret_key": "abcd",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            data: json!({
+                "access_key": "xyz",
+                "secret_key": "abcd",
+            })
+            .as_object()
+            .cloned(),
             ..Default::default()
         };
 
@@ -1918,15 +1882,12 @@ mod mod_expiration_tests {
                     lease: Lease { ttl: Duration::from_secs(60 * 60), renewable: true, ..Default::default() },
                     ..Default::default()
                 }),
-                data: Some(
-                    json!({
-                        "access_key": "123",
-                        "secret_key": "abcd",
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                ),
+                data: json!({
+                    "access_key": "123",
+                    "secret_key": "abcd",
+                })
+                .as_object()
+                .cloned(),
                 ..Default::default()
             }),
             ..Default::default()

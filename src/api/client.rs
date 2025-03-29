@@ -17,7 +17,7 @@ pub struct TLSConfig {
     client_config: ClientConfig,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TLSConfigBuilder {
     pub server_ca_pem: Option<Vec<u8>>,
     pub client_cert_pem: Option<Vec<u8>>,
@@ -26,7 +26,7 @@ pub struct TLSConfigBuilder {
     pub insecure: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Client {
     #[default("https://127.0.0.1:8200".into())]
     pub address: String,

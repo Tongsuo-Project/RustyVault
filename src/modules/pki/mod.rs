@@ -159,11 +159,10 @@ mod test {
             "pem_bundle": ca_pem_bundle,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         // config ca
-        let resp = test_write_api(core, token, format!("{}config/ca", path).as_str(), true, Some(ca_data)).await;
+        let resp = test_write_api(core, token, format!("{}config/ca", path).as_str(), true, ca_data).await;
         assert!(resp.is_ok());
     }
 
@@ -181,12 +180,10 @@ mod test {
             "no_store": false,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         // config role
-        let resp =
-            test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, Some(role_data)).await;
+        let resp = test_write_api(&core, token, format!("{}roles/{}", path, role_name).as_str(), true, role_data).await;
         assert!(resp.is_ok());
     }
 
@@ -209,15 +206,14 @@ mod test {
             "key_bits": key_bits,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("generate root req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(
             core,
             token,
             format!("{}root/generate/{}", path, if exported { "exported" } else { "internal" }).as_str(),
             is_ok,
-            Some(req_data),
+            req_data,
         )
         .await;
         if !is_ok {
@@ -295,13 +291,11 @@ mod test {
             "alt_names": "a.test.com,b.test.com",
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         // issue cert
         let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let resp =
-            test_write_api(core, token, format!("{}issue/{}", path, role_name).as_str(), true, Some(issue_data)).await;
+        let resp = test_write_api(core, token, format!("{}issue/{}", path, role_name).as_str(), true, issue_data).await;
         assert!(resp.is_ok());
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
@@ -493,12 +487,11 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "alt_names": "a.test.com,b.test.com",
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         // issue cert
         let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let resp = test_write_api(&core, token, &format!("{}issue/{}", path, role_name), true, Some(issue_data)).await;
+        let resp = test_write_api(&core, token, &format!("{}issue/{}", path, role_name), true, issue_data).await;
         assert!(resp.is_ok());
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
@@ -636,15 +629,14 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "key_bits": key_bits,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("generate req_data: {:?}, is_ok: {}", req_data, is_ok);
         let resp = test_write_api(
             core,
             token,
             &format!("{}/keys/generate/{}", path, if exported { "exported" } else { "internal" }),
             is_ok,
-            Some(req_data),
+            req_data,
         )
         .await;
         if !is_ok {
@@ -739,10 +731,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "data": hex::encode(data),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("sign req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(core, token, &format!("{}/keys/sign", path), is_ok, Some(req_data)).await;
+        let resp = test_write_api(core, token, &format!("{}/keys/sign", path), is_ok, req_data).await;
         if !is_ok {
             return;
         }
@@ -761,10 +752,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "signature": signature,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("verify req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), is_ok, Some(req_data)).await;
+        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), is_ok, req_data).await;
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
         let resp_raw_data = resp_body.unwrap().data;
@@ -780,10 +770,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "signature": signature,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("verify bad req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), true, Some(req_data)).await;
+        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), true, req_data).await;
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
         let resp_raw_data = resp_body.unwrap().data;
@@ -798,10 +787,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "signature": signature[2..],
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("verify bad signatue req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), true, Some(req_data)).await;
+        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), true, req_data).await;
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
         let resp_raw_data = resp_body.unwrap().data;
@@ -816,9 +804,8 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "signature": signature[1..],
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), false, Some(req_data)).await;
+        .cloned();
+        let resp = test_write_api(core, token, &format!("{}/keys/verify", path), false, req_data).await;
         assert!(resp.is_err());
     }
 
@@ -830,10 +817,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "data": origin_data.clone(),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("encrypt req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(core, token, &format!("{}/keys/encrypt", path), is_ok, Some(req_data)).await;
+        let resp = test_write_api(core, token, &format!("{}/keys/encrypt", path), is_ok, req_data).await;
         if !is_ok {
             return;
         }
@@ -851,10 +837,9 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "data": encrypted_data,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         println!("decrypt req_data: {:?}, is_ok: {}", req_data, is_ok);
-        let resp = test_write_api(core, token, &format!("{}/keys/decrypt", path), is_ok, Some(req_data)).await;
+        let resp = test_write_api(core, token, &format!("{}/keys/decrypt", path), is_ok, req_data).await;
         let resp_body = resp.unwrap();
         assert!(resp_body.is_some());
         let resp_raw_data = resp_body.unwrap().data;
@@ -869,9 +854,8 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
             "data": encrypted_data[1..],
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let resp = test_write_api(core, token, &format!("{}/keys/decrypt", path), false, Some(req_data)).await;
+        .cloned();
+        let resp = test_write_api(core, token, &format!("{}/keys/decrypt", path), false, req_data).await;
         assert!(resp.is_err());
     }
 

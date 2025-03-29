@@ -123,10 +123,14 @@ impl CommandExecutor for Login {
             std::process::exit(1);
         }
 
-        let mut auth_data = self.data.to_map();
-        //let mount = auth_data.get("mount").unwrap_or("");
+        let mut auth_data = if auth_method == "token" && !self.data.is_empty() && !self.data[0].contains('=') {
+            let mut data = self.data.clone();
+            data[0] = format!("token={}", self.data[0]);
+            data.to_map()
+        } else {
+            self.data.to_map()
+        };
 
-        //if mount == "" && auth_path != "" {
         if !auth_path.is_empty() {
             auth_data.insert("mount".into(), Value::String(auth_path));
         }
@@ -150,8 +154,6 @@ impl CommandExecutor for Login {
         if self.options.no_print {
             return Ok(());
         }
-
-        println!("login ret, secret: {:?}", secret);
 
         self.output.print_secret(&secret, None)
     }

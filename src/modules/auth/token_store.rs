@@ -644,14 +644,11 @@ impl TokenStore {
         if let Some(data) = req.data.as_mut() {
             data.insert("token".to_string(), Value::String(req.client_token.clone()));
         } else {
-            req.data = Some(
-                json!({
-                    "token": req.client_token.clone(),
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            );
+            req.data = json!({
+                "token": req.client_token.clone(),
+            })
+            .as_object()
+            .cloned();
         }
 
         self.handle_lookup(backend, req)
@@ -1033,15 +1030,12 @@ mod mod_token_store_tests {
 
         let mut req = Request {
             client_token: entry.id.clone(),
-            body: Some(
-                json!({
-                    "policies": ["default"],
-                    "display_name": "test-token",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            body: json!({
+                "policies": ["default"],
+                "display_name": "test-token",
+            })
+            .as_object()
+            .cloned(),
             ..Request::default()
         };
 

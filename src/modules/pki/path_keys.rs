@@ -342,10 +342,9 @@ impl PkiBackendInner {
             "key_bits": key_bundle.bits,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(resp_data))))
+        Ok(Some(Response::data_response(resp_data)))
     }
 
     pub fn key_sign(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -362,10 +361,9 @@ impl PkiBackendInner {
             "result": hex::encode(result),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(resp_data))))
+        Ok(Some(Response::data_response(resp_data)))
     }
 
     pub fn key_verify(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -385,10 +383,9 @@ impl PkiBackendInner {
             "result": result,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(resp_data))))
+        Ok(Some(Response::data_response(resp_data)))
     }
 
     pub fn key_encrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -407,10 +404,9 @@ impl PkiBackendInner {
             "result": hex::encode(result),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(resp_data))))
+        Ok(Some(Response::data_response(resp_data)))
     }
 
     pub fn key_decrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -429,10 +425,9 @@ impl PkiBackendInner {
             "result": hex::encode(result),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(resp_data))))
+        Ok(Some(Response::data_response(resp_data)))
     }
 
     pub fn fetch_key(&self, req: &Request, key_name: &str) -> Result<KeyBundle, RvError> {
