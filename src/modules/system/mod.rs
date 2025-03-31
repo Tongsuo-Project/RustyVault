@@ -70,6 +70,11 @@ impl SystemBackend {
         let sys_backend_policy_read = Arc::clone(&self.inner);
         let sys_backend_policy_write = Arc::clone(&self.inner);
         let sys_backend_policy_delete = Arc::clone(&self.inner);
+        let sys_backend_policies_list1 = Arc::clone(&self.inner);
+        let sys_backend_policies_list2 = Arc::clone(&self.inner);
+        let sys_backend_policies_read = Arc::clone(&self.inner);
+        let sys_backend_policies_write = Arc::clone(&self.inner);
+        let sys_backend_policies_delete = Arc::clone(&self.inner);
         let sys_backend_audit_table = Arc::clone(&self.inner);
         let sys_backend_audit_enable = Arc::clone(&self.inner);
         let sys_backend_audit_disable = Arc::clone(&self.inner);
@@ -225,6 +230,31 @@ impl SystemBackend {
                     ]
                 },
                 {
+                    pattern: "policies/acl/?$",
+                    operations: [
+                        {op: Operation::Read, handler: sys_backend_policies_list1.handle_policy_list},
+                        {op: Operation::List, handler: sys_backend_policies_list2.handle_policy_list}
+                    ]
+                },
+                {
+                    pattern: "policies/acl/(?P<name>.+)",
+                    fields: {
+                        "name": {
+                            field_type: FieldType::Str,
+                            description: r#"The name of the policy. Example: "ops""#
+                        },
+                        "policy": {
+                            field_type: FieldType::Str,
+                            description: r#"The rules of the policy. Either given in HCL or JSON format."#
+                        }
+                    },
+                    operations: [
+                        {op: Operation::Read, handler: sys_backend_policies_read.handle_policy_read},
+                        {op: Operation::Write, handler: sys_backend_policies_write.handle_policy_write},
+                        {op: Operation::Delete, handler: sys_backend_policies_delete.handle_policy_delete}
+                    ]
+                },
+                {
                     pattern: "audit$",
                     operations: [
                         {op: Operation::Read, handler: sys_backend_audit_table.handle_audit_table}
@@ -286,7 +316,7 @@ impl SystemBackendInner {
         let core = self.core.read()?;
         let mut data: Map<String, Value> = Map::new();
 
-        let mounts = core.mounts.entries.read()?;
+        let mounts = core.mounts_router.entries.read()?;
 
         for mount_entry in mounts.values() {
             let entry = mount_entry.read()?;
@@ -310,11 +340,11 @@ impl SystemBackendInner {
         let logical_type = logical_type.as_str().unwrap();
         let description = description.as_str().unwrap();
 
-        if logical_type == "" {
+        if logical_type.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let mut me = MountEntry::new(&MOUNT_TABLE_TYPE, path, logical_type, description);
+        let mut me = MountEntry::new(MOUNT_TABLE_TYPE, path, logical_type, description);
         me.options = options.as_map();
 
         let core = self.core.read()?;
@@ -324,12 +354,12 @@ impl SystemBackendInner {
 
     pub fn handle_unmount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let suffix = req.path.trim_start_matches("mounts/");
-        if suffix.len() == 0 {
+        if suffix.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
         let core = self.core.read()?;
-        core.unmount(&suffix)?;
+        core.unmount(suffix)?;
         Ok(None)
     }
 
@@ -339,7 +369,7 @@ impl SystemBackendInner {
 
         let from = from.as_str().unwrap();
         let to = to.as_str().unwrap();
-        if from.len() == 0 || to.len() == 0 {
+        if from.is_empty() || to.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -350,8 +380,8 @@ impl SystemBackendInner {
         if let Some(me) = core.router.matching_mount_entry(&from_path)? {
             let mount_entry = me.read()?;
 
-            let dst_path_match = core.router.matching_mount(&to)?;
-            if dst_path_match.len() != 0 {
+            let dst_path_match = core.router.matching_mount(to)?;
+            if !dst_path_match.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path already in use at {}", dst_path_match)));
             }
 
@@ -406,8 +436,7 @@ impl SystemBackendInner {
         let auth_mod = module.read()?;
         let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
 
-        let router_store = auth_module.router_store.read()?;
-        let mounts = router_store.mounts.entries.read()?;
+        let mounts = auth_module.mounts_router.entries.read()?;
 
         for mount_entry in mounts.values() {
             let entry = mount_entry.read()?;
@@ -418,7 +447,7 @@ impl SystemBackendInner {
             data.insert(entry.path.clone(), info);
         }
 
-        return Ok(Some(Response::data_response(Some(data))));
+        Ok(Some(Response::data_response(Some(data))))
     }
 
     pub fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -431,11 +460,11 @@ impl SystemBackendInner {
         let logical_type = logical_type.as_str().unwrap();
         let description = description.as_str().unwrap();
 
-        if logical_type == "" {
+        if logical_type.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let mut me = MountEntry::new(&AUTH_TABLE_TYPE, &path, logical_type, description);
+        let mut me = MountEntry::new(AUTH_TABLE_TYPE, &path, logical_type, description);
 
         me.options = options.as_map();
 
@@ -450,7 +479,7 @@ impl SystemBackendInner {
 
     pub fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = sanitize_path(req.path.trim_start_matches("auth/"));
-        if path.len() == 0 {
+        if path.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -586,7 +615,7 @@ impl SystemModule {
 
 impl Module for SystemModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {

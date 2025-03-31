@@ -121,7 +121,7 @@ pub fn common_internal_get_cipher_alg(alg: &(AESKeySize, CipherMode)) -> Result<
         _ => return Err(RvError::ErrCryptoCipherOPNotSupported),
     }
 
-    return Ok((cipher, aead));
+    Ok((cipher, aead))
 }
 
 macro_rules! common_aes_encrypt {

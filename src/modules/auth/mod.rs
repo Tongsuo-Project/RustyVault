@@ -2,10 +2,7 @@
 //!
 //! After a successful authentication, a client will be granted a token for further operations.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use lazy_static::lazy_static;
 
@@ -16,8 +13,7 @@ use crate::{
     handler::Handler,
     logical::Backend,
     modules::Module,
-    mount::{MountEntry, MountTable},
-    router::Router,
+    mount::{MountEntry, MountTable, MountsRouter},
     rv_error_response_status,
     storage::{barrier::SecurityBarrier, barrier_view::BarrierView},
     utils::{generate_uuid, is_protect_path},
@@ -47,23 +43,11 @@ lazy_static! {
     }];
 }
 
-pub struct AuthRouterStore {
-    pub mounts: Arc<MountTable>,
-    pub router: Arc<Router>,
-}
-
-impl AuthRouterStore {
-    pub fn new(mounts: Arc<MountTable>, router: Arc<Router>) -> Self {
-        Self { mounts, router }
-    }
-}
-
 pub struct AuthModule {
     pub name: String,
     pub core: Arc<RwLock<Core>>,
     pub barrier: Arc<dyn SecurityBarrier>,
-    pub backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
-    pub router_store: RwLock<AuthRouterStore>,
+    pub mounts_router: Arc<MountsRouter>,
     pub token_store: Option<Arc<TokenStore>>,
     pub expiration: Option<Arc<ExpirationManager>>,
 }
@@ -74,20 +58,25 @@ impl AuthModule {
             name: "auth".to_string(),
             core: Arc::clone(core.self_ref.as_ref().unwrap()),
             barrier: Arc::clone(&core.barrier),
-            backends: Mutex::new(HashMap::new()),
-            router_store: RwLock::new(AuthRouterStore::new(Arc::new(MountTable::new()), Arc::clone(&core.router))),
+            mounts_router: Arc::new(MountsRouter::new(
+                Arc::new(MountTable::new(AUTH_CONFIG_PATH)),
+                Arc::clone(&core.router),
+                Arc::clone(&core.barrier),
+                AUTH_BARRIER_PREFIX,
+                AUTH_ROUTER_PREFIX,
+            )),
             token_store: None,
             expiration: None,
         })
     }
 
     pub fn enable_auth(&self, me: &MountEntry) -> Result<(), RvError> {
-        let router_store = self.router_store.read()?;
+        let mounts_router = &self.mounts_router;
         {
-            let mut auth_table = router_store.mounts.entries.write()?;
+            let mut auth_table = mounts_router.mounts.entries.write()?;
             let mut entry = me.clone();
 
-            if !entry.path.ends_with("/") {
+            if !entry.path.ends_with('/') {
                 entry.path += "/";
             }
 
@@ -110,8 +99,8 @@ impl AuthModule {
                 }
             }
 
-            let match_mount_path = router_store.router.matching_mount(&entry.path)?;
-            if match_mount_path.len() != 0 {
+            let match_mount_path = mounts_router.router.matching_mount(&entry.path)?;
+            if !match_mount_path.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path is already in use at {}", match_mount_path)));
             }
 
@@ -128,21 +117,21 @@ impl AuthModule {
 
             let mount_entry = Arc::new(RwLock::new(entry));
 
-            router_store.router.mount(backend, &path, Arc::clone(&mount_entry), view)?;
+            mounts_router.router.mount(backend, &path, Arc::clone(&mount_entry), view)?;
 
             auth_table.insert(key, mount_entry);
         }
 
-        router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())?;
+        mounts_router.persist(self.barrier.as_storage())?;
 
         Ok(())
     }
 
     pub fn disable_auth(&self, path: &str) -> Result<(), RvError> {
-        let router_store = self.router_store.read()?;
+        let mounts_router = &self.mounts_router;
 
         let mut path = path.to_string();
-        if !path.ends_with("/") {
+        if !path.ends_with('/') {
             path += "/";
         }
 
@@ -151,13 +140,13 @@ impl AuthModule {
         }
 
         let full_path = format!("{}{}", AUTH_ROUTER_PREFIX, &path);
-        let view = router_store.router.matching_view(&full_path)?;
+        let view = mounts_router.router.matching_view(&full_path)?;
 
         self.taint_auth_entry(&path)?;
 
-        router_store.router.taint(&full_path)?;
+        mounts_router.router.taint(&full_path)?;
 
-        router_store.router.unmount(&full_path)?;
+        mounts_router.router.unmount(&full_path)?;
 
         if view.is_some() {
             view.unwrap().clear()?;
@@ -172,11 +161,11 @@ impl AuthModule {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
-        if !src.ends_with("/") {
+        if !src.ends_with('/') {
             src += "/";
         }
 
-        if !dst.ends_with("/") {
+        if !dst.ends_with('/') {
             dst += "/";
         }
 
@@ -195,14 +184,14 @@ impl AuthModule {
             return Err(RvError::ErrMountPathProtected);
         }
 
-        let router_store = self.router_store.read()?;
+        let mounts_router = &self.mounts_router;
 
-        let dst_match = router_store.router.matching_mount(&dst)?;
-        if dst_match.len() != 0 {
+        let dst_match = mounts_router.router.matching_mount(&dst)?;
+        if !dst_match.is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
-        let src_match = router_store.router.matching_mount_entry(&src)?;
+        let src_match = mounts_router.router.matching_mount_entry(&src)?;
         if src_match.is_none() {
             return Err(RvError::ErrMountNotMatch);
         }
@@ -210,9 +199,9 @@ impl AuthModule {
         let mut src_entry = src_match.as_ref().unwrap().write()?;
         src_entry.tainted = true;
 
-        router_store.router.taint(&src)?;
+        mounts_router.router.taint(&src)?;
 
-        if router_store.router.matching_mount(&dst)? != "" {
+        if !(mounts_router.router.matching_mount(&dst)?).is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
@@ -222,121 +211,83 @@ impl AuthModule {
 
         std::mem::drop(src_entry);
 
-        if let Err(e) = router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage()) {
+        if let Err(e) = mounts_router.mounts.persist(self.barrier.as_storage()) {
             let mut src_entry = src_match.as_ref().unwrap().write()?;
             src_entry.path = src_path;
             src_entry.tainted = true;
             return Err(e);
         }
 
-        router_store.router.remount(&dst, &src)?;
+        mounts_router.router.remount(&dst, &src)?;
 
-        router_store.router.untaint(&dst)?;
+        mounts_router.router.untaint(&dst)?;
 
         Ok(())
     }
 
     pub fn remove_auth_entry(&self, path: &str) -> Result<(), RvError> {
-        let router_store = self.router_store.read()?;
-        if router_store.mounts.delete(path) {
-            router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())?;
+        if self.mounts_router.delete(path) {
+            self.mounts_router.persist(self.barrier.as_storage())?;
         }
         Ok(())
     }
 
     pub fn taint_auth_entry(&self, path: &str) -> Result<(), RvError> {
-        let router_store = self.router_store.read()?;
-        if router_store.mounts.set_taint(path, true) {
-            router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())?;
+        if self.mounts_router.set_taint(path, true) {
+            self.mounts_router.persist(self.barrier.as_storage())?;
         }
         Ok(())
     }
 
     pub fn teardown_auth(&self) -> Result<(), RvError> {
-        let mut router_store = self.router_store.write()?;
-        router_store.mounts = Arc::new(MountTable::new());
-        router_store.router = Arc::new(Router::new());
+        let _ = self.mounts_router.mounts.clear();
+        // TODO
+        let _ = self.mounts_router.router.clear();
         Ok(())
     }
 
     pub fn load_auth(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
-        let router_store = self.router_store.read()?;
-        if router_store.mounts.load(self.barrier.as_storage(), AUTH_CONFIG_PATH, hmac_key, hmac_level.clone()).is_err()
-        {
-            router_store.mounts.set_default(DEFAULT_AUTH_MOUNTS.to_vec(), hmac_key)?;
-            router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())?;
+        let mounts_router = &self.mounts_router;
+        if mounts_router.mounts.load(self.barrier.as_storage(), hmac_key, hmac_level).is_err() {
+            mounts_router.mounts.set_default(DEFAULT_AUTH_MOUNTS.to_vec(), hmac_key)?;
+            mounts_router.mounts.persist(self.barrier.as_storage())?;
         }
 
         self.update_auth_mount(hmac_key, hmac_level)
     }
 
     pub fn persist_auth(&self) -> Result<(), RvError> {
-        let router_store = self.router_store.read()?;
-        router_store.mounts.persist(AUTH_CONFIG_PATH, self.barrier.as_storage())
+        self.mounts_router.persist(self.barrier.as_storage())
     }
 
     pub fn setup_auth(&self) -> Result<(), RvError> {
-        let router_store = self.router_store.read()?;
-
-        let mounts = router_store.mounts.entries.read()?;
-
-        for mount_entry in mounts.values() {
-            let entry = mount_entry.read()?;
-            let barrier_path = format!("{}{}/", AUTH_BARRIER_PREFIX, &entry.uuid);
-
-            let backend_new_func = self.get_auth_backend(&entry.logical_type)?;
-            let backend = backend_new_func(Arc::clone(&self.core))?;
-
-            let view = BarrierView::new(Arc::clone(&self.barrier), &barrier_path);
-            let path = format!("{}{}", AUTH_ROUTER_PREFIX, &entry.path);
-
-            router_store.router.mount(backend, &path, Arc::clone(mount_entry), view)?;
-
-            if entry.tainted {
-                router_store.router.taint(&entry.path)?;
-            }
-        }
-
-        Ok(())
+        self.mounts_router.setup(&self.core)
     }
 
     pub fn get_auth_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
-        let backends = self.backends.lock().unwrap();
-        if let Some(backend) = backends.get(logical_type) {
-            Ok(backend.clone())
-        } else {
-            Err(RvError::ErrCoreLogicalBackendNoExist)
-        }
+        self.mounts_router.get_backend(logical_type)
     }
 
     pub fn add_auth_backend(&self, logical_type: &str, backend: Arc<LogicalBackendNewFunc>) -> Result<(), RvError> {
-        let mut backends = self.backends.lock().unwrap();
-        if backends.contains_key(logical_type) {
-            return Err(RvError::ErrCoreLogicalBackendExist);
-        }
-        backends.insert(logical_type.to_string(), backend);
-        Ok(())
+        self.mounts_router.add_backend(logical_type, backend)
     }
 
     pub fn delete_auth_backend(&self, logical_type: &str) -> Result<(), RvError> {
-        let mut backends = self.backends.lock().unwrap();
-        backends.remove(logical_type);
-        Ok(())
+        self.mounts_router.delete_backend(logical_type)
     }
 
     fn update_auth_mount(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
         let mut need_persist = false;
-        let router_store = self.router_store.read()?;
-        let mounts = router_store.mounts.entries.read()?;
+        let mounts = self.mounts_router.mounts.entries.read()?;
 
         for mount_entry in mounts.values() {
             let mut entry = mount_entry.write()?;
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = AUTH_TABLE_TYPE.to_string();
                 need_persist = true;
             }
 
-            if entry.hmac == "" && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
+            if entry.hmac.is_empty() && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
                 entry.calc_hmac(hmac_key.unwrap())?;
                 need_persist = true;
             }
@@ -352,14 +303,7 @@ impl AuthModule {
 
 impl Module for AuthModule {
     fn name(&self) -> String {
-        return self.name.clone();
-    }
-
-    fn setup(&mut self, core: &Core) -> Result<(), RvError> {
-        let mut router_store = self.router_store.write()?;
-        router_store.router = Arc::clone(&core.router);
-
-        Ok(())
+        self.name.clone()
     }
 
     fn init(&mut self, core: &Core) -> Result<(), RvError> {
@@ -380,8 +324,10 @@ impl Module for AuthModule {
         };
 
         self.add_auth_backend("token", Arc::new(token_backend_new_func))?;
-        self.load_auth(Some(&core.hmac_key), core.mount_entry_hmac_level.clone())?;
+        self.load_auth(Some(&core.hmac_key), core.mount_entry_hmac_level)?;
         self.setup_auth()?;
+
+        core.mounts_monitor.as_ref().unwrap().add_mounts_router(self.mounts_router.clone());
 
         expiration.restore()?;
         expiration.start_check_expired_lease_entries();
@@ -392,8 +338,8 @@ impl Module for AuthModule {
     }
 
     fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
+        core.mounts_monitor.as_ref().unwrap().remove_mounts_router(self.mounts_router.clone());
         core.delete_handler(self.token_store.as_ref().unwrap().clone() as Arc<dyn Handler>)?;
-
         self.delete_auth_backend("token")?;
         self.teardown_auth()?;
         Ok(())

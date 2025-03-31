@@ -8,7 +8,7 @@ As per: [RustyVault Requirements Document](./req.md). In this document we descri
 
 # Architecture Diagram
 
-![RustyVault Architecture](/docs/static/img/RustyVault-arch.png)
+![RustyVault Architecture](../../static/img/RustyVault-arch.png)
 
 Detailed description:
 

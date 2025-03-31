@@ -77,12 +77,12 @@ impl Backend for LogicalBackend {
             _ => {}
         }
 
-        if req.path == "" && req.operation == Operation::Help {
+        if req.path.is_empty() && req.operation == Operation::Help {
             return self.handle_root_help(req);
         }
 
         if let Some((path, captures)) = self.match_path(&req.path) {
-            if captures.len() != 0 {
+            if !captures.is_empty() {
                 let mut data = Map::new();
                 captures.iter().for_each(|(key, value)| {
                     data.insert(key.to_string(), Value::String(value.to_string()));
@@ -164,7 +164,7 @@ impl LogicalBackend {
         }
 
         log::error!("secret is unsupported by this backend");
-        return Ok(None);
+        Ok(None)
     }
 
     pub fn handle_root_help(&self, _req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -261,7 +261,7 @@ mod test {
     use crate::{
         logical::{field::FieldTrait, Field, FieldType, PathOperation},
         new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal, storage,
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     struct MyTest;
@@ -304,7 +304,7 @@ mod test {
 
     #[test]
     fn test_logical_backend_api() {
-        let backend = test_backend("test_logical_backend_api");
+        let backend = new_test_backend("test_logical_backend_api");
 
         let t = MyTest::new();
 
@@ -461,7 +461,7 @@ mod test {
 
     #[test]
     fn test_logical_path_field() {
-        let backend = test_backend("test_logical_path_field");
+        let backend = new_test_backend("test_logical_path_field");
 
         let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 

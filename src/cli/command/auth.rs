@@ -63,13 +63,13 @@ pub enum Commands {
 
 impl Commands {
     pub fn execute(&mut self) -> ExitCode {
-        return match self {
+        match self {
             Commands::List(list) => list.execute(),
             Commands::Enable(enable) => enable.execute(),
             Commands::Disable(disable) => disable.execute(),
             Commands::Move(mv) => mv.execute(),
             Commands::Help(help) => help.execute(),
-        };
+        }
     }
 }
 

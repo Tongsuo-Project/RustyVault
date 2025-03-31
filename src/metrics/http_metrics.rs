@@ -165,15 +165,15 @@ mod tests {
                         .as_object()
                         .unwrap()
                         .clone();
-                        let (_, _) = server.request(method, path, Some(data), Some(&root_token), None).unwrap();
+                        let (_, _) = server.request(method, path, Some(data), Some(root_token), None).unwrap();
                     } else {
-                        let (_, _) = server.request(method, path, None, Some(&root_token), None).unwrap();
+                        let (_, _) = server.request(method, path, None, Some(root_token), None).unwrap();
                     }
                 }
             }
         }
 
-        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(&root_token), None).unwrap();
+        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(root_token), None).unwrap();
         assert_eq!(status, 200);
 
         let counter_map = parse_counter(resp["metrics"].as_str().unwrap());

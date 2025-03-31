@@ -40,6 +40,8 @@ pub struct Config {
     pub collection_interval: u64,
     #[serde(default = "default_hmac_level")]
     pub mount_entry_hmac_level: MountEntryHMACLevel,
+    #[serde(default = "default_mounts_monitor_interval")]
+    pub mounts_monitor_interval: u64,
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
@@ -56,6 +58,10 @@ fn default_hmac_level() -> MountEntryHMACLevel {
 
 fn default_collection_interval() -> u64 {
     15
+}
+
+fn default_mounts_monitor_interval() -> u64 {
+    5
 }
 
 /// A struct that contains several configurable options for networking stuffs
@@ -154,7 +160,7 @@ where
 {
     struct TlsVersionVisitor;
 
-    impl<'de> Visitor<'de> for TlsVersionVisitor {
+    impl Visitor<'_> for TlsVersionVisitor {
         type Value = SslVersion;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -204,18 +210,16 @@ where
             return Err(serde::de::Error::custom("Invalid listener key"));
         }
 
-        if !listener.tls_disable && (listener.tls_cert_file.len() == 0 || listener.tls_key_file.len() == 0) {
+        if !listener.tls_disable && (listener.tls_cert_file.is_empty() || listener.tls_key_file.is_empty()) {
             return Err(serde::de::Error::custom(
                 "when tls_disable is false, tls_cert_file and tls_key_file must be configured",
             ));
         }
 
-        if !listener.tls_disable {
-            if listener.tls_require_and_verify_client_cert && listener.tls_disable_client_certs {
-                return Err(serde::de::Error::custom(
-                    "'tls_disable_client_certs' and 'tls_require_and_verify_client_cert' are mutually exclusive",
-                ));
-            }
+        if !listener.tls_disable && listener.tls_require_and_verify_client_cert && listener.tls_disable_client_certs {
+            return Err(serde::de::Error::custom(
+                "'tls_disable_client_certs' and 'tls_require_and_verify_client_cert' are mutually exclusive",
+            ));
         }
     }
 
@@ -226,19 +230,19 @@ impl Config {
     pub fn merge(&mut self, other: Config) {
         self.listener.extend(other.listener);
         self.storage.extend(other.storage);
-        if other.api_addr != "" {
+        if !other.api_addr.is_empty() {
             self.api_addr = other.api_addr;
         }
 
-        if other.log_format != "" {
+        if !other.log_format.is_empty() {
             self.log_format = other.log_format;
         }
 
-        if other.log_level != "" {
+        if !other.log_level.is_empty() {
             self.log_level = other.log_level;
         }
 
-        if other.pid_file != "" {
+        if !other.pid_file.is_empty() {
             self.pid_file = other.pid_file;
         }
 
@@ -264,18 +268,16 @@ fn load_config_dir(dir: &str) -> Result<Config, RvError> {
     let mut paths: Vec<String> = Vec::new();
 
     if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if !path.is_file() {
-                    continue;
-                }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
 
-                if let Some(ext) = path.extension() {
-                    if ext == "hcl" || ext == "json" {
-                        let filename = path.to_string_lossy().into_owned();
-                        paths.push(filename);
-                    }
+            if let Some(ext) = path.extension() {
+                if ext == "hcl" || ext == "json" {
+                    let filename = path.to_string_lossy().into_owned();
+                    paths.push(filename);
                 }
             }
         }
@@ -316,8 +318,8 @@ fn load_config_file(path: &str) -> Result<Config, RvError> {
 }
 
 fn set_config_type_field(config: &mut Config) -> Result<(), RvError> {
-    config.storage.iter_mut().for_each(|(key, value)| value.stype = key.clone());
-    config.listener.iter_mut().for_each(|(key, value)| value.ltype = key.clone());
+    config.storage.iter_mut().for_each(|(key, value)| value.stype.clone_from(key));
+    config.listener.iter_mut().for_each(|(key, value)| value.ltype.clone_from(key));
     Ok(())
 }
 

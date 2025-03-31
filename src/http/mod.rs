@@ -125,7 +125,7 @@ impl ResponseError for RvError {
             status = StatusCode::from_u16(400).unwrap();
             text = resp_text.clone();
         } else if let RvError::ErrResponseStatus(status_code, resp_text) = self {
-            status = StatusCode::from_u16(status_code.clone()).unwrap();
+            status = StatusCode::from_u16(*status_code).unwrap();
             text = resp_text.clone();
         } else {
             text = self.to_string();
@@ -161,7 +161,7 @@ pub fn request_auth(req: &HttpRequest) -> Request {
 }
 
 pub fn response_error(status: StatusCode, msg: &str) -> HttpResponse {
-    if msg.len() == 0 {
+    if msg.is_empty() {
         HttpResponse::build(status).finish()
     } else {
         let err_json = json!({ "error": msg.to_string() });
@@ -199,6 +199,9 @@ pub fn response_json_ok<T: Serialize>(cookie: Option<Cookie>, body: T) -> HttpRe
 
 pub async fn handle_request(core: web::Data<Arc<RwLock<Core>>>, req: &mut Request) -> Result<HttpResponse, RvError> {
     let core = core.read()?;
+    #[cfg(feature = "sync_handler")]
+    let resp = core.handle_request(req)?;
+    #[cfg(not(feature = "sync_handler"))]
     let resp = core.handle_request(req).await?;
     if resp.is_none() {
         Ok(response_ok(None, None))

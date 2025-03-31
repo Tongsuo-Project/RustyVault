@@ -1,11 +1,14 @@
 use std::{
+    any::Any,
     collections::HashMap,
     fs::{self, File},
     io::{self, Read, Write},
     path::PathBuf,
-    sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
 };
 
+use lockfile::Lockfile;
 use serde_json::Value;
 
 use crate::{
@@ -16,12 +19,11 @@ use crate::{
 #[derive(Debug)]
 pub struct FileBackend {
     path: PathBuf,
-    lock: Arc<Mutex<i32>>,
 }
 
 impl Backend for FileBackend {
     fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
-        if prefix.starts_with("/") {
+        if prefix.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendPrefixInvalid);
         }
 
@@ -29,8 +31,6 @@ impl Backend for FileBackend {
         if !prefix.is_empty() {
             path.push(prefix);
         }
-
-        let _lock = self.lock.lock().unwrap();
 
         if !path.exists() {
             return Ok(Vec::new());
@@ -41,8 +41,8 @@ impl Backend for FileBackend {
         for entry in entries {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with('_') {
-                names.push(name[1..].to_owned());
+            if let Some(stripped) = name.strip_prefix('_') {
+                names.push(stripped.to_owned());
             } else {
                 names.push(name + "/");
             }
@@ -51,16 +51,14 @@ impl Backend for FileBackend {
     }
 
     fn get(&self, k: &str) -> Result<Option<BackendEntry>, RvError> {
-        if k.starts_with("/") {
+        if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
 
         let (path, key) = self.path_key(k);
         let path = path.join(key);
 
-        let _lock = self.lock.lock().unwrap();
-
-        match File::open(&path) {
+        match File::open(path) {
             Ok(mut file) => {
                 let mut buffer = String::new();
                 file.read_to_string(&mut buffer)?;
@@ -79,29 +77,32 @@ impl Backend for FileBackend {
 
     fn put(&self, entry: &BackendEntry) -> Result<(), RvError> {
         let k = entry.key.as_str();
-        if k.starts_with("/") {
+        if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
 
-        let _lock = self.lock.lock().unwrap();
+        let serialized_entry = serde_json::to_string(entry)?;
         let (path, key) = self.path_key(k);
         fs::create_dir_all(&path)?;
-        let file_path = path.join(&key);
-        let mut file = File::create(&file_path)?;
-        let serialized_entry = serde_json::to_string(entry)?;
+
+        let _lock = self.lock(k)?;
+
+        let file_path = path.join(key);
+        let mut file = File::create(file_path)?;
         file.write_all(serialized_entry.as_bytes())?;
         Ok(())
     }
 
     fn delete(&self, k: &str) -> Result<(), RvError> {
-        if k.starts_with("/") {
+        if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
 
-        let _lock = self.lock.lock().unwrap();
+        let _lock = self.lock(k)?;
+
         let (path, key) = self.path_key(k);
         let file_path = path.join(key);
-        if let Err(err) = fs::remove_file(&file_path) {
+        if let Err(err) = fs::remove_file(file_path) {
             if err.kind() == io::ErrorKind::NotFound {
                 return Ok(());
             } else {
@@ -109,6 +110,18 @@ impl Backend for FileBackend {
             }
         }
         Ok(())
+    }
+
+    fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+        let (path, key) = self.path_key(lock_name);
+        let file_path = path.join(format!("{}.lock", key));
+        loop {
+            if let Ok(lock) = Lockfile::create_with_parents(&file_path) {
+                return Ok(Box::new(lock));
+            } else {
+                sleep(Duration::from_millis(100));
+            }
+        }
     }
 }
 
@@ -121,7 +134,9 @@ impl FileBackend {
                     return Err(RvError::ErrPhysicalConfigItemMissing);
                 }
 
-                Ok(FileBackend { path: PathBuf::from(path.unwrap()), lock: Arc::new(Mutex::new(0)) })
+                let fb = FileBackend { path: PathBuf::from(path.unwrap()) };
+                fs::create_dir_all(&fb.path)?;
+                Ok(fb)
             }
             None => Err(RvError::ErrPhysicalConfigItemMissing),
         }
@@ -138,13 +153,20 @@ impl FileBackend {
 #[cfg(test)]
 mod test {
     use super::super::super::test::{test_backend_curd, test_backend_list_prefix};
-    use crate::test_utils::test_backend;
+    use crate::test_utils::{new_test_backend, new_test_file_backend, new_test_temp_dir, test_multi_routine};
 
     #[test]
     fn test_file_backend() {
-        let backend = test_backend("test_file_backend");
+        let backend = new_test_backend("test_file_backend");
 
         test_backend_curd(backend.as_ref());
         test_backend_list_prefix(backend.as_ref());
+    }
+
+    #[test]
+    fn test_file_backend_multi_routine() {
+        let dir = new_test_temp_dir("test_file_backend_multi_routine");
+        let backend = new_test_file_backend(&dir);
+        test_multi_routine(backend);
     }
 }

@@ -239,7 +239,7 @@ impl AppRoleBackendInner {
         }
 
         let role = self
-            .get_role(req, &role_name)?
+            .get_role(req, role_name)?
             .ok_or(rv_error_response!(format!("role {} does not exist during renewal", role_name)))?;
 
         auth.period = role.token_period;

@@ -131,6 +131,7 @@ then the next renew will cause the lease to expire.
     }
 }
 
+#[allow(clippy::assigning_clones)]
 impl UserPassBackendInner {
     pub fn get_user(&self, req: &mut Request, name: &str) -> Result<Option<UserEntry>, RvError> {
         let key = format!("user/{}", name.to_lowercase());
@@ -143,15 +144,15 @@ impl UserPassBackendInner {
         let mut user_entry: UserEntry = serde_json::from_slice(entry.value.as_slice())?;
 
         if user_entry.token_ttl.as_secs() == 0 && user_entry.ttl.as_secs() > 0 {
-            user_entry.token_ttl = user_entry.ttl.clone();
+            user_entry.token_ttl = user_entry.ttl;
         }
         if user_entry.token_max_ttl.as_secs() == 0 && user_entry.max_ttl.as_secs() > 0 {
-            user_entry.token_max_ttl = user_entry.max_ttl.clone();
+            user_entry.token_max_ttl = user_entry.max_ttl;
         }
-        if user_entry.token_policies.len() == 0 && user_entry.policies.len() > 0 {
+        if user_entry.token_policies.is_empty() && !user_entry.policies.is_empty() {
             user_entry.token_policies = user_entry.policies.clone();
         }
-        if user_entry.token_bound_cidrs.len() == 0 && user_entry.bound_cidrs.len() > 0 {
+        if user_entry.token_bound_cidrs.is_empty() && !user_entry.bound_cidrs.is_empty() {
             user_entry.token_bound_cidrs = user_entry.bound_cidrs.clone();
         }
 
@@ -175,10 +176,10 @@ impl UserPassBackendInner {
 
         let user_entry = entry.unwrap();
         let mut user_entry_data = serde_json::to_value(&user_entry)?;
-        let mut data = user_entry_data.as_object_mut().unwrap();
+        let data = user_entry_data.as_object_mut().unwrap();
         data.remove("password_hash");
 
-        user_entry.populate_token_data(&mut data);
+        user_entry.populate_token_data(data);
 
         if user_entry.ttl.as_secs() == 0 {
             data.remove("ttl");
@@ -188,11 +189,11 @@ impl UserPassBackendInner {
             data.remove("max_ttl");
         }
 
-        if user_entry.policies.len() > 0 {
+        if !user_entry.policies.is_empty() {
             data["policies"] = data["token_policies"].clone();
         }
 
-        if user_entry.bound_cidrs.len() > 0 {
+        if !user_entry.bound_cidrs.is_empty() {
             data["bound_cidrs"] = data["token_bound_cidrs"].clone();
         }
 
@@ -211,7 +212,7 @@ impl UserPassBackendInner {
 
         if let Ok(password_value) = req.get_data("password") {
             let password = password_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if password != "" {
+            if !password.is_empty() {
                 user_entry.password_hash = self.gen_password_hash(password)?;
             }
         }
@@ -229,8 +230,8 @@ impl UserPassBackendInner {
         }
 
         let old_token_policies = user_entry.token_policies.clone();
-        let old_token_ttl = user_entry.token_ttl.clone();
-        let old_token_max_ttl = user_entry.token_max_ttl.clone();
+        let old_token_ttl = user_entry.token_ttl;
+        let old_token_max_ttl = user_entry.token_max_ttl;
         let old_token_bound_cidrs = user_entry.token_bound_cidrs.clone();
 
         user_entry.parse_token_fields(req)?;
@@ -239,23 +240,23 @@ impl UserPassBackendInner {
             user_entry.policies = user_entry.token_policies.clone();
         } else if let Ok(policies_value) = req.get_data("policies") {
             let policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-            user_entry.policies = policies.clone();
+            user_entry.policies.clone_from(&policies);
             user_entry.token_policies = policies;
         }
 
         if old_token_ttl != user_entry.token_ttl {
-            user_entry.ttl = user_entry.token_ttl.clone();
+            user_entry.ttl = user_entry.token_ttl;
         } else if let Ok(ttl_value) = req.get_data("ttl") {
             let ttl = ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            user_entry.ttl = ttl.clone();
+            user_entry.ttl = ttl;
             user_entry.token_ttl = ttl;
         }
 
         if old_token_max_ttl != user_entry.token_max_ttl {
-            user_entry.max_ttl = user_entry.token_max_ttl.clone();
+            user_entry.max_ttl = user_entry.token_max_ttl;
         } else if let Ok(max_ttl_value) = req.get_data("max_ttl") {
             let max_ttl = max_ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            user_entry.max_ttl = max_ttl.clone();
+            user_entry.max_ttl = max_ttl;
             user_entry.token_max_ttl = max_ttl;
         }
 
@@ -278,7 +279,7 @@ impl UserPassBackendInner {
     pub fn delete_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
         let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if username == "" {
+        if username.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 

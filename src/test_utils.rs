@@ -4,9 +4,10 @@ use std::{
     env, fs,
     io::prelude::*,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
+    str::FromStr,
     sync::{Arc, Barrier, RwLock},
-    thread,
+    thread::{self, sleep},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -43,6 +44,7 @@ use tokio::sync::oneshot;
 use ureq::AgentBuilder;
 
 use crate::{
+    api::{client::TLSConfigBuilder, Client},
     core::{Core, InitResult, SealConfig},
     errors::RvError,
     http,
@@ -95,7 +97,7 @@ impl TestHttpServer {
         let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
         let mut test_http_server = TestHttpServer::new_without_init(name, tls_enable);
 
-        let init_result = test_rusty_vault_core_init(Arc::clone(&test_http_server.core));
+        let init_result = init_test_rusty_vault_core(Arc::clone(&test_http_server.core));
         println!("init_result: {:?}", init_result);
 
         let mut keys: Vec<Vec<u8>> = Vec::new();
@@ -106,7 +108,7 @@ impl TestHttpServer {
 
         let k: Vec<&[u8]> = keys.iter().map(|v| v.as_slice()).collect();
 
-        assert!(test_rusty_vault_core_unseal(Arc::clone(&test_http_server.core), &k));
+        assert!(unseal_test_rusty_vault_core(Arc::clone(&test_http_server.core), &k));
 
         root_token = init_result.root_token;
         println!("root_token: {:?}", root_token);
@@ -119,7 +121,7 @@ impl TestHttpServer {
     pub fn new_without_init(name: &str, tls_enable: bool) -> Self {
         let barrier = Arc::new(Barrier::new(2));
         let (stop_tx, stop_rx) = oneshot::channel();
-        let core = test_rusty_vault_core_new(name);
+        let core = new_test_rusty_vault_core(name);
         {
             let mut c = core.write().unwrap();
             assert!(c.config(Arc::clone(&core), None).is_ok());
@@ -150,10 +152,7 @@ impl TestHttpServer {
             )
             .unwrap();
 
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-            let test_certs_dir = env::temp_dir().join(format!("{}/certs/{}-{}", *TEST_DIR, name, now).as_str());
-            let dir = test_certs_dir.to_string_lossy().into_owned();
-            assert!(fs::create_dir_all(&test_certs_dir).is_ok());
+            let dir = new_test_temp_dir("certs");
 
             let ca_path = format!("{}/ca.crt", dir);
             let cert_path = format!("{}/server.crt", dir);
@@ -201,10 +200,14 @@ impl TestHttpServer {
         }
     }
 
-    pub fn new_with_prometheus(name: &str, tls_enable: bool) -> Self {
+    pub fn new_with_backend(backend: Arc<dyn Backend>, tls_enable: bool) -> Self {
         let barrier = Arc::new(Barrier::new(2));
         let (stop_tx, stop_rx) = oneshot::channel();
-        let (root_token, core) = test_rusty_vault_init(name);
+        let core = Arc::new(RwLock::new(Core::new(backend)));
+        {
+            let mut c = core.write().unwrap();
+            assert!(c.config(Arc::clone(&core), None).is_ok());
+        }
 
         let mut scheme = "http";
         let mut ca_cert_pem = "".into();
@@ -231,10 +234,85 @@ impl TestHttpServer {
             )
             .unwrap();
 
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-            let test_certs_dir = env::temp_dir().join(format!("{}/certs/{}-{}", *TEST_DIR, name, now).as_str());
-            let dir = test_certs_dir.to_string_lossy().into_owned();
-            assert!(fs::create_dir_all(&test_certs_dir).is_ok());
+            let dir = new_test_temp_dir("certs");
+
+            let ca_path = format!("{}/ca.crt", dir);
+            let cert_path = format!("{}/server.crt", dir);
+            let key_path = format!("{}/key.pem", dir);
+
+            let mut ca_file = fs::File::create(&ca_path).unwrap();
+            assert!(ca_file.write_all(ca_cert_pem.as_bytes()).is_ok());
+
+            let mut cert_file = fs::File::create(&cert_path).unwrap();
+            assert!(cert_file.write_all(server_cert_pem.as_bytes()).is_ok());
+
+            let mut key_file = fs::File::create(&key_path).unwrap();
+            assert!(key_file.write_all(server_key_pem.as_bytes()).is_ok());
+
+            test_tls_config = Some(TestTlsConfig { cert_path, key_path });
+
+            scheme = "https";
+            cert_dir = dir.clone();
+        }
+
+        let (server, listen_addr) = new_test_http_server(core.clone(), test_tls_config).unwrap();
+        let server_thread = start_test_http_server(server, Arc::clone(&barrier), stop_rx);
+
+        barrier.wait();
+
+        let url_prefix = format!("{}://{}/v1", scheme, listen_addr);
+
+        Self {
+            name: "".into(),
+            binary_path: get_project_binary_path(),
+            core,
+            root_token: "".into(),
+            token: "".into(),
+            tls_enable,
+            ca_cert_pem,
+            ca_key_pem,
+            server_cert_pem,
+            server_key_pem,
+            cert_dir,
+            listen_addr,
+            url_prefix,
+            mount_path: "".into(),
+            stop_tx: Some(stop_tx),
+            thread: Some(server_thread),
+        }
+    }
+
+    pub fn new_with_prometheus(name: &str, tls_enable: bool) -> Self {
+        let barrier = Arc::new(Barrier::new(2));
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let (root_token, core) = init_test_rusty_vault(name);
+
+        let mut scheme = "http";
+        let mut ca_cert_pem = "".into();
+        let mut ca_key_pem = "".into();
+        let mut server_cert_pem = "".into();
+        let mut server_key_pem = "".into();
+        let mut test_tls_config = None;
+        let mut cert_dir = "".into();
+
+        if tls_enable {
+            (ca_cert_pem, ca_key_pem) =
+                new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
+            (server_cert_pem, server_key_pem) = new_test_cert(
+                false,
+                true,
+                true,
+                "localhost",
+                Some("localhost"),
+                Some("127.0.0.1"),
+                None,
+                None,
+                Some(ca_cert_pem.clone()),
+                Some(ca_key_pem.clone()),
+            )
+            .unwrap();
+
+            let dir = new_test_temp_dir("certs");
 
             let ca_path = format!("{}/ca.crt", dir);
             let cert_path = format!("{}/server.crt", dir);
@@ -380,7 +458,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
@@ -432,15 +510,15 @@ impl TestHttpServer {
                     return Ok((status, json!("")));
                 }
                 let json: Value = response.into_json()?;
-                return Ok((status, json));
+                Ok((status, json))
             }
             Err(ureq::Error::Status(code, response)) => {
                 let json: Value = response.into_json()?;
-                return Ok((code, json));
+                Ok((code, json))
             }
             Err(e) => {
                 println!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }
@@ -472,7 +550,7 @@ impl TestHttpServer {
                     match rustls_pemfile::read_one_from_slice(cert_pem)? {
                         Some((rustls_pemfile::Item::X509Certificate(cert), rest)) => {
                             cert_pem = rest;
-                            client_certs.push(cert.into());
+                            client_certs.push(cert);
                         }
                         None => break,
                         _ => return Err(rv_error_response!("client cert format invalid")),
@@ -525,20 +603,24 @@ impl TestHttpServer {
                 }
                 let text = response.into_string()?;
                 let wrapped_json = json!({"metrics":text});
-                return Ok((status, wrapped_json));
+                Ok((status, wrapped_json))
             }
             Err(ureq::Error::Status(code, response)) => {
                 let json: Value = response.into_json()?;
-                return Ok((code, json));
+                Ok((code, json))
             }
             Err(e) => {
                 println!("Request failed: {}", e);
-                return Err(RvError::UreqError { source: e });
+                Err(RvError::UreqError { source: e })
             }
         }
     }
 
     pub fn cli(&self, commands: &[&str], args: &[&str]) -> Result<String, RvError> {
+        self.cli_with_input(commands, args, None)
+    }
+
+    pub fn cli_with_input(&self, commands: &[&str], args: &[&str], input: Option<&str>) -> Result<String, RvError> {
         let mut cmd = Command::new(&self.binary_path);
 
         for command in commands {
@@ -546,13 +628,13 @@ impl TestHttpServer {
         }
 
         if self.tls_enable {
-            cmd.arg(&format!("--address=https://{}", self.listen_addr));
-            cmd.arg(&format!("--ca-cert={}/ca.crt", self.cert_dir));
-            cmd.arg(&format!("--client-cert={}/server.crt", self.cert_dir));
-            cmd.arg(&format!("--client-key={}/key.pem", self.cert_dir));
+            cmd.arg(format!("--address=https://{}", self.listen_addr));
+            cmd.arg(format!("--ca-cert={}/ca.crt", self.cert_dir));
+            cmd.arg(format!("--client-cert={}/server.crt", self.cert_dir));
+            cmd.arg(format!("--client-key={}/key.pem", self.cert_dir));
             cmd.arg("--tls-skip-verify");
         } else {
-            cmd.arg(&format!("--address=http://{}", self.listen_addr));
+            cmd.arg(format!("--address=http://{}", self.listen_addr));
         }
 
         for arg in args {
@@ -563,7 +645,17 @@ impl TestHttpServer {
 
         println!("cmd: {}, args: {:?}", self.binary_path, cmd.get_args());
 
-        match cmd.output() {
+        let ret = if let Some(input_value) = input {
+            let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+            let mut stdin = child.stdin.take().unwrap();
+            stdin.write_all(input_value.as_bytes())?;
+            drop(stdin);
+            child.wait_with_output()
+        } else {
+            cmd.output()
+        };
+
+        match ret {
             Ok(output) => {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -576,6 +668,30 @@ impl TestHttpServer {
             }
             Err(e) => Err(rv_error_string!(format!("Failed to execute command: {}", e))),
         }
+    }
+
+    pub fn client(&self) -> Result<Client, RvError> {
+        let mut client = Client::new().with_token(&self.token);
+
+        if self.tls_enable {
+            let mut tls_config_builder = TLSConfigBuilder::new().with_insecure(true);
+
+            tls_config_builder =
+                tls_config_builder.with_server_ca_path(&PathBuf::from(&format!("{}/ca.crt", self.cert_dir)))?;
+
+            tls_config_builder = tls_config_builder.with_client_cert_path(
+                &PathBuf::from(&format!("{}/server.crt", self.cert_dir)),
+                &PathBuf::from(&format!("{}/key.pem", self.cert_dir)),
+            )?;
+
+            let tls_config = tls_config_builder.build()?;
+
+            client = client.with_addr(&format!("https://{}", self.listen_addr)).with_tls_config(tls_config);
+        } else {
+            client = client.with_addr(&format!("http://{}", self.listen_addr));
+        }
+
+        Ok(client.build())
     }
 }
 
@@ -886,19 +1002,27 @@ pub unsafe fn new_test_crl(revoked_cert_pem: &str, ca_cert_pem: &str, ca_key_pem
     openssl_sys::BIO_free_all(bio);
     openssl_sys::X509_CRL_free(crl);
 
-    return Ok(String::from_utf8_lossy(&buffer).into());
+    Ok(String::from_utf8_lossy(&buffer).into())
 }
 
-pub fn test_backend(name: &str) -> Arc<dyn Backend> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+pub fn new_test_temp_dir(name: &str) -> String {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
     let test_dir = env::temp_dir().join(format!("{}/{}-{}", *TEST_DIR, name, now).as_str());
     let dir = test_dir.to_string_lossy().into_owned();
-    assert!(fs::create_dir(&test_dir).is_ok());
+    assert!(fs::create_dir_all(&test_dir).is_ok());
+    println!("new_test_temp_dir: {}", dir);
+    dir
+}
 
-    println!("test backend init, dir: {}", dir);
+pub fn new_test_backend(name: &str) -> Arc<dyn Backend> {
+    let dir = new_test_temp_dir(name);
+    println!("new_test_backend, dir: {}", dir);
+    new_test_file_backend(&dir)
+}
 
+pub fn new_test_file_backend(path: &str) -> Arc<dyn Backend> {
     let mut conf: HashMap<String, Value> = HashMap::new();
-    conf.insert("path".to_string(), Value::String(dir));
+    conf.insert("path".to_string(), Value::String(path.to_string()));
 
     let backend = storage::new_backend("file", &conf);
     assert!(backend.is_ok());
@@ -906,13 +1030,11 @@ pub fn test_backend(name: &str) -> Arc<dyn Backend> {
     backend.unwrap()
 }
 
-pub fn test_rusty_vault_core_new(name: &str) -> Arc<RwLock<Core>> {
-    let backend = test_backend(name);
-    let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-    Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }))
+pub fn new_test_rusty_vault_core(name: &str) -> Arc<RwLock<Core>> {
+    Arc::new(RwLock::new(Core::new(new_test_backend(name))))
 }
 
-pub fn test_rusty_vault_core_init(core: Arc<RwLock<Core>>) -> InitResult {
+pub fn init_test_rusty_vault_core(core: Arc<RwLock<Core>>) -> InitResult {
     let mut c = core.write().unwrap();
     assert!(c.config(Arc::clone(&core), None).is_ok());
 
@@ -924,7 +1046,7 @@ pub fn test_rusty_vault_core_init(core: Arc<RwLock<Core>>) -> InitResult {
     result.unwrap()
 }
 
-pub fn test_rusty_vault_core_unseal(core: Arc<RwLock<Core>>, keys: &[&[u8]]) -> bool {
+pub fn unseal_test_rusty_vault_core(core: Arc<RwLock<Core>>, keys: &[&[u8]]) -> bool {
     let mut c = core.write().unwrap();
     let mut unsealed = false;
     for key in keys.iter() {
@@ -936,12 +1058,12 @@ pub fn test_rusty_vault_core_unseal(core: Arc<RwLock<Core>>, keys: &[&[u8]]) -> 
     unsealed
 }
 
-pub fn test_rusty_vault_init(name: &str) -> (String, Arc<RwLock<Core>>) {
+pub fn init_test_rusty_vault(name: &str) -> (String, Arc<RwLock<Core>>) {
     let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
     let root_token;
-    let c = test_rusty_vault_core_new(name);
+    let c = new_test_rusty_vault_core(name);
 
-    let init_result = test_rusty_vault_core_init(Arc::clone(&c));
+    let init_result = init_test_rusty_vault_core(Arc::clone(&c));
     println!("init_result: {:?}", init_result);
 
     let mut keys: Vec<Vec<u8>> = Vec::new();
@@ -952,7 +1074,7 @@ pub fn test_rusty_vault_init(name: &str) -> (String, Arc<RwLock<Core>>) {
 
     let k: Vec<&[u8]> = keys.iter().map(|v| v.as_slice()).collect();
 
-    assert!(test_rusty_vault_core_unseal(Arc::clone(&c), &k));
+    assert!(unseal_test_rusty_vault_core(Arc::clone(&c), &k));
 
     root_token = init_result.root_token;
     println!("root_token: {:?}", root_token);
@@ -969,7 +1091,7 @@ pub fn new_test_http_server(
             .wrap(middleware::Logger::default())
             .app_data(web::Data::new(core.clone()))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 
@@ -1019,7 +1141,7 @@ pub fn new_test_http_server_with_prometheus(
             .app_data(web::Data::new(core.clone()))
             .app_data(web::Data::new(Arc::clone(&metrics_manager)))
             .configure(http::init_service)
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .on_connect(http::request_on_connect_handler);
 
@@ -1075,7 +1197,7 @@ pub fn start_test_http_server(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = stop_future => {
@@ -1084,7 +1206,7 @@ pub fn start_test_http_server(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 
@@ -1114,7 +1236,7 @@ pub fn start_test_http_server_with_prometheus(
 
         barrier.wait();
 
-        let _ = sys.block_on(async {
+        sys.block_on(async {
             tokio::select! {
                 _ = server_future => {},
                 _ = system_metrics_fucture => {},
@@ -1124,13 +1246,14 @@ pub fn start_test_http_server_with_prometheus(
             }
         });
 
-        let _ = sys.run().unwrap();
+        sys.run().unwrap();
         println!("HTTP Server has stopped.");
     });
 
     server_thread
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::List;
@@ -1141,6 +1264,86 @@ pub async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     resp
 }
 
+pub fn test_multi_routine(backend: Arc<dyn Backend>) {
+    let mut test_http_server1 = TestHttpServer::new_with_backend(backend.clone(), false);
+
+    let ret = test_http_server1.cli(&["operator", "init"], &["--format=raw", "--key-shares=3", "--key-threshold=2"]);
+    assert!(ret.is_ok());
+    let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+    let init_result = ret.as_object().unwrap();
+
+    let keys = &init_result["keys"];
+    let _ret = test_http_server1.cli(&["operator", "unseal"], &["--format=raw", keys[0].as_str().unwrap()]);
+    let ret = test_http_server1.cli(&["operator", "unseal"], &["--format=raw", keys[1].as_str().unwrap()]);
+    let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+    let unseal_result = ret.as_object().unwrap();
+    assert_eq!(unseal_result["sealed"], false);
+    test_http_server1.root_token = init_result["root_token"].as_str().unwrap().to_string();
+    test_http_server1.token = test_http_server1.root_token.clone();
+
+    let mut test_http_server2 = TestHttpServer::new_with_backend(backend, false);
+
+    let _ret = test_http_server2.cli(&["operator", "unseal"], &["--format=raw", keys[0].as_str().unwrap()]);
+    let ret = test_http_server2.cli(&["operator", "unseal"], &["--format=raw", keys[1].as_str().unwrap()]);
+    let ret = Value::from_str(ret.unwrap().as_str()).unwrap();
+    let unseal_result = ret.as_object().unwrap();
+    assert_eq!(unseal_result["sealed"], false);
+    test_http_server2.root_token = init_result["root_token"].as_str().unwrap().to_string();
+    test_http_server2.token = test_http_server2.root_token.clone();
+
+    // test mount kv
+    let ret = test_http_server1.mount("kv", "kv");
+    assert!(ret.is_ok());
+
+    let ret = test_http_server1.cli(&["write"], &["kv/foo", "aa=bb", "cc=dd"]);
+    assert_eq!(ret, Ok("Success! Data written to: kv/foo\n".into()));
+
+    let ret = test_http_server1.cli(&["read"], &["--format=json", "kv/foo"]);
+    assert_eq!(ret, Ok("{\n  \"aa\": \"bb\",\n  \"cc\": \"dd\"\n}\n".into()));
+
+    let ret = test_http_server2.cli(&["read"], &["--format=json", "kv/foo"]);
+    assert_ne!(ret, Ok("{\n  \"aa\": \"bb\",\n  \"cc\": \"dd\"\n}\n".into()));
+
+    sleep(Duration::from_secs(6));
+
+    let ret = test_http_server2.cli(&["read"], &["--format=json", "kv/foo"]);
+    assert_eq!(ret, Ok("{\n  \"aa\": \"bb\",\n  \"cc\": \"dd\"\n}\n".into()));
+
+    // test mount auth
+    // mount usepass auth to path: pass
+    let mount = "pass";
+    let ret = test_http_server1.mount_auth(mount, "userpass");
+    assert!(ret.is_ok());
+
+    // add user
+    let username = "jinjiu";
+    let password = "123123";
+    let ret = test_http_server1.cli(
+        &["write"],
+        &[&format!("auth/{}/users/{}", mount, username), &format!("password={}", password), "ttl=600"],
+    );
+    assert!(ret.is_ok());
+
+    sleep(Duration::from_secs(6));
+
+    // clear token
+    test_http_server2.token.clear();
+
+    // test login
+    let ret = test_http_server2.cli(
+        &["login"],
+        &[
+            "--method=userpass",
+            &format!("--path={}", mount),
+            &format!("username={}", username),
+            &format!("password={}", password),
+        ],
+    );
+    println!("login ret: {:?}", ret);
+    assert!(ret.is_ok());
+}
+
+#[maybe_async::maybe_async]
 pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) -> Result<Option<Response>, RvError> {
     let mut req = Request::new(path);
     req.operation = Operation::Read;
@@ -1151,6 +1354,7 @@ pub async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool) ->
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_write_api(
     core: &Core,
     token: &str,
@@ -1169,6 +1373,7 @@ pub async fn test_write_api(
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_delete_api(
     core: &Core,
     token: &str,
@@ -1186,6 +1391,7 @@ pub async fn test_delete_api(
     resp
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     let data = json!({
         "type": mtype,
@@ -1198,6 +1404,7 @@ pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
     assert!(resp.is_ok());
 }
 
+#[maybe_async::maybe_async]
 pub async fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &str) {
     let auth_data = json!({
         "type": atype,
@@ -1251,9 +1458,9 @@ impl Clone for NoopBackend {
             response: self.response.clone(),
             request_handler: self.request_handler.clone(),
             invalidations: self.invalidations.clone(),
-            default_lease_ttl: self.default_lease_ttl.clone(),
-            max_lease_ttl: self.max_lease_ttl.clone(),
-            rollback_errs: self.rollback_errs.clone(),
+            default_lease_ttl: self.default_lease_ttl,
+            max_lease_ttl: self.max_lease_ttl,
+            rollback_errs: self.rollback_errs,
         }
     }
 }

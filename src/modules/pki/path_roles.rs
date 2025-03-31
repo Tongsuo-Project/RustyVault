@@ -317,7 +317,7 @@ impl PkiBackendInner {
 
     pub fn read_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let role_entry = self.get_role(req, req.get_data("name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
-        let data = serde_json::to_value(&role_entry)?;
+        let data = serde_json::to_value(role_entry)?;
         Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))))
     }
 
@@ -327,14 +327,14 @@ impl PkiBackendInner {
         let mut ttl = DEFAULT_MAX_TTL;
         if let Ok(ttl_value) = req.get_data("ttl") {
             let ttl_str = ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if ttl_str != "" {
+            if !ttl_str.is_empty() {
                 ttl = parse_duration(ttl_str)?;
             }
         }
         let mut max_ttl = DEFAULT_MAX_TTL;
         if let Ok(max_ttl_value) = req.get_data("max_ttl") {
             let max_ttl_str = max_ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-            if max_ttl_str != "" {
+            if !max_ttl_str.is_empty() {
                 max_ttl = parse_duration(max_ttl_str)?;
             }
         }
@@ -458,7 +458,7 @@ impl PkiBackendInner {
     pub fn delete_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name_value = req.get_data("name")?;
         let name = name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if name == "" {
+        if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 

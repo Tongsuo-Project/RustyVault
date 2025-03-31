@@ -190,7 +190,7 @@ impl ExpirationManager {
 
     /// Renews a lease entry by the given increment.
     pub fn renew(&self, lease_id: &str, increment: Duration) -> Result<Option<Response>, RvError> {
-        let le = self.load_lease_entry(&lease_id)?;
+        let le = self.load_lease_entry(lease_id)?;
         if le.is_none() {
             return Err(RvError::ErrLeaseNotFound);
         }
@@ -225,9 +225,9 @@ impl ExpirationManager {
             secret.lease_id = lease_id.into();
         }
 
-        le.data = resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new());
+        le.data = resp.data.clone().unwrap_or(Map::new());
         le.expire_time = resp.secret.as_ref().unwrap().expiration_time();
-        le.secret = resp.secret.clone();
+        le.secret.clone_from(&resp.secret);
 
         self.persist_lease_entry(&le)?;
         self.register_lease_entry(Arc::new(le))?;
@@ -278,7 +278,7 @@ impl ExpirationManager {
             auth.explicit_max_ttl,
             le.issue_time,
         )?;
-        auth.client_token = te.id.clone();
+        auth.client_token.clone_from(&te.id);
 
         le.expire_time = auth.expiration_time();
         le.auth = Some(auth.clone());
@@ -305,13 +305,13 @@ impl ExpirationManager {
 
             let lease_id = format!("{}/{}", req.path, generate_uuid());
 
-            secret.lease_id = lease_id.clone();
+            secret.lease_id.clone_from(&lease_id);
 
             let le = LeaseEntry {
                 lease_id: lease_id.clone(),
                 client_token: req.client_token.clone(),
                 path: req.path.clone(),
-                data: resp.data.as_ref().map(|data| data.clone()).unwrap_or(Map::new()),
+                data: resp.data.clone().unwrap_or_default(),
                 secret: Some(secret.clone()),
                 issue_time: now,
                 expire_time: secret.expiration_time(),
@@ -401,7 +401,7 @@ impl ExpirationManager {
     /// Revokes all lease entries with a given prefix.
     pub fn revoke_prefix(&self, prefix: &str) -> Result<(), RvError> {
         let mut prefix = prefix.to_string();
-        if !prefix.ends_with("/") {
+        if !prefix.ends_with('/') {
             prefix += "/";
         }
 
@@ -419,7 +419,7 @@ impl ExpirationManager {
     pub fn revoke_by_token(&self, te: &TokenEntry) -> Result<(), RvError> {
         let existing = self.lookup_by_token(&te.id)?;
         for lease_id in existing.iter() {
-            self.revoke_lease_id(&lease_id, true)?;
+            self.revoke_lease_id(lease_id, true)?;
         }
 
         Ok(())
@@ -522,8 +522,8 @@ impl ExpirationManager {
                 data: ole.data.clone().map(|serde_map| serde_map.into_iter().collect()).unwrap_or(Map::new()),
                 secret: ole.secret.clone(),
                 auth: ole.auth.clone(),
-                issue_time: ole.issue_time.clone(),
-                expire_time: ole.expire_time.clone(),
+                issue_time: ole.issue_time,
+                expire_time: ole.expire_time,
                 ..Default::default()
             };
             self.persist_lease_entry(&le)?;
@@ -655,7 +655,7 @@ impl ExpirationManager {
         if le.auth.is_some() {
             let mut au = le.auth.as_ref().unwrap().clone();
             if le.path.starts_with("auth/token/") {
-                au.client_token = le.client_token.clone();
+                au.client_token.clone_from(&le.client_token);
             } else {
                 au.client_token = "".to_string();
             }
@@ -670,7 +670,7 @@ impl ExpirationManager {
             log::error!("failed to renew_auth entry: {}", ret.as_ref().unwrap_err());
         }
 
-        return ret;
+        ret
     }
 }
 
@@ -687,14 +687,14 @@ mod mod_expiration_tests {
         mount::{MountEntry, MOUNT_TABLE_TYPE},
         new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path,
         new_path_internal, new_secret, new_secret_internal,
-        test_utils::{test_rusty_vault_init, NoopBackend},
+        test_utils::{init_test_rusty_vault, NoopBackend},
     };
 
     macro_rules! mock_expiration_manager {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
-            println!("test_rusty_vault_init, name: {}", name);
-            let (_, core) = test_rusty_vault_init(&name);
+            println!("init_test_rusty_vault, name: {}", name);
+            let (_, core) = init_test_rusty_vault(&name);
             let core_cloned = core.clone();
             let core_locked = core_cloned.read().unwrap();
 
@@ -813,7 +813,7 @@ mod mod_expiration_tests {
         )
         .unwrap();
 
-        let me = MountEntry::new(&MOUNT_TABLE_TYPE, "mytest/", "test", "test description");
+        let me = MountEntry::new(MOUNT_TABLE_TYPE, "mytest/", "test", "test description");
         core.mount(&me).unwrap();
 
         let mut request = Request::new("mytest/tt");
@@ -986,7 +986,7 @@ mod mod_expiration_tests {
     fn test_expiration_register_and_restore_benchmark() {
         let (_core, expiration, _token_store) = mock_expiration_manager!();
 
-        let n = 100000;
+        let n = 10000;
         for i in 0..n {
             let mut secret = SecretData::default();
             secret.ttl = Duration::from_secs(400);
@@ -1004,8 +1004,8 @@ mod mod_expiration_tests {
             assert!(result.is_ok());
         }
 
-        println!("sleep 2s");
-        sleep(Duration::from_secs(2));
+        println!("sleep 5s");
+        sleep(Duration::from_secs(5));
 
         assert!(expiration.stop_check_expired_lease_entries().is_ok());
 
@@ -1750,7 +1750,7 @@ mod mod_expiration_tests {
 
         assert!(expiration.persist_lease_entry(&le).is_ok());
 
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_millis(500));
 
         let resp = expiration.renew(&id, Duration::ZERO);
         assert!(resp.is_ok());

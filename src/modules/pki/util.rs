@@ -6,13 +6,13 @@ use openssl::x509::X509NameBuilder;
 use super::path_roles::RoleEntry;
 use crate::{errors::RvError, logical::Request, utils::cert::Certificate};
 
-pub const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60 as u64);
+pub const DEFAULT_MAX_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60_u64);
 
 pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
     let mut ttl = DEFAULT_MAX_TTL;
     if let Ok(ttl_value) = req.get_data("ttl") {
         let ttl_str = ttl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if ttl_str != "" {
+        if !ttl_str.is_empty() {
             ttl = parse_duration(ttl_str)?;
         }
     }
@@ -94,13 +94,13 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
 
     let common_name_value = req.get_data_or_default("common_name")?;
     let common_name = common_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-    if common_name != "" {
+    if !common_name.is_empty() {
         common_names.push(common_name.to_string());
     }
 
     if let Ok(alt_names_value) = req.get_data("alt_names") {
         let alt_names = alt_names_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if alt_names != "" {
+        if !alt_names.is_empty() {
             for v in alt_names.split(',') {
                 common_names.push(v.to_string());
             }
@@ -110,7 +110,7 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
     let mut ip_sans = Vec::new();
     if let Ok(ip_sans_value) = req.get_data("ip_sans") {
         let ip_sans_str = ip_sans_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
-        if ip_sans_str != "" {
+        if !ip_sans_str.is_empty() {
             for v in ip_sans_str.split(',') {
                 ip_sans.push(v.to_string());
             }
@@ -121,32 +121,30 @@ pub fn generate_certificate(role_entry: &RoleEntry, req: &mut Request) -> Result
     let not_after: SystemTime;
     if role_entry.not_after.len() > 18 {
         let parsed_time = parse_rfc3339(&role_entry.not_after)?;
-        not_after = parsed_time.into();
+        not_after = parsed_time;
+    } else if role_entry.ttl != Duration::from_secs(0) {
+        not_after = not_before + role_entry.ttl;
     } else {
-        if role_entry.ttl != Duration::from_secs(0) {
-            not_after = not_before + role_entry.ttl;
-        } else {
-            not_after = not_before + role_entry.max_ttl;
-        }
+        not_after = not_before + role_entry.max_ttl;
     }
 
     let mut subject_name = X509NameBuilder::new().unwrap();
-    if role_entry.country.len() > 0 {
+    if !role_entry.country.is_empty() {
         subject_name.append_entry_by_text("C", &role_entry.country).unwrap();
     }
-    if role_entry.province.len() > 0 {
+    if !role_entry.province.is_empty() {
         subject_name.append_entry_by_text("ST", &role_entry.province).unwrap();
     }
-    if role_entry.locality.len() > 0 {
+    if !role_entry.locality.is_empty() {
         subject_name.append_entry_by_text("L", &role_entry.locality).unwrap();
     }
-    if role_entry.organization.len() > 0 {
+    if !role_entry.organization.is_empty() {
         subject_name.append_entry_by_text("O", &role_entry.organization).unwrap();
     }
-    if role_entry.ou.len() > 0 {
+    if !role_entry.ou.is_empty() {
         subject_name.append_entry_by_text("OU", &role_entry.ou).unwrap();
     }
-    if common_name != "" {
+    if !common_name.is_empty() {
         subject_name.append_entry_by_text("CN", common_name).unwrap();
     }
     let subject = subject_name.build();

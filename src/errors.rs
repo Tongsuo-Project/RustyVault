@@ -173,6 +173,12 @@ pub enum RvError {
     ErrCredentailInvalid,
     #[error("Credentail is not config.")]
     ErrCredentailNotConfig,
+    #[error("Storage backend doesn't require a lock.")]
+    ErrStorageBackendLockless,
+    #[error("Storage backend lock failed.")]
+    ErrStorageBackendLockFailed,
+    #[error("Storage backend unlock failed.")]
+    ErrStorageBackendUnlockFailed,
     #[error("Some IO error happened, {:?}", .source)]
     IO {
         #[from]
@@ -295,6 +301,12 @@ pub enum RvError {
         source: std::string::FromUtf8Error,
     },
 
+    #[error("Some lockfile error happened, {:?}", .source)]
+    LockfileError {
+        #[from]
+        source: lockfile::Error,
+    },
+
     /// Database Errors Begin
     ///
     #[error("Database type is not support now. Please try postgressql or mysql again.")]
@@ -315,7 +327,6 @@ pub enum RvError {
     },
     ///
     /// Database Errors End
-
     #[error(transparent)]
     ErrOther(#[from] anyhow::Error),
     #[error("Some error happend, response text: {0}")]

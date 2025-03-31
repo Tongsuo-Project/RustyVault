@@ -258,7 +258,7 @@ impl PkiBackendInner {
                 }
             }
 
-            if key_bundle.iv.len() > 0 {
+            if !key_bundle.iv.is_empty() {
                 resp_data.insert("iv".to_string(), Value::String(hex::encode(&key_bundle.iv)));
             }
         }
@@ -276,7 +276,7 @@ impl PkiBackendInner {
         let hex_bundle_value = req.get_data_or_default("hex_bundle")?;
         let hex_bundle = hex_bundle_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
-        if pem_bundle.len() == 0 && hex_bundle.len() == 0 {
+        if pem_bundle.is_empty() && hex_bundle.is_empty() {
             return Err(RvError::ErrRequestFieldNotFound);
         }
 
@@ -287,7 +287,7 @@ impl PkiBackendInner {
 
         let mut key_bundle = KeyBundle::new(key_name, key_type.to_lowercase().as_str(), 0);
 
-        if pem_bundle.len() != 0 {
+        if !pem_bundle.is_empty() {
             key_bundle.key = pem_bundle.as_bytes().to_vec();
             match key_type {
                 "rsa" => {
@@ -304,8 +304,8 @@ impl PkiBackendInner {
             };
         }
 
-        if hex_bundle.len() != 0 {
-            key_bundle.key = hex::decode(&hex_bundle)?;
+        if !hex_bundle.is_empty() {
+            key_bundle.key = hex::decode(hex_bundle)?;
             key_bundle.bits = (key_bundle.key.len() as u32) * 8;
             match key_bundle.bits {
                 128 | 192 | 256 => {}
@@ -326,7 +326,7 @@ impl PkiBackendInner {
             // Proceed to check IV only if required by the key type.
             if is_iv_required {
                 if let Some(iv) = iv_value.as_str() {
-                    key_bundle.iv = hex::decode(&iv)?;
+                    key_bundle.iv = hex::decode(iv)?;
                 } else {
                     return Err(RvError::ErrRequestFieldNotFound);
                 }
@@ -359,7 +359,7 @@ impl PkiBackendInner {
         let result = key_bundle.sign(&decoded_data)?;
 
         let resp_data = json!({
-            "result": hex::encode(&result),
+            "result": hex::encode(result),
         })
         .as_object()
         .unwrap()
@@ -404,7 +404,7 @@ impl PkiBackendInner {
         let result = key_bundle.encrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
 
         let resp_data = json!({
-            "result": hex::encode(&result),
+            "result": hex::encode(result),
         })
         .as_object()
         .unwrap()
@@ -426,7 +426,7 @@ impl PkiBackendInner {
         let result = key_bundle.decrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
 
         let resp_data = json!({
-            "result": hex::encode(&result),
+            "result": hex::encode(result),
         })
         .as_object()
         .unwrap()

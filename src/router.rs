@@ -4,7 +4,6 @@
 
 use std::sync::{Arc, RwLock};
 
-use async_trait::async_trait;
 use radix_trie::{Trie, TrieCommon};
 
 use crate::{
@@ -31,7 +30,7 @@ pub struct Router {
 
 impl RouterEntry {
     fn salt_id(&self, id: &str) -> String {
-        return id.to_string();
+        id.to_string()
     }
 }
 
@@ -87,6 +86,12 @@ impl Router {
         } else {
             Err(RvError::ErrRouterMountNotFound)
         }
+    }
+
+    pub fn clear(&self) -> Result<(), RvError> {
+        let mut trie_write = self.root.write()?;
+        *trie_write = Trie::new();
+        Ok(())
     }
 
     pub fn taint(&self, path: &str) -> Result<(), RvError> {
@@ -161,7 +166,7 @@ impl Router {
             return Ok(remain.starts_with(unauth_path_match));
         }
 
-        return Ok(remain == *unauth_path_match);
+        Ok(remain == *unauth_path_match)
     }
 
     pub fn is_root_path(&self, path: &str) -> Result<bool, RvError> {
@@ -187,7 +192,7 @@ impl Router {
             return Ok(remain.starts_with(root_path_match));
         }
 
-        return Ok(remain == *root_path_match);
+        Ok(remain == *root_path_match)
     }
 
     pub fn as_handler(&self) -> &dyn Handler {
@@ -224,7 +229,7 @@ impl Router {
                 }
             }
 
-            req.path = req.path.replacen(&mount, "", 1);
+            req.path = req.path.replacen(mount, "", 1);
             if req.path == "/" {
                 req.path = String::new();
             }
@@ -249,7 +254,7 @@ impl Router {
     }
 }
 
-#[async_trait]
+#[maybe_async::maybe_async]
 impl Handler for Router {
     fn name(&self) -> String {
         "core_router".to_string()

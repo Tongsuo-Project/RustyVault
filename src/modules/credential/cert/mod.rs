@@ -99,7 +99,7 @@ impl CertModule {
 
 impl Module for CertModule {
     fn name(&self) -> String {
-        return self.name.clone();
+        self.name.clone()
     }
 
     fn setup(&mut self, core: &Core) -> Result<(), RvError> {
@@ -560,7 +560,7 @@ mod test {
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &issued_cert, &issued_key, None);
 
         // Register a CRL containing the issued client certificate used above.
-        let _ = test_http_server.test_write_crl(&issued_cert, &ca_cert, &ca_key);
+        test_http_server.test_write_crl(&issued_cert, &ca_cert, &ca_key);
 
         // Login attempt after certificate expiry should fail
         let _ = test_http_server.test_login(

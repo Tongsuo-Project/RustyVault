@@ -72,9 +72,7 @@ impl FieldTrait for Value {
         }
 
         if let Some(secs_str) = self.as_str() {
-            if secs_str.parse::<u64>().ok().is_some() {
-                return true;
-            } else if parse_duration(secs_str).is_ok() {
+            if secs_str.parse::<u64>().ok().is_some() || parse_duration(secs_str).is_ok() {
                 return true;
             }
         }
@@ -127,21 +125,17 @@ impl FieldTrait for Value {
         }
 
         let map = serde_json::from_str::<Value>(map_str.unwrap());
-        return map.is_ok() && map.unwrap().is_object();
+        map.is_ok() && map.unwrap().is_object()
     }
 
     fn as_int(&self) -> Option<i64> {
         let mut int = self.as_i64();
         if int.is_none() {
             let int_str = self.as_str();
-            if int_str.is_none() {
-                return None;
-            }
+            int_str?;
 
             int = int_str.unwrap().parse::<i64>().ok();
-            if int.is_none() {
-                return None;
-            }
+            int?;
         }
 
         int
@@ -153,7 +147,7 @@ impl FieldTrait for Value {
         }
 
         if let Some(secs_str) = self.as_str() {
-            if let Some(secs_int) = secs_str.parse::<u64>().ok() {
+            if let Ok(secs_int) = secs_str.parse::<u64>() {
                 return Some(Duration::from_secs(secs_int));
             } else if let Ok(ret) = parse_duration(secs_str) {
                 return Some(ret);
@@ -273,21 +267,21 @@ impl Field {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Int => {
                 if self.default.is_i64() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Bool => {
                 if self.default.is_boolean() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Array => {
                 if self.default.is_array() {
@@ -300,7 +294,7 @@ impl Field {
                     return Ok(serde_json::from_str(arr_str.unwrap())?);
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::Map => {
                 if self.default.is_object() {
@@ -313,21 +307,21 @@ impl Field {
                     return Ok(serde_json::from_str(arr_str.unwrap())?);
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::DurationSecond => {
                 if self.default.is_duration() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
             FieldType::CommaStringSlice => {
                 if self.default.is_comma_string_slice() {
                     return Ok(self.default.clone());
                 }
 
-                return Err(RvError::ErrRustDowncastFailed);
+                Err(RvError::ErrRustDowncastFailed)
             }
         }
     }

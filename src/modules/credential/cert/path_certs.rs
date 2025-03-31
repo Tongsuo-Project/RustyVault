@@ -232,6 +232,7 @@ then the next renew will cause the lease to expire.
     }
 }
 
+#[allow(clippy::assigning_clones)]
 impl CertBackendInner {
     pub fn get_cert(&self, req: &Request, name: &str) -> Result<Option<CertEntry>, RvError> {
         let key = format!("cert/{}", name.to_lowercase());
@@ -244,18 +245,18 @@ impl CertBackendInner {
         let mut cert_entry: CertEntry = serde_json::from_slice(entry.value.as_slice())?;
 
         if cert_entry.token_ttl.as_secs() == 0 && cert_entry.ttl.as_secs() > 0 {
-            cert_entry.token_ttl = cert_entry.ttl.clone();
+            cert_entry.token_ttl = cert_entry.ttl;
         }
         if cert_entry.token_max_ttl.as_secs() == 0 && cert_entry.max_ttl.as_secs() > 0 {
-            cert_entry.token_max_ttl = cert_entry.max_ttl.clone();
+            cert_entry.token_max_ttl = cert_entry.max_ttl;
         }
         if cert_entry.token_period.as_secs() == 0 && cert_entry.period.as_secs() > 0 {
-            cert_entry.token_period = cert_entry.period.clone();
+            cert_entry.token_period = cert_entry.period;
         }
-        if cert_entry.token_policies.len() == 0 && cert_entry.policies.len() > 0 {
+        if cert_entry.token_policies.is_empty() && !cert_entry.policies.is_empty() {
             cert_entry.token_policies = cert_entry.policies.clone();
         }
-        if cert_entry.token_bound_cidrs.len() == 0 && cert_entry.bound_cidrs.len() > 0 {
+        if cert_entry.token_bound_cidrs.is_empty() && !cert_entry.bound_cidrs.is_empty() {
             cert_entry.token_bound_cidrs = cert_entry.bound_cidrs.clone();
         }
 
@@ -288,11 +289,11 @@ impl CertBackendInner {
             data.remove("max_ttl");
         }
 
-        if cert_entry.policies.len() > 0 {
+        if !cert_entry.policies.is_empty() {
             data["policies"] = data["token_policies"].clone();
         }
 
-        if cert_entry.bound_cidrs.len() > 0 {
+        if !cert_entry.bound_cidrs.is_empty() {
             data["bound_cidrs"] = data["token_bound_cidrs"].clone();
         }
 
@@ -308,7 +309,7 @@ impl CertBackendInner {
         if entry.is_some() {
             cert_entry = entry.unwrap();
         } else {
-            cert_entry.name = name.clone();
+            cert_entry.name.clone_from(&name);
         }
 
         if let Ok(certificate_raw) = req.get_data("certificate") {
@@ -384,9 +385,9 @@ impl CertBackendInner {
         }
 
         let old_token_policies = cert_entry.token_policies.clone();
-        let old_token_period = cert_entry.token_period.clone();
-        let old_token_ttl = cert_entry.token_ttl.clone();
-        let old_token_max_ttl = cert_entry.token_max_ttl.clone();
+        let old_token_period = cert_entry.token_period;
+        let old_token_ttl = cert_entry.token_ttl;
+        let old_token_max_ttl = cert_entry.token_max_ttl;
         let old_token_bound_cidrs = cert_entry.token_bound_cidrs.clone();
 
         cert_entry.token_params.parse_token_fields(req)?;
@@ -395,35 +396,35 @@ impl CertBackendInner {
             cert_entry.policies = cert_entry.token_policies.clone();
         } else if let Ok(policies_value) = req.get_data("policies") {
             let policies = policies_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.policies = policies.clone();
+            cert_entry.policies.clone_from(&policies);
             cert_entry.token_policies = policies;
         }
 
         if old_token_period != cert_entry.token_period {
-            cert_entry.period = cert_entry.token_period.clone();
+            cert_entry.period = cert_entry.token_period;
         } else if let Ok(period_value) = req.get_data("period") {
             let period = period_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.period = period.clone();
+            cert_entry.period = period;
             cert_entry.token_period = period;
         }
 
         if old_token_ttl != cert_entry.token_ttl {
-            cert_entry.ttl = cert_entry.token_ttl.clone();
+            cert_entry.ttl = cert_entry.token_ttl;
         } else if let Ok(ttl_value) = req.get_data("ttl") {
             let ttl = ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.ttl = ttl.clone();
+            cert_entry.ttl = ttl;
             cert_entry.token_ttl = ttl;
         } else if let Ok(lease_value) = req.get_data("lease") {
             let lease = lease_value.as_u64().ok_or(RvError::ErrRequestFieldInvalid)?;
             cert_entry.ttl = Duration::from_secs(lease);
-            cert_entry.token_ttl = cert_entry.ttl.clone();
+            cert_entry.token_ttl = cert_entry.ttl;
         }
 
         if old_token_max_ttl != cert_entry.token_max_ttl {
-            cert_entry.max_ttl = cert_entry.token_max_ttl.clone();
+            cert_entry.max_ttl = cert_entry.token_max_ttl;
         } else if let Ok(max_ttl_value) = req.get_data("max_ttl") {
             let max_ttl = max_ttl_value.as_duration().ok_or(RvError::ErrRequestFieldInvalid)?;
-            cert_entry.max_ttl = max_ttl.clone();
+            cert_entry.max_ttl = max_ttl;
             cert_entry.token_max_ttl = max_ttl;
         }
 
@@ -438,8 +439,8 @@ impl CertBackendInner {
             cert_entry.token_bound_cidrs = cert_entry.bound_cidrs.clone();
         }
 
-        if cert_entry.display_name == "" {
-            cert_entry.display_name = name.clone();
+        if cert_entry.display_name.is_empty() {
+            cert_entry.display_name.clone_from(&name);
         }
 
         //TODO: TTL check
@@ -465,7 +466,7 @@ impl CertBackendInner {
     }
 
     pub fn list_cert(&self, _backend: &dyn Backend, req: &Request) -> Result<Option<Response>, RvError> {
-        let certs = req.storage_list(format!("cert/").as_str())?;
+        let certs = req.storage_list("cert/".to_string().as_str())?;
         let resp = Response::list_response(&certs);
         Ok(Some(resp))
     }

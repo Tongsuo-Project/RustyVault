@@ -46,11 +46,10 @@ pub fn sanitize_policies(policies: &mut Vec<String>, add_default: bool) {
 // the "default" policy out of its comparisons as it may be added later by core
 // after a set of policies has been saved by a backend.
 pub fn equivalent_policies(a: &Vec<String>, b: &Vec<String>) -> bool {
-    if a.is_empty() && b.is_empty() {
-        return true;
-    } else if a.is_empty() && b.len() == 1 && b[0] == "default" {
-        return true;
-    } else if b.is_empty() && a.len() == 1 && a[0] == "default" {
+    if (a.is_empty() && b.is_empty())
+        || (a.is_empty() && b.len() == 1 && b[0] == "default")
+        || (b.is_empty() && a.len() == 1 && a[0] == "default")
+    {
         return true;
     } else if a.is_empty() || b.is_empty() {
         return false;

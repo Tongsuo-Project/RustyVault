@@ -106,4 +106,24 @@ impl Sys<'_> {
 
         self.request_write("/v1/sys/remount", data.as_object().cloned())
     }
+
+    pub fn list_policy(&self) -> Result<HttpResponse, RvError> {
+        self.request_read("/v1/sys/policies/acl")
+    }
+
+    pub fn read_policy(&self, name: &str) -> Result<HttpResponse, RvError> {
+        self.request_read(&format!("/v1/sys/policies/acl/{}", name))
+    }
+
+    pub fn write_policy(&self, name: &str, policy: &str) -> Result<HttpResponse, RvError> {
+        let data = json!({
+            "policy": policy,
+        });
+
+        self.request_write(&format!("/v1/sys/policies/acl/{}", name), data.as_object().cloned())
+    }
+
+    pub fn delete_policy(&self, name: &str) -> Result<HttpResponse, RvError> {
+        self.request_delete(&format!("/v1/sys/policies/acl/{}", name), None)
+    }
 }

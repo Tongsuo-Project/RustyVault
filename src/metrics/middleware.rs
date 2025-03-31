@@ -36,7 +36,7 @@ pub async fn metrics_midleware(
     let path = req.path().to_string();
     let method = match *req.method() {
         Method::GET => MetricsMethod::GET,
-        _ if req.method().to_string() == "LIST" => MetricsMethod::LIST,
+        _ if *req.method() == "LIST" => MetricsMethod::LIST,
         Method::POST => MetricsMethod::POST,
         Method::PUT => MetricsMethod::PUT,
         Method::DELETE => MetricsMethod::DELETE,
@@ -106,7 +106,7 @@ mod tests {
 
         let server = TestHttpServer::new_with_prometheus("test_metrics_name_and_help_info", false);
         let root_token = &server.root_token;
-        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(&root_token), None).unwrap();
+        let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(root_token), None).unwrap();
         assert_eq!(status, 200);
 
         let metrics_map = parse_metrics_name_help(resp["metrics"].as_str().unwrap());

@@ -11,9 +11,9 @@ use crate::{
 };
 
 // 24h
-pub const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(24 * 60 * 60 as u64);
+pub const DEFAULT_LEASE_TTL: Duration = Duration::from_secs(24 * 60 * 60_u64);
 // 30d
-pub const MAX_LEASE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60 as u64);
+pub const MAX_LEASE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60_u64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenParams {
@@ -198,7 +198,7 @@ impl TokenParams {
     pub fn populate_token_auth(&self, auth: &mut Auth) {
         auth.ttl = self.token_ttl;
         auth.max_ttl = self.token_max_ttl;
-        auth.policies = self.token_policies.clone();
+        auth.policies.clone_from(&self.token_policies);
         auth.no_default_policy = self.token_no_default_policy;
         auth.renewable = true;
     }
@@ -214,13 +214,13 @@ mod test {
     use crate::{
         logical::{Operation, Path},
         storage::barrier_aes_gcm::AESGCMBarrier,
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     #[test]
     fn test_token_util() {
         // init the storage backend
-        let backend = test_backend("test_token_util");
+        let backend = new_test_backend("test_token_util");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 

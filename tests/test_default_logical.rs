@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    default::Default,
     env, fs,
     sync::{Arc, RwLock},
 };
@@ -13,6 +12,7 @@ use rusty_vault::{
 };
 use serde_json::{json, Map, Value};
 
+#[maybe_async::maybe_async]
 async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool, expect: Option<Map<String, Value>>) {
     let mut req = Request::new(path);
     req.operation = Operation::Read;
@@ -23,30 +23,36 @@ async fn test_read_api(core: &Core, token: &str, path: &str, is_ok: bool, expect
         let resp = resp.unwrap();
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().data.as_ref().unwrap(), expect.as_ref().unwrap());
-    } else {
-        if is_ok {
-            let resp = resp.unwrap();
-            assert!(resp.is_none());
-        }
+    } else if is_ok {
+        let resp = resp.unwrap();
+        assert!(resp.is_none());
     }
 }
 
+#[maybe_async::maybe_async]
 async fn test_write_api(core: &Core, token: &str, path: &str, is_ok: bool, data: Option<Map<String, Value>>) {
     let mut req = Request::new(path);
     req.operation = Operation::Write;
     req.client_token = token.to_string();
     req.body = data;
 
-    assert_eq!(core.handle_request(&mut req).await.is_ok(), is_ok);
+    let ret = core.handle_request(&mut req).await;
+
+    assert_eq!(ret.is_ok(), is_ok);
 }
 
+#[maybe_async::maybe_async]
 async fn test_delete_api(core: &Core, token: &str, path: &str, is_ok: bool) {
     let mut req = Request::new(path);
     req.operation = Operation::Delete;
     req.client_token = token.to_string();
-    assert_eq!(core.handle_request(&mut req).await.is_ok(), is_ok);
+
+    let ret = core.handle_request(&mut req).await;
+
+    assert_eq!(ret.is_ok(), is_ok);
 }
 
+#[maybe_async::maybe_async]
 async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool, keys_len: usize) {
     let mut req = Request::new(path);
     req.operation = Operation::List;
@@ -62,6 +68,7 @@ async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool, keys_l
     }
 }
 
+#[maybe_async::maybe_async]
 async fn test_default_secret(core: Arc<RwLock<Core>>, token: &str) {
     let core = core.read().unwrap();
 
@@ -84,6 +91,7 @@ async fn test_default_secret(core: Arc<RwLock<Core>>, token: &str) {
     test_list_api(&core, token, "secret/", true, 1).await;
 }
 
+#[maybe_async::maybe_async]
 async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     let core = core.read().unwrap();
 
@@ -168,6 +176,7 @@ async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     test_read_api(&core, token, "vk/foo", false, None).await;
 }
 
+#[maybe_async::maybe_async]
 async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     let core = core.read().unwrap();
 
@@ -255,6 +264,7 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     test_write_api(&core, token, "sys/remount", true, Some(remount_data)).await;
 }
 
+#[maybe_async::maybe_async]
 async fn test_sys_raw_api_feature(core: Arc<RwLock<Core>>, token: &str) {
     let core = core.read().unwrap();
 
@@ -297,12 +307,13 @@ async fn test_sys_raw_api_feature(core: Arc<RwLock<Core>>, token: &str) {
     test_read_api(&core, token, "sys/raw/test", true, None).await;
 }
 
+#[maybe_async::maybe_async]
 async fn test_sys_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     test_sys_mount_feature(Arc::clone(&core), token).await;
     test_sys_raw_api_feature(core, token).await;
 }
 
-#[tokio::test]
+#[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
 async fn test_default_logical() {
     let dir = env::temp_dir().join("rusty_vault_core_init");
     let _ = fs::remove_dir_all(&dir);
@@ -319,9 +330,7 @@ async fn test_default_logical() {
 
     let backend = storage::new_backend("file", &conf).unwrap();
 
-    let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-
-    let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
+    let c = Arc::new(RwLock::new(Core::new(backend)));
 
     {
         let mut core = c.write().unwrap();

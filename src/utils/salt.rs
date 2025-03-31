@@ -44,16 +44,16 @@ impl Salt {
     pub fn new(storage: Option<&dyn Storage>, config: Option<&Config>) -> Result<Self, RvError> {
         let mut salt = Salt::default();
         if let Some(c) = config {
-            if salt.config.location != c.location && c.location != "" {
-                salt.config.location = c.location.clone();
+            if salt.config.location != c.location && !c.location.is_empty() {
+                salt.config.location.clone_from(&c.location);
             }
 
             if salt.config.hash_type != c.hash_type {
-                salt.config.hash_type = c.hash_type.clone();
+                salt.config.hash_type = c.hash_type;
             }
 
             if salt.config.hmac_type != c.hmac_type {
-                salt.config.hmac_type = c.hmac_type.clone();
+                salt.config.hmac_type = c.hmac_type;
             }
         }
 
@@ -123,13 +123,13 @@ mod test {
     use super::*;
     use crate::{
         storage::{barrier::SecurityBarrier, barrier_aes_gcm, barrier_view},
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     #[test]
     fn test_salt() {
         // init the storage backend
-        let backend = test_backend("test_salt");
+        let backend = new_test_backend("test_salt");
 
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());

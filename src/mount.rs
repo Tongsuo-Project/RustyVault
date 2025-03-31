@@ -6,9 +6,16 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, RwLock,
+    },
+    thread::{self, JoinHandle},
+    time::Duration,
 };
 
+use crossbeam_channel::{select, tick};
+use derive_more::Deref;
 use lazy_static::lazy_static;
 use openssl::{
     hash::MessageDigest,
@@ -19,17 +26,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     cli::config::MountEntryHMACLevel,
-    core::Core,
+    core::{Core, LogicalBackendNewFunc},
     errors::RvError,
     router::Router,
-    storage::{barrier_view::BarrierView, Storage, StorageEntry},
+    storage::{barrier::SecurityBarrier, barrier_view::BarrierView, Storage, StorageEntry},
     utils::{generate_uuid, is_protect_path},
 };
 
-const CORE_MOUNT_CONFIG_PATH: &str = "core/mounts";
-const LOGICAL_BARRIER_PREFIX: &str = "logical/";
-const SYSTEM_BARRIER_PREFIX: &str = "sys/";
-
+pub const LOGICAL_BARRIER_PREFIX: &str = "logical/";
+pub const CORE_MOUNT_CONFIG_PATH: &str = "core/mounts";
+pub const SYSTEM_BARRIER_PREFIX: &str = "sys/";
 pub const MOUNT_TABLE_TYPE: &str = "mounts";
 
 lazy_static! {
@@ -56,6 +62,25 @@ lazy_static! {
     ];
 }
 
+pub struct MountsMonitor {
+    core: Arc<RwLock<Core>>,
+    interval: u64,
+    tables: Arc<RwLock<Vec<Arc<MountsRouter>>>>,
+    running: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+#[derive(Deref)]
+pub struct MountsRouter {
+    #[deref]
+    pub mounts: Arc<MountTable>,
+    pub router: Arc<Router>,
+    pub barrier: Arc<dyn SecurityBarrier>,
+    pub barrier_prefix: String,
+    pub router_prefix: String,
+    pub backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct MountEntry {
     #[serde(default)]
@@ -70,9 +95,83 @@ pub struct MountEntry {
     pub hmac: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MountTable {
-    pub entries: Arc<RwLock<HashMap<String, Arc<RwLock<MountEntry>>>>>,
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub id: RwLock<String>,
+    pub entries: RwLock<HashMap<String, Arc<RwLock<MountEntry>>>>,
+}
+
+impl MountsRouter {
+    pub fn new(
+        mounts: Arc<MountTable>,
+        router: Arc<Router>,
+        barrier: Arc<dyn SecurityBarrier>,
+        barrier_prefix: &str,
+        router_prefix: &str,
+    ) -> Self {
+        Self {
+            mounts,
+            router,
+            barrier,
+            barrier_prefix: barrier_prefix.to_string(),
+            router_prefix: router_prefix.to_string(),
+            backends: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn setup(&self, core: &Arc<RwLock<Core>>) -> Result<(), RvError> {
+        let mounts = self.mounts.entries.read()?;
+
+        for mount_entry in mounts.values() {
+            let entry = mount_entry.read()?;
+            let barrier_path = format!("{}{}/", self.barrier_prefix, &entry.uuid);
+
+            let backend_new_func = self.get_backend(&entry.logical_type)?;
+            let backend = backend_new_func(core.clone())?;
+
+            let view = BarrierView::new(self.barrier.clone(), &barrier_path);
+            let path = format!("{}{}", self.router_prefix, &entry.path);
+
+            self.router.mount(backend, &path, Arc::clone(mount_entry), view)?;
+
+            if entry.tainted {
+                self.router.taint(&entry.path)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn unload(&self) -> Result<(), RvError> {
+        self.mounts.clear()
+    }
+
+    pub fn get_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
+        let backends = self.backends.lock().unwrap();
+        if let Some(backend) = backends.get(logical_type) {
+            Ok(backend.clone())
+        } else {
+            Err(RvError::ErrCoreLogicalBackendNoExist)
+        }
+    }
+
+    pub fn add_backend(&self, logical_type: &str, backend: Arc<LogicalBackendNewFunc>) -> Result<(), RvError> {
+        let mut backends = self.backends.lock().unwrap();
+        if backends.contains_key(logical_type) {
+            return Err(RvError::ErrCoreLogicalBackendExist);
+        }
+        backends.insert(logical_type.to_string(), backend);
+        Ok(())
+    }
+
+    pub fn delete_backend(&self, logical_type: &str) -> Result<(), RvError> {
+        let mut backends = self.backends.lock().unwrap();
+        backends.remove(logical_type);
+        Ok(())
+    }
 }
 
 impl MountEntry {
@@ -112,8 +211,7 @@ impl MountEntry {
         let mut msg = format!("{}-{}-{}-{}", self.table, self.path, self.logical_type, self.description);
 
         if let Some(options) = &self.options {
-            let options_btree: BTreeMap<String, String> =
-                options.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let options_btree: BTreeMap<String, String> = options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             for (key, value) in options_btree.iter() {
                 msg = format!("{}-{}:{}", msg, key, value);
             }
@@ -124,13 +222,14 @@ impl MountEntry {
 }
 
 impl MountTable {
-    pub fn new() -> Self {
-        Self { entries: Arc::new(RwLock::new(HashMap::new())) }
+    pub fn new(path: &str) -> Self {
+        Self { path: path.to_string(), id: RwLock::new(generate_uuid()), entries: RwLock::new(HashMap::new()) }
     }
 
-    pub fn hash(&self) -> Result<Vec<u8>, RvError> {
-        //let mounts = self.entries.read()?;
-        Ok(Vec::new())
+    pub fn clear(&self) -> Result<(), RvError> {
+        let mut entries_write = self.entries.write()?;
+        entries_write.clear();
+        Ok(())
     }
 
     pub fn get(&self, path: &str) -> Result<Option<Arc<RwLock<MountEntry>>>, RvError> {
@@ -159,7 +258,7 @@ impl MountTable {
                 return false;
             }
         }
-        return false;
+        false
     }
 
     pub fn set_default(&self, mounts: Vec<MountEntry>, hmac_key: Option<&[u8]>) -> Result<(), RvError> {
@@ -179,14 +278,17 @@ impl MountTable {
         hmac_key: Option<&[u8]>,
         hmac_level: MountEntryHMACLevel,
     ) -> Result<(), RvError> {
-        let entry = storage.get(CORE_MOUNT_CONFIG_PATH)?;
-        if entry.is_none() {
-            self.set_default(DEFAULT_CORE_MOUNTS.to_vec(), hmac_key)?;
-            self.persist(CORE_MOUNT_CONFIG_PATH, storage)?;
-            return Ok(());
+        match self.load(storage, hmac_key, hmac_level) {
+            Err(RvError::ErrConfigLoadFailed) => {
+                self.set_default(DEFAULT_CORE_MOUNTS.to_vec(), hmac_key)?;
+                self.persist(storage)?;
+                return Ok(());
+            }
+            Err(err) => {
+                return Err(err);
+            }
+            _ => {}
         }
-
-        self.load(storage, CORE_MOUNT_CONFIG_PATH, hmac_key, hmac_level.clone())?;
 
         self.mount_update(storage, hmac_key, hmac_level)
     }
@@ -194,11 +296,10 @@ impl MountTable {
     pub fn load(
         &self,
         storage: &dyn Storage,
-        path: &str,
         hmac_key: Option<&[u8]>,
         hmac_level: MountEntryHMACLevel,
-    ) -> Result<(), RvError> {
-        let entry = storage.get(path)?;
+    ) -> Result<Option<()>, RvError> {
+        let entry = storage.get(&self.path)?;
         if entry.is_none() {
             return Err(RvError::ErrConfigLoadFailed);
         }
@@ -206,6 +307,13 @@ impl MountTable {
         let new_table: MountTable = serde_json::from_slice(entry.unwrap().value.as_slice())?;
         let mut new_entries = new_table.entries.write()?;
         let mut entries = self.entries.write()?;
+        let new_id = new_table.id.read()?;
+        let mut id = self.id.write()?;
+
+        if id.to_string() == new_id.to_string() && entries.len() == new_entries.len() {
+            return Ok(None);
+        }
+
         entries.clear();
 
         if hmac_level != MountEntryHMACLevel::None && hmac_key.is_some() {
@@ -228,13 +336,14 @@ impl MountTable {
         }
 
         entries.extend(new_entries.drain());
-        Ok(())
+        *id = new_id.to_string();
+
+        Ok(Some(()))
     }
 
-    pub fn persist(&self, to: &str, storage: &dyn Storage) -> Result<(), RvError> {
+    pub fn persist(&self, storage: &dyn Storage) -> Result<(), RvError> {
         let value = serde_json::to_string(self)?;
-        let entry = StorageEntry { key: to.to_string(), value: value.into_bytes() };
-        storage.put(&entry)?;
+        storage.put(&StorageEntry { key: self.path.clone(), value: value.into_bytes() })?;
         Ok(())
     }
 
@@ -249,32 +358,110 @@ impl MountTable {
 
         for mount_entry in mounts.values() {
             let mut entry = mount_entry.write()?;
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = MOUNT_TABLE_TYPE.to_string();
                 need_persist = true;
             }
 
-            if entry.hmac == "" && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
+            if entry.hmac.is_empty() && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
                 entry.calc_hmac(hmac_key.unwrap())?;
                 need_persist = true;
             }
         }
 
         if need_persist {
-            self.persist(CORE_MOUNT_CONFIG_PATH, storage)?;
+            self.persist(storage)?;
         }
 
         Ok(())
     }
 }
 
+impl MountsMonitor {
+    pub fn new(core: Arc<RwLock<Core>>, interval: u64) -> Self {
+        Self {
+            core,
+            interval,
+            tables: Arc::new(RwLock::new(Vec::new())),
+            running: Arc::new(AtomicBool::new(false)),
+            handle: None,
+        }
+    }
+
+    pub fn add_mounts_router(&self, table: Arc<MountsRouter>) {
+        let mut tables = self.tables.write().unwrap();
+        tables.push(table);
+    }
+
+    pub fn remove_mounts_router(&self, table: Arc<MountsRouter>) {
+        let mut tables = self.tables.write().unwrap();
+        tables.retain(|mt| mt.path != table.path);
+    }
+
+    pub fn start(&mut self) {
+        if self.running.load(Ordering::Relaxed) {
+            return;
+        }
+
+        self.running.store(true, Ordering::Relaxed);
+        let running_flag = self.running.clone();
+
+        let core_cloned = self.core.clone();
+        let mount_tables = self.tables.clone();
+
+        let ticker = tick(Duration::from_secs(self.interval));
+        let handle = thread::spawn(move || {
+            while running_flag.load(Ordering::Relaxed) {
+                select! {
+                    recv(ticker) -> _ => {
+                        let core = match core_cloned.try_read() {
+                            Ok(c) => c,
+                            _ => {
+                                continue;
+                            }
+                        };
+
+                        let mut changed = false;
+                        let tables = mount_tables.read().unwrap();
+                        for table in tables.iter() {
+                            match table.load(core.barrier.as_storage(), Some(&core.hmac_key), core.mount_entry_hmac_level) {
+                                Ok(Some(())) => changed = true,
+                                _ => continue,
+                            }
+                        }
+
+                        if changed {
+                            let _ = core.router.clear();
+
+                            for table in tables.iter() {
+                                if let Err(err) = table.setup(&core_cloned) {
+                                    log::error!("update mount table failed, path: {}, err: {:?}", table.path, err);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        self.handle = Some(handle);
+    }
+
+    pub fn stop(&mut self) {
+        self.running.store(false, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 impl Core {
     pub fn mount(&self, me: &MountEntry) -> Result<(), RvError> {
         {
-            let mut table = self.mounts.entries.write()?;
+            let mut table = self.mounts_router.entries.write()?;
             let mut entry = me.clone();
 
-            if !entry.path.ends_with("/") {
+            if !entry.path.ends_with('/') {
                 entry.path += "/";
             }
 
@@ -282,12 +469,12 @@ impl Core {
                 return Err(RvError::ErrMountPathProtected);
             }
 
-            if entry.table == "" {
+            if entry.table.is_empty() {
                 entry.table = MOUNT_TABLE_TYPE.to_string();
             }
 
             let match_mount_path = self.router.matching_mount(&entry.path)?;
-            if match_mount_path.len() != 0 {
+            if !match_mount_path.is_empty() {
                 return Err(RvError::ErrMountPathExist);
             }
 
@@ -310,14 +497,14 @@ impl Core {
             table.insert(path, mount_entry);
         }
 
-        self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        self.mounts_router.persist(self.barrier.as_storage())?;
 
         Ok(())
     }
 
     pub fn unmount(&self, path: &str) -> Result<(), RvError> {
         let mut path = path.to_string();
-        if !path.ends_with("/") {
+        if !path.ends_with('/') {
             path += "/";
         }
 
@@ -326,7 +513,7 @@ impl Core {
         }
 
         let match_mount = self.router.matching_mount(&path)?;
-        if match_mount.len() == 0 || match_mount != path {
+        if match_mount.is_empty() || match_mount != path {
             return Err(RvError::ErrMountNotMatch);
         }
 
@@ -351,11 +538,11 @@ impl Core {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
-        if !src.ends_with("/") {
+        if !src.ends_with('/') {
             src += "/";
         }
 
-        if !dst.ends_with("/") {
+        if !dst.ends_with('/') {
             dst += "/";
         }
 
@@ -364,7 +551,7 @@ impl Core {
         }
 
         let dst_match = self.router.matching_mount(&dst)?;
-        if dst_match.len() != 0 {
+        if !dst_match.is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
@@ -378,18 +565,18 @@ impl Core {
 
         self.router.taint(&src)?;
 
-        if self.router.matching_mount(&dst)? != "" {
+        if !(self.router.matching_mount(&dst)?).is_empty() {
             return Err(RvError::ErrMountPathExist);
         }
 
         let src_path = src_entry.path.clone();
-        src_entry.path = dst.clone();
+        src_entry.path.clone_from(&dst);
         src_entry.tainted = false;
         src_entry.calc_hmac(&self.hmac_key)?;
 
         std::mem::drop(src_entry);
 
-        if let Err(e) = self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage()) {
+        if let Err(e) = self.mounts_router.persist(self.barrier.as_storage()) {
             let mut src_entry = src_match.as_ref().unwrap().write()?;
             src_entry.path = src_path;
             src_entry.tainted = true;
@@ -404,55 +591,23 @@ impl Core {
         Ok(())
     }
 
-    pub fn setup_mounts(&mut self) -> Result<(), RvError> {
-        let mounts = self.mounts.entries.read()?;
-
-        for mount_entry in mounts.values() {
-            let entry = mount_entry.read()?;
-            let mut barrier_path = format!("{}{}/", LOGICAL_BARRIER_PREFIX, &entry.uuid);
-            if entry.logical_type.as_str() == "system" {
-                barrier_path = SYSTEM_BARRIER_PREFIX.to_string();
-            }
-
-            let backend_new_func = self.get_logical_backend(&entry.logical_type)?;
-            let backend = backend_new_func(Arc::clone(self.self_ref.as_ref().unwrap()))?;
-
-            let view = BarrierView::new(self.barrier.clone(), &barrier_path);
-
-            self.router.mount(backend, &entry.path, Arc::clone(mount_entry), view)?;
-
-            if entry.logical_type.as_str() == "system" {
-                self.system_view = Some(Arc::new(BarrierView::new(self.barrier.clone(), &barrier_path)));
-            }
-
-            if entry.tainted {
-                self.router.taint(&entry.path)?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn unload_mounts(&mut self) -> Result<(), RvError> {
-        let router = Arc::new(Router::new());
-        self.router = Arc::clone(&router);
-        let mut handlers = self.handlers.write()?;
-        handlers[0] = router;
-        self.mounts = Arc::new(MountTable::new());
+        let _ = self.router.clear();
+        let _ = self.mounts_router.clear();
         self.system_view = None;
         Ok(())
     }
 
     fn taint_mount_entry(&self, path: &str) -> Result<(), RvError> {
-        if self.mounts.set_taint(path, true) {
-            self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        if self.mounts_router.set_taint(path, true) {
+            self.mounts_router.persist(self.barrier.as_storage())?;
         }
         Ok(())
     }
 
     fn remove_mount_entry(&self, path: &str) -> Result<(), RvError> {
-        if self.mounts.delete(path) {
-            self.mounts.persist(CORE_MOUNT_CONFIG_PATH, self.barrier.as_storage())?;
+        if self.mounts_router.delete(path) {
+            self.mounts_router.persist(self.barrier.as_storage())?;
         }
         Ok(())
     }

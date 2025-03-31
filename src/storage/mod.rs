@@ -14,7 +14,7 @@
 //! Typical storage types may be direct file, databases, remote network filesystem and etc.
 //! Different strage types are all as sub-module of this module.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{any::Any, collections::HashMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -34,6 +34,9 @@ pub trait Storage: Send + Sync {
     fn get(&self, key: &str) -> Result<Option<StorageEntry>, RvError>;
     fn put(&self, entry: &StorageEntry) -> Result<(), RvError>;
     fn delete(&self, key: &str) -> Result<(), RvError>;
+    fn lock(&self, _lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+        Ok(Box::new(true))
+    }
 }
 
 /// This struct is used to describe a specific storage entry
@@ -58,6 +61,9 @@ pub trait Backend: Send + Sync {
     fn get(&self, key: &str) -> Result<Option<BackendEntry>, RvError>;
     fn put(&self, entry: &BackendEntry) -> Result<(), RvError>;
     fn delete(&self, key: &str) -> Result<(), RvError>;
+    fn lock(&self, _lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+        Ok(Box::new(true))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -107,7 +113,7 @@ pub mod test {
         assert!(backend.is_ok());
 
         let backend = new_backend("foo", &conf);
-        assert!(!backend.is_ok());
+        assert!(backend.is_err());
     }
 
     pub fn test_backend_curd(backend: &dyn Backend) {
