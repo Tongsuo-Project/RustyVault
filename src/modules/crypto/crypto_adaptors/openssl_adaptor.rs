@@ -116,14 +116,14 @@ impl RSA {
         prime: Option<u8>,
         size: Option<RSAKeySize>,
     ) -> Result<Self, RvError> {
-        return Ok(
+        Ok(
             RSA {
                 key_type: PublicKeyType::RSA,
                 prime: prime.unwrap_or(2),
                 size: size.unwrap_or(RSAKeySize::RSA2048),
                 ctx: None,
             }
-        );
+        )
     }
 }
 
@@ -301,7 +301,7 @@ impl Signature for ECDSA {
     fn sign(&self, data: &Vec<u8>) -> Result<Vec<u8>, RvError> {
         let key = &self.ctx.as_ref().unwrap().private_key;
 
-        let mut ctx = match PkeyCtx::new(&key) {
+        let mut ctx = match PkeyCtx::new(key) {
             Ok(ctx) => ctx,
             Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
         };
@@ -323,7 +323,7 @@ impl Signature for ECDSA {
     fn verify(&self, data: &Vec<u8>, sig: &Vec<u8>) -> Result<bool, RvError> {
         let key = &self.ctx.as_ref().unwrap().private_key;
 
-        let mut ctx = match PkeyCtx::new(&key) {
+        let mut ctx = match PkeyCtx::new(key) {
             Ok(ctx) => ctx,
             Err(_e) => return Err(RvError::ErrCryptoPKeyInternalError),
         };
@@ -338,6 +338,6 @@ impl Signature for ECDSA {
             Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyFailed),
         };
 
-        return Ok(valid);
+        Ok(valid)
     }
 }
