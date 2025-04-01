@@ -49,15 +49,15 @@ impl Secret {
             return Ok(auth.renewable);
         }
 
-        if let Some(data) = self.data.get("renewable") {
-            if let Some(renewable) = data.as_bool() {
-                return Ok(renewable);
-            } else {
-                return Err(rv_error_string!("token id found but in the wrong format"));
-            }
-        }
+        let Some(renewable_value) = self.data.get("renewable") else {
+            return Ok(false);
+        };
 
-        Ok(false)
+        let Some(renewable) = renewable_value.as_bool() else {
+            return Err(rv_error_string!("token id found but in the wrong format"));
+        };
+
+        Ok(renewable)
     }
 
     pub fn token_id(&self) -> Result<String, RvError> {
@@ -67,15 +67,15 @@ impl Secret {
             }
         }
 
-        if let Some(data) = self.data.get("id") {
-            if let Some(id) = data.as_str() {
-                return Ok(id.to_string());
-            } else {
-                return Err(rv_error_string!("token id found but in the wrong format"));
-            }
-        }
+        let Some(id_value) = self.data.get("id") else {
+            return Ok("".into());
+        };
 
-        Ok("".into())
+        let Some(id) = id_value.as_str() else {
+            return Err(rv_error_string!("token id found but in the wrong format"));
+        };
+
+        Ok(id.to_string())
     }
 
     pub fn token_accessor(&self) -> Result<String, RvError> {
@@ -85,15 +85,15 @@ impl Secret {
             }
         }
 
-        if let Some(data) = self.data.get("accessor") {
-            if let Some(accessor) = data.as_str() {
-                return Ok(accessor.to_string());
-            } else {
-                return Err(rv_error_string!("token accessor found but in the wrong format"));
-            }
-        }
+        let Some(accessor_value) = self.data.get("accessor") else {
+            return Ok("".into());
+        };
 
-        Ok("".into())
+        let Some(accessor) = accessor_value.as_str() else {
+            return Err(rv_error_string!("token accessor found but in the wrong format"));
+        };
+
+        Ok(accessor.to_string())
     }
 
     pub fn token_policies(&self) -> Result<Vec<String>, RvError> {
@@ -103,15 +103,15 @@ impl Secret {
             }
         }
 
-        if let Some(data) = self.data.get("policies") {
-            if let Some(policies) = data.as_array() {
-                return Ok(policies.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect());
-            } else {
-                return Err(rv_error_string!("token policies found but in the wrong format"));
-            }
-        }
+        let Some(policies_value) = self.data.get("policies") else {
+            return Ok(vec![]);
+        };
 
-        Ok(vec![])
+        let Some(policies) = policies_value.as_array() else {
+            return Err(rv_error_string!("token policies found but in the wrong format"));
+        };
+
+        Ok(policies.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
     }
 
     pub fn token_ttl(&self) -> Result<u64, RvError> {
@@ -119,15 +119,15 @@ impl Secret {
             return Ok(auth.lease_duration);
         }
 
-        if let Some(data) = self.data.get("ttl") {
-            if let Some(ttl) = data.as_u64() {
-                return Ok(ttl);
-            } else {
-                return Err(rv_error_string!("token ttl found but in the wrong format"));
-            }
-        }
+        let Some(ttl_value) = self.data.get("ttl") else {
+            return Ok(0);
+        };
 
-        Ok(0)
+        let Some(ttl) = ttl_value.as_u64() else {
+            return Err(rv_error_string!("token ttl found but in the wrong format"));
+        };
+
+        Ok(ttl)
     }
 
     pub fn token_metadata(&self) -> Result<HashMap<String, String>, RvError> {
@@ -138,19 +138,19 @@ impl Secret {
         }
 
         if let Some(data) = self.data.get("metadata") {
-            if let Some(metadata) = data.as_object() {
-                return Ok(metadata.into_iter().map(|(k, v)| (k.to_string(), value_to_string(v))).collect());
-            } else {
+            let Some(metadata) = data.as_object() else {
                 return Err(rv_error_string!("token metadata found but in the wrong format"));
-            }
+            };
+
+            return Ok(metadata.into_iter().map(|(k, v)| (k.to_string(), value_to_string(v))).collect());
         }
 
         if let Some(data) = self.data.get("meta") {
-            if let Some(meta) = data.as_object() {
-                return Ok(meta.into_iter().map(|(k, v)| (k.to_string(), value_to_string(v))).collect());
-            } else {
+            let Some(meta) = data.as_object() else {
                 return Err(rv_error_string!("token meta found but in the wrong format"));
-            }
+            };
+
+            return Ok(meta.into_iter().map(|(k, v)| (k.to_string(), value_to_string(v))).collect());
         }
 
         Ok(HashMap::new())

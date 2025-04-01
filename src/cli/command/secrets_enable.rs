@@ -59,8 +59,8 @@ pub struct EnableOptions {
         next_line_help = false,
         value_name = "string",
         default_value = "",
-        long_help = r#"Place where the secrets engine will be accessible. This must be unique
-cross all secrets engines. This defaults to the "type" of the secrets
+        long_help = r#"A place that a secrets engine is enabled at, thus the engine can be accessed via that path.
+This must be unique across all secrets engines. This defaults to the "type" of the secrets
 engine."#
     )]
     path: String,

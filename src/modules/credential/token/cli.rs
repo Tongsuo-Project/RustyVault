@@ -21,12 +21,6 @@ pub struct TokenCliHandler;
 
 impl LoginHandler for TokenCliHandler {
     fn auth(&self, client: &Client, data: &Map<String, Value>) -> Result<HttpResponse, RvError> {
-        let lookup = if let Some(lookup_value) = data.get("lookup") {
-            lookup_value.as_bool_ex().ok_or(rv_error_string!("Failed to parse \"lookup\" as boolean"))?
-        } else {
-            true
-        };
-
         let mut token = data["token"].as_str().unwrap_or("").to_string();
         if token.is_empty() {
             let mut writer = io::stdout();
@@ -41,6 +35,12 @@ impl LoginHandler for TokenCliHandler {
         if token.is_empty() {
             return Err(rv_error_string!("a token must be passed to auth, please view the help for more information"));
         }
+
+        let lookup = if let Some(lookup_value) = data.get("lookup") {
+            lookup_value.as_bool_ex().ok_or(rv_error_string!("Failed to parse \"lookup\" as boolean"))?
+        } else {
+            true
+        };
 
         if !lookup {
             let auth = SecretAuth { client_token: token.clone(), ..Default::default() };
@@ -108,7 +108,7 @@ token=<string>
     via the "rvault login" command.
 
 lookup=<bool>
-    Perform a lookup of the token's metadata and policies."#;
+    If true, it performs a lookup of the token's metadata and policies."#;
         help.trim().to_string()
     }
 }
