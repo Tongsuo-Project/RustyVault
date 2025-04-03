@@ -37,10 +37,12 @@ pub struct Field {
 }
 
 pub trait FieldTrait {
+    fn is_bool_ex(&self) -> bool;
     fn is_int(&self) -> bool;
     fn is_duration(&self) -> bool;
     fn is_comma_string_slice(&self) -> bool;
     fn is_map(&self) -> bool;
+    fn as_bool_ex(&self) -> Option<bool>;
     fn as_int(&self) -> Option<i64>;
     fn as_duration(&self) -> Option<Duration>;
     fn as_comma_string_slice(&self) -> Option<Vec<String>>;
@@ -48,6 +50,14 @@ pub trait FieldTrait {
 }
 
 impl FieldTrait for Value {
+    fn is_bool_ex(&self) -> bool {
+        if self.is_boolean() {
+            return true;
+        }
+
+        matches!(self.as_str(), Some("true") | Some("false"))
+    }
+
     fn is_int(&self) -> bool {
         if self.is_i64() {
             return true;
@@ -126,6 +136,18 @@ impl FieldTrait for Value {
 
         let map = serde_json::from_str::<Value>(map_str.unwrap());
         map.is_ok() && map.unwrap().is_object()
+    }
+
+    fn as_bool_ex(&self) -> Option<bool> {
+        if self.is_boolean() {
+            return self.as_bool();
+        }
+
+        match self.as_str() {
+            Some("true") => Some(true),
+            Some("false") => Some(false),
+            _ => None,
+        }
     }
 
     fn as_int(&self) -> Option<i64> {

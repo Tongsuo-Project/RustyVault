@@ -555,10 +555,9 @@ impl SystemBackendInner {
             "value": String::from_utf8_lossy(&entry.unwrap().value),
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        Ok(Some(Response::data_response(Some(data))))
+        Ok(Some(Response::data_response(data)))
     }
 
     pub fn handle_raw_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
