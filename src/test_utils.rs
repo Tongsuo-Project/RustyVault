@@ -371,9 +371,8 @@ impl TestHttpServer {
             "type": mtype,
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let (status, resp) = self.write(&format!("sys/mounts/{}", path), Some(data), None)?;
+        .cloned();
+        let (status, resp) = self.write(&format!("sys/mounts/{}", path), data, None)?;
         if status == 200 || status == 204 {
             self.mount_path = path.into();
         }
@@ -386,9 +385,8 @@ impl TestHttpServer {
             "type": atype,
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let (status, resp) = self.write(&format!("sys/auth/{}", path), Some(data), None)?;
+        .cloned();
+        let (status, resp) = self.write(&format!("sys/auth/{}", path), data, None)?;
         if status == 200 || status == 204 {
             self.mount_path = path.into();
         }
@@ -1397,10 +1395,9 @@ pub async fn test_mount_api(core: &Core, token: &str, mtype: &str, path: &str) {
         "type": mtype,
     })
     .as_object()
-    .unwrap()
-    .clone();
+    .cloned();
 
-    let resp = test_write_api(core, token, format!("sys/mounts/{}", path).as_str(), true, Some(data)).await;
+    let resp = test_write_api(core, token, format!("sys/mounts/{}", path).as_str(), true, data).await;
     assert!(resp.is_ok());
 }
 
@@ -1410,10 +1407,9 @@ pub async fn test_mount_auth_api(core: &Core, token: &str, atype: &str, path: &s
         "type": atype,
     })
     .as_object()
-    .unwrap()
-    .clone();
+    .cloned();
 
-    let resp = test_write_api(core, token, format!("sys/auth/{}", path).as_str(), true, Some(auth_data)).await;
+    let resp = test_write_api(core, token, format!("sys/auth/{}", path).as_str(), true, auth_data).await;
     assert!(resp.is_ok());
 }
 

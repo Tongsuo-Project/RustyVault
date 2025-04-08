@@ -15,7 +15,7 @@ use crate::{
 #[command(
     author,
     version,
-    about = r#"Enables a new auth method. An auth method is responsible for authenticating users 
+    about = r#"Enables a new auth method. An auth method is responsible for authenticating users
 or machines and assigning them policies with which they can access RustyVault.
 
 Enable the userpass auth method at userpass/:
@@ -77,17 +77,18 @@ impl CommandExecutor for Enable {
         let client = self.client()?;
         let sys = client.sys();
 
+        let path = util::ensure_trailing_slash(&self.options.path);
         let auth_input = AuthInput {
-            path: util::ensure_trailing_slash(&self.options.path),
             logical_type: self.method.clone(),
             description: self.options.description.clone(),
             options: self.options.options.to_map(),
+            ..Default::default()
         };
 
-        match sys.enable_auth(&auth_input) {
+        match sys.enable_auth(&path, &auth_input) {
             Ok(ret) => match ret.response_status {
                 200 | 204 => {
-                    println!("Success! Enabled {} auth method at: {}", self.method, auth_input.path);
+                    println!("Success! Enabled {} auth method at: {}", self.method, path);
                 }
                 _ => ret.print_debug_info(),
             },

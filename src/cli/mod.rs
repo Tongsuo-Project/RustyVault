@@ -33,6 +33,7 @@ pub enum Commands {
     Login(command::login::Login),
     Auth(command::auth::Auth),
     Policy(command::policy::Policy),
+    Secrets(command::secrets::Secrets),
 }
 
 impl Commands {
@@ -48,6 +49,7 @@ impl Commands {
             Commands::Login(login) => login.execute(),
             Commands::Auth(auth) => auth.execute(),
             Commands::Policy(policy) => policy.execute(),
+            Commands::Secrets(secrets) => secrets.execute(),
         }
     }
 }

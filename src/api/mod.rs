@@ -3,6 +3,7 @@
 use serde_json::Value;
 
 pub mod auth;
+pub mod auth_token;
 pub mod client;
 pub mod logical;
 pub mod secret;
