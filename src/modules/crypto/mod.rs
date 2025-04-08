@@ -457,12 +457,8 @@ impl Zeroize for ECCurveName {
 #[cfg(test)]
 mod crypto_test {
     use crate::modules::crypto::{
-        AEADCipher, AESKeySize, BlockCipher,
-        CipherMode, AES,
-        RSA, RSAKeySize,
-        PublicKey, PublicKeyType,
-        Signature, Encryption,
-        ECDSA, ECCurveName
+        AEADCipher, AESKeySize, BlockCipher, CipherMode, ECCurveName, Encryption, PublicKey, PublicKeyType, RSAKeySize,
+        Signature, AES, ECDSA, RSA,
     };
 
     #[cfg(feature = "crypto_adaptor_tongsuo")]

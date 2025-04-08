@@ -3,24 +3,19 @@
 use crate::{
     errors::RvError,
     modules::crypto::{
-    AEADCipher, AESKeySize, BlockCipher,
-    CipherMode, AES,
-    RSA, RSAKeySize,
-    PublicKey, PublicKeyType,
-    Signature, Encryption,
-    ECDSA, ECCurveName,
-    crypto_adaptors::common,
+        crypto_adaptors::common, AEADCipher, AESKeySize, BlockCipher, CipherMode, ECCurveName, Encryption, PublicKey,
+        PublicKeyType, RSAKeySize, Signature, AES, ECDSA, RSA,
     },
 };
 
 use openssl::{
-    rand::rand_priv_bytes,
-    symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher, Crypter, Mode},
-    rsa::{Rsa, Padding},
+    ec::{EcGroup, EcKey},
+    nid::Nid,
     pkey::{PKey, Private},
     pkey_ctx::PkeyCtx,
-    nid::Nid,
-    ec::{EcGroup, EcKey},
+    rand::rand_priv_bytes,
+    rsa::{Padding, Rsa},
+    symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher, Crypter, Mode},
 };
 
 use zeroize::{Zeroize, Zeroizing};
@@ -112,18 +107,13 @@ impl RSA {
     ///
     /// size: RSA key size. Valid options are RSA2048 (default), RSA3072, RSA4096, RSA8192.
     /// prime: for multi-prime RSA usage (RFC 8017), default is 2.
-    pub fn new(
-        prime: Option<u8>,
-        size: Option<RSAKeySize>,
-    ) -> Result<Self, RvError> {
-        Ok(
-            RSA {
-                key_type: PublicKeyType::RSA,
-                prime: prime.unwrap_or(2),
-                size: size.unwrap_or(RSAKeySize::RSA2048),
-                ctx: None,
-            }
-        )
+    pub fn new(prime: Option<u8>, size: Option<RSAKeySize>) -> Result<Self, RvError> {
+        Ok(RSA {
+            key_type: PublicKeyType::RSA,
+            prime: prime.unwrap_or(2),
+            size: size.unwrap_or(RSAKeySize::RSA2048),
+            ctx: None,
+        })
     }
 }
 
@@ -131,10 +121,10 @@ impl PublicKey for RSA {
     fn keygen(&mut self) -> Result<(), RvError> {
         let bits: u32;
         match &self.size {
-            RSAKeySize::RSA2048 =>  bits = 2048,
-            RSAKeySize::RSA3072 =>  bits = 3072,
-            RSAKeySize::RSA4096 =>  bits = 4096,
-            RSAKeySize::RSA8192 =>  bits = 8192,
+            RSAKeySize::RSA2048 => bits = 2048,
+            RSAKeySize::RSA3072 => bits = 3072,
+            RSAKeySize::RSA4096 => bits = 4096,
+            RSAKeySize::RSA8192 => bits = 8192,
         }
 
         let rsa = match Rsa::generate(bits) {
@@ -168,13 +158,13 @@ impl Signature for RSA {
         };
 
         match ctx.sign_init() {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeySignInitFailed),
         }
 
         let mut signature: Vec<u8> = Vec::new();
         match ctx.sign_to_vec(data, &mut signature) {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeySignFailed),
         }
 
@@ -190,7 +180,7 @@ impl Signature for RSA {
         };
 
         match ctx.verify_init() {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyInitFailed),
         }
 
@@ -213,13 +203,13 @@ impl Encryption for RSA {
         };
 
         match ctx.encrypt_init() {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeyEncInitFailed),
         }
 
         let mut ciphertext: Vec<u8> = Vec::new();
         match ctx.encrypt_to_vec(plaintext, &mut ciphertext) {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeyEncFailed),
         }
 
@@ -235,13 +225,13 @@ impl Encryption for RSA {
         };
 
         match ctx.decrypt_init() {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeyDecInitFailed),
         }
 
         let mut plaintext: Vec<u8> = Vec::new();
         match ctx.decrypt_to_vec(ciphertext, &mut plaintext) {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeyDecFailed),
         }
 
@@ -255,16 +245,12 @@ impl ECDSA {
     ///
     /// curve: RSA key size. Valid options are RSA2048 (default), RSA3072, RSA4096, RSA8192.
     /// prime: for multi-prime RSA usage (RFC 8017), default is 2.
-    pub fn new(
-        curve: Option<ECCurveName>,
-    ) -> Result<Self, RvError> {
-        return Ok(
-            ECDSA {
-                key_type: PublicKeyType::ECDSA,
-                curve: curve.unwrap_or(ECCurveName::Prime256v1),
-                ctx: None,
-            }
-        );
+    pub fn new(curve: Option<ECCurveName>) -> Result<Self, RvError> {
+        return Ok(ECDSA {
+            key_type: PublicKeyType::ECDSA,
+            curve: curve.unwrap_or(ECCurveName::Prime256v1),
+            ctx: None,
+        });
     }
 }
 
@@ -307,13 +293,13 @@ impl Signature for ECDSA {
         };
 
         match ctx.sign_init() {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeySignInitFailed),
         }
 
         let mut signature: Vec<u8> = Vec::new();
         match ctx.sign_to_vec(data, &mut signature) {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeySignFailed),
         }
 
@@ -329,7 +315,7 @@ impl Signature for ECDSA {
         };
 
         match ctx.verify_init() {
-            Ok(_ret) => {},
+            Ok(_ret) => {}
             Err(_e) => return Err(RvError::ErrCryptoPKeyVerifyInitFailed),
         }
 
