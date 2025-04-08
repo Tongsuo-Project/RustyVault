@@ -261,7 +261,7 @@ mod test {
     use crate::{
         logical::{field::FieldTrait, Field, FieldType, PathOperation},
         new_fields, new_fields_internal, new_path, new_path_internal, new_secret, new_secret_internal, storage,
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     struct MyTest;
@@ -304,7 +304,7 @@ mod test {
 
     #[test]
     fn test_logical_backend_api() {
-        let backend = test_backend("test_logical_backend_api");
+        let backend = new_test_backend("test_logical_backend_api");
 
         let t = MyTest::new();
 
@@ -424,15 +424,13 @@ mod test {
 
         assert!(logical_backend.handle_request(&mut req).is_err());
 
-        let body: Map<String, Value> = json!({
+        req.body = json!({
             "mytype": 1,
             "mypath": "/pp",
             "mypassword": "123qwe",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        req.body = Some(body);
+        .cloned();
         req.storage = Some(Arc::new(barrier));
         assert!(logical_backend.handle_request(&mut req).is_ok());
         let mypassword = req.body.as_ref().unwrap().get("mypassword");
@@ -461,7 +459,7 @@ mod test {
 
     #[test]
     fn test_logical_path_field() {
-        let backend = test_backend("test_logical_path_field");
+        let backend = new_test_backend("test_logical_path_field");
 
         let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
 
@@ -580,9 +578,8 @@ mod test {
                                     "duration_default": duration_default_val.as_duration().unwrap().as_secs(),
                                 })
                                 .as_object()
-                                .unwrap()
-                                .clone();
-                                Ok(Some(Response::data_response(Some(data))))
+                                .cloned();
+                                Ok(Some(Response::data_response(data)))
                              }
                         }
                     ]
@@ -612,7 +609,7 @@ mod test {
             "duration": 100,
         });
         req.operation = Operation::Write;
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         let resp = logical_backend.handle_request(&mut req);
         println!("resp: {:?}", resp);
         assert!(resp.is_ok());
@@ -641,7 +638,7 @@ mod test {
             "map": {"aa":"bb"},
             "duration": 100,
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         assert!(logical_backend.handle_request(&mut req).is_err());
 
         let req_body = json!({
@@ -651,7 +648,7 @@ mod test {
             "map": {"aa":"bb"},
             "duration": 100,
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         assert!(logical_backend.handle_request(&mut req).is_err());
 
         let req_body = json!({
@@ -661,7 +658,7 @@ mod test {
             "map": {"aa":"bb"},
             "duration": 100,
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         assert!(logical_backend.handle_request(&mut req).is_err());
 
         let req_body = json!({
@@ -671,7 +668,7 @@ mod test {
             "map": 11,
             "duration": 100,
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         assert!(logical_backend.handle_request(&mut req).is_err());
 
         let req_body = json!({
@@ -681,7 +678,7 @@ mod test {
             "map": {"aa":"bb"},
             "duration": "1000",
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         let resp = logical_backend.handle_request(&mut req);
         assert!(resp.is_ok());
         let data = resp.unwrap().unwrap().data;
@@ -696,7 +693,7 @@ mod test {
             "map": {"aa":"bb"},
             "duration": "1000",
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         let resp = logical_backend.handle_request(&mut req);
         assert!(resp.is_ok());
         let data = resp.unwrap().unwrap().data;
@@ -717,7 +714,7 @@ mod test {
             "duration": "1000",
             "duration_default": "2000",
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
         let resp = logical_backend.handle_request(&mut req);
         assert!(resp.is_ok());
         let data = resp.unwrap().unwrap().data;

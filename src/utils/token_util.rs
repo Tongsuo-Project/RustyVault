@@ -214,13 +214,13 @@ mod test {
     use crate::{
         logical::{Operation, Path},
         storage::barrier_aes_gcm::AESGCMBarrier,
-        test_utils::test_backend,
+        test_utils::new_test_backend,
     };
 
     #[test]
     fn test_token_util() {
         // init the storage backend
-        let backend = test_backend("test_token_util");
+        let backend = new_test_backend("test_token_util");
 
         let barrier = AESGCMBarrier::new(Arc::clone(&backend));
 
@@ -245,7 +245,7 @@ mod test {
             "token_policies": "aa,bb,cc",
             "token_bound_cidrs": ["192.168.1.1:8080","10.0.0.1:80"],
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
 
         let mut token_params = TokenParams::new("tt1");
         let ret = token_params.parse_token_fields(&req);
@@ -280,7 +280,7 @@ mod test {
             "token_no_default_policy": true,
             "token_num_uses": 100,
         });
-        req.body = Some(req_body.as_object().unwrap().clone());
+        req.body = req_body.as_object().cloned();
 
         let mut token_params = TokenParams::new("tt2");
         let ret = token_params.parse_token_fields(&req);

@@ -213,7 +213,7 @@ mod test {
     use crate::{
         core::Core,
         logical::{field::FieldTrait, Operation, Request},
-        test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
+        test_utils::{init_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api},
     };
 
     #[maybe_async::maybe_async]
@@ -291,12 +291,11 @@ mod test {
             "secret_id": secret_id,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         let mut req = Request::new(format!("auth/{}/login", path).as_str());
         req.operation = Operation::Write;
-        req.body = Some(data);
+        req.body = data;
 
         let resp = core.handle_request(&mut req).await;
         if is_ok {
@@ -336,14 +335,13 @@ mod test {
             "secret_id_accessor": secret_id_accessor,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         let resp = test_write_api(
             core,
             token,
             format!("auth/{}/role/{}/secret-id-accessor/destroy", path, role_name).as_str(),
             true,
-            Some(data),
+            data,
         )
         .await;
         assert!(resp.is_ok());
@@ -362,14 +360,13 @@ mod test {
             "secret_id": secret_id,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         let resp = test_write_api(
             core,
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name).as_str(),
             true,
-            Some(data),
+            data,
         )
         .await;
         assert!(resp.is_ok());
@@ -388,14 +385,13 @@ mod test {
             "secret_id": secret_id,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         let resp = test_write_api(
             core,
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_lowercase()).as_str(),
             true,
-            Some(data),
+            data,
         )
         .await;
         assert!(resp.is_ok());
@@ -414,14 +410,13 @@ mod test {
             "secret_id": secret_id,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         let resp = test_write_api(
             core,
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, role_name.to_uppercase()).as_str(),
             true,
-            Some(data),
+            data,
         )
         .await;
         assert!(resp.is_ok());
@@ -440,8 +435,7 @@ mod test {
             "secret_id": secret_id,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
         let mut mixed_case_name = role_name.to_string();
         if let Some(first_char) = mixed_case_name.get_mut(0..1) {
             let inverted_case_char = if first_char.chars().next().unwrap().is_uppercase() {
@@ -456,7 +450,7 @@ mod test {
             token,
             format!("auth/{}/role/{}/secret-id/destroy", path, mixed_case_name).as_str(),
             true,
-            Some(data),
+            data,
         )
         .await;
         assert!(resp.is_ok());
@@ -557,7 +551,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_credential_approle_module() {
-        let (root_token, core) = test_rusty_vault_init("test_approle_module");
+        let (root_token, core) = init_test_rusty_vault("test_approle_module");
         let core = core.read().unwrap();
 
         // Mount approle auth to path: auth/approle

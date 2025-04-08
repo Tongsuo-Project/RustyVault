@@ -35,7 +35,7 @@ use crate::{
     rv_error_response, rv_error_string,
     storage::{Storage, StorageEntry},
     utils::{
-        deserialize_duration, deserialize_system_time, generate_uuid, is_str_subset,
+        default_system_time, deserialize_duration, deserialize_system_time, generate_uuid, is_str_subset,
         policy::sanitize_policies,
         serialize_duration, serialize_system_time, sha1,
         token_util::{DEFAULT_LEASE_TTL, MAX_LEASE_TTL},
@@ -94,11 +94,15 @@ pub struct TokenEntry {
     pub num_uses: u32,
     pub ttl: u64,
     #[default(SystemTime::now())]
-    #[serde(serialize_with = "serialize_system_time", deserialize_with = "deserialize_system_time")]
+    #[serde(
+        default = "default_system_time",
+        serialize_with = "serialize_system_time",
+        deserialize_with = "deserialize_system_time"
+    )]
     pub creation_time: SystemTime,
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub period: Duration,
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(default, serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub explicit_max_ttl: Duration,
 }
 
@@ -640,14 +644,11 @@ impl TokenStore {
         if let Some(data) = req.data.as_mut() {
             data.insert("token".to_string(), Value::String(req.client_token.clone()));
         } else {
-            req.data = Some(
-                json!({
-                    "token": req.client_token.clone(),
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            );
+            req.data = json!({
+                "token": req.client_token.clone(),
+            })
+            .as_object()
+            .cloned();
         }
 
         self.handle_lookup(backend, req)
@@ -894,14 +895,14 @@ mod mod_token_store_tests {
     use crate::{
         context::Context,
         logical::{Backend, Request, Response, Secret},
-        test_utils::test_rusty_vault_init,
+        test_utils::init_test_rusty_vault,
     };
 
     macro_rules! mock_token_store {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
-            println!("test_rusty_vault_init, name: {}", name);
-            let (_, core) = test_rusty_vault_init(&name);
+            println!("init_test_rusty_vault, name: {}", name);
+            let (_, core) = init_test_rusty_vault(&name);
             let core = core.read().unwrap();
 
             let expiration = ExpirationManager::new(&core).unwrap().wrap();
@@ -1029,15 +1030,12 @@ mod mod_token_store_tests {
 
         let mut req = Request {
             client_token: entry.id.clone(),
-            body: Some(
-                json!({
-                    "policies": ["default"],
-                    "display_name": "test-token",
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            ),
+            body: json!({
+                "policies": ["default"],
+                "display_name": "test-token",
+            })
+            .as_object()
+            .cloned(),
             ..Request::default()
         };
 

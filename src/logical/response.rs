@@ -46,14 +46,11 @@ impl Response {
         let value = serde_json::to_value(keys);
         let mut resp = Response::new();
         if value.is_ok() {
-            resp.data = Some(
-                json!({
-                    "keys": value.unwrap(),
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            );
+            resp.data = json!({
+                "keys": value.unwrap(),
+            })
+            .as_object()
+            .cloned();
         }
         resp
     }
@@ -62,29 +59,23 @@ impl Response {
         let value = serde_json::to_value(see_also);
         let mut resp = Response::new();
         if value.is_ok() {
-            resp.data = Some(
-                json!({
-                    "help": text.to_string(),
-                    "sea_also": value.unwrap(),
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            );
+            resp.data = json!({
+                "help": text.to_string(),
+                "sea_also": value.unwrap(),
+            })
+            .as_object()
+            .cloned();
         }
         resp
     }
 
     pub fn error_response(text: &str) -> Self {
         let mut resp = Response::new();
-        resp.data = Some(
-            json!({
-                "error": text.to_string(),
-            })
-            .as_object()
-            .unwrap()
-            .clone(),
-        );
+        resp.data = json!({
+            "error": text.to_string(),
+        })
+        .as_object()
+        .cloned();
         resp
     }
 

@@ -124,7 +124,7 @@ mod test {
     use crate::{
         core::Core,
         logical::{Operation, Request},
-        test_utils::{test_delete_api, test_mount_auth_api, test_read_api, test_rusty_vault_init, test_write_api},
+        test_utils::{init_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api},
     };
 
     #[maybe_async::maybe_async]
@@ -134,12 +134,10 @@ mod test {
             "ttl": ttl,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         let resp =
-            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data))
-                .await;
+            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, user_data).await;
         assert!(resp.is_ok());
     }
 
@@ -168,12 +166,11 @@ mod test {
             "password": password,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         let mut req = Request::new(format!("auth/{}/login/{}", path, username).as_str());
         req.operation = Operation::Write;
-        req.body = Some(login_data);
+        req.body = login_data;
 
         let resp = core.handle_request(&mut req).await;
         assert!(resp.is_ok());
@@ -186,7 +183,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_userpass_module() {
-        let (root_token, core) = test_rusty_vault_init("test_userpass_module");
+        let (root_token, core) = init_test_rusty_vault("test_userpass_module");
         let core = core.read().unwrap();
 
         // mount userpass auth to path: auth/pass

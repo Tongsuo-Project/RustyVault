@@ -8,9 +8,8 @@
 //! of RustyVault.
 
 use std::{
-    collections::HashMap,
     ops::{Deref, DerefMut},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use as_any::Downcast;
@@ -30,7 +29,9 @@ use crate::{
         pki::PkiModule,
         policy::PolicyModule,
     },
-    mount::MountTable,
+    mount::{
+        MountTable, MountsMonitor, MountsRouter, CORE_MOUNT_CONFIG_PATH, LOGICAL_BARRIER_PREFIX, SYSTEM_BARRIER_PREFIX,
+    },
     router::Router,
     shamir::{ShamirSecret, SHAMIR_OVERHEAD},
     storage::{
@@ -70,48 +71,79 @@ pub struct Core {
     pub physical: Arc<dyn PhysicalBackend>,
     pub barrier: Arc<dyn SecurityBarrier>,
     pub system_view: Option<Arc<BarrierView>>,
-    pub mounts: Arc<MountTable>,
-    pub router: Arc<Router>,
     pub handlers: RwLock<Vec<Arc<dyn Handler>>>,
     pub auth_handlers: Arc<RwLock<Vec<Arc<dyn AuthHandler>>>>,
-    pub logical_backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
+    pub router: Arc<Router>,
+    pub mounts_router: Arc<MountsRouter>,
     pub module_manager: ModuleManager,
     pub sealed: bool,
     pub unseal_key_shares: Vec<Vec<u8>>,
     pub hmac_key: Vec<u8>,
     pub mount_entry_hmac_level: MountEntryHMACLevel,
+    pub mounts_monitor: Option<MountsMonitor>,
+    pub mounts_monitor_interval: u64,
 }
 
 impl Default for Core {
     fn default() -> Self {
         let backend: Arc<dyn PhysicalBackend> = Arc::new(physical::mock::MockBackend::new());
-        let barrier = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = Arc::new(barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend)));
+        let barrier_cloned = Arc::clone(&barrier);
         let router = Arc::new(Router::new());
 
         Core {
             self_ref: None,
             physical: backend,
-            barrier: Arc::new(barrier),
+            barrier: barrier_cloned,
             system_view: None,
-            mounts: Arc::new(MountTable::new()),
             router: Arc::clone(&router),
+            mounts_router: Arc::new(MountsRouter::new(
+                Arc::new(MountTable::new(CORE_MOUNT_CONFIG_PATH)),
+                Arc::clone(&router),
+                barrier,
+                LOGICAL_BARRIER_PREFIX,
+                "",
+            )),
             handlers: RwLock::new(vec![router]),
             auth_handlers: Arc::new(RwLock::new(Vec::new())),
-            logical_backends: Mutex::new(HashMap::new()),
             module_manager: ModuleManager::new(),
             sealed: true,
             unseal_key_shares: Vec::new(),
             hmac_key: Vec::new(),
             mount_entry_hmac_level: MountEntryHMACLevel::None,
+            mounts_monitor: None,
+            mounts_monitor_interval: 5,
         }
     }
 }
 
 #[maybe_async::maybe_async]
 impl Core {
+    pub fn new(backend: Arc<dyn PhysicalBackend>) -> Self {
+        let barrier = Arc::new(barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend)));
+        let barrier_cloned = Arc::clone(&barrier);
+        let router = Arc::new(Router::new());
+
+        Core {
+            physical: backend,
+            barrier: barrier_cloned,
+            router: Arc::clone(&router),
+            mounts_router: Arc::new(MountsRouter::new(
+                Arc::new(MountTable::new(CORE_MOUNT_CONFIG_PATH)),
+                Arc::clone(&router),
+                barrier,
+                LOGICAL_BARRIER_PREFIX,
+                "",
+            )),
+            handlers: RwLock::new(vec![router]),
+            ..Default::default()
+        }
+    }
+
     pub fn config(&mut self, core: Arc<RwLock<Core>>, config: Option<&Config>) -> Result<(), RvError> {
         if let Some(conf) = config {
             self.mount_entry_hmac_level = conf.mount_entry_hmac_level;
+            self.mounts_monitor_interval = conf.mounts_monitor_interval;
         }
 
         self.module_manager.set_default_modules(Arc::clone(&core))?;
@@ -140,6 +172,8 @@ impl Core {
         // add credential module: cert
         let cert_module = CertModule::new(self);
         self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
+
+        self.mounts_monitor = Some(MountsMonitor::new(core, self.mounts_monitor_interval));
 
         let handlers = { self.handlers.read()?.clone() };
         for handler in handlers.iter() {
@@ -246,27 +280,15 @@ impl Core {
     }
 
     pub fn get_logical_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
-        let logical_backends = self.logical_backends.lock().unwrap();
-        if let Some(backend) = logical_backends.get(logical_type) {
-            Ok(backend.clone())
-        } else {
-            Err(RvError::ErrCoreLogicalBackendNoExist)
-        }
+        self.mounts_router.get_backend(logical_type)
     }
 
     pub fn add_logical_backend(&self, logical_type: &str, backend: Arc<LogicalBackendNewFunc>) -> Result<(), RvError> {
-        let mut logical_backends = self.logical_backends.lock().unwrap();
-        if logical_backends.contains_key(logical_type) {
-            return Err(RvError::ErrCoreLogicalBackendExist);
-        }
-        logical_backends.insert(logical_type.to_string(), backend);
-        Ok(())
+        self.mounts_router.add_backend(logical_type, backend)
     }
 
     pub fn delete_logical_backend(&self, logical_type: &str) -> Result<(), RvError> {
-        let mut logical_backends = self.logical_backends.lock().unwrap();
-        logical_backends.remove(logical_type);
-        Ok(())
+        self.mounts_router.delete_backend(logical_type)
     }
 
     pub fn add_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
@@ -397,16 +419,27 @@ impl Core {
 
         // Perform initial setup
         self.hmac_key = self.barrier.derive_hmac_key()?;
-        self.mounts.load_or_default(self.barrier.as_storage(), Some(&self.hmac_key), self.mount_entry_hmac_level)?;
+        self.mounts_router.load_or_default(
+            self.barrier.as_storage(),
+            Some(&self.hmac_key),
+            self.mount_entry_hmac_level,
+        )?;
 
-        self.setup_mounts()?;
+        self.mounts_router.setup(self.self_ref.as_ref().unwrap())?;
+
+        self.system_view = Some(Arc::new(BarrierView::new(self.barrier.clone(), SYSTEM_BARRIER_PREFIX)));
 
         self.module_manager.init(self)?;
+
+        self.mounts_monitor.as_ref().unwrap().add_mounts_router(self.mounts_router.clone());
+        self.mounts_monitor.as_mut().unwrap().start();
 
         Ok(())
     }
 
     fn pre_seal(&mut self) -> Result<(), RvError> {
+        self.mounts_monitor.as_ref().unwrap().remove_mounts_router(self.mounts_router.clone());
+        self.mounts_monitor.as_mut().unwrap().stop();
         self.module_manager.cleanup(self)?;
         self.unload_mounts()?;
         Ok(())
@@ -546,10 +579,10 @@ impl Core {
 
 #[cfg(test)]
 mod test {
-    use crate::test_utils::test_rusty_vault_init;
+    use crate::test_utils::init_test_rusty_vault;
 
     #[test]
     fn test_core_init() {
-        let _ = test_rusty_vault_init("test_core_init");
+        let _ = init_test_rusty_vault("test_core_init");
     }
 }

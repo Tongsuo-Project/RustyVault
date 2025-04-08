@@ -13,6 +13,7 @@ use crate::{
     errors::RvError,
     handler::AuthHandler,
     logical::{Backend, Request, Response},
+    rv_error_response_status,
 };
 
 #[allow(clippy::module_inception)]
@@ -81,12 +82,12 @@ impl PolicyModule {
 
             return Ok(Some(resp));
         }
-        Ok(None)
+        Err(rv_error_response_status!(404, &format!("No policy named: {}", name)))
     }
 
     pub fn handle_policy_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
-        let policy_str = req.get_data_as_str("policy")?;
+        let policy_str = req.get_data("policy")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
         let policy_raw = if let Ok(policy_bytes) = STANDARD.decode(&policy_str) {
             String::from_utf8_lossy(&policy_bytes).to_string()
         } else {
@@ -147,7 +148,7 @@ mod mod_policy_tests {
     use crate::{
         logical::{Operation, Request},
         test_utils::{
-            test_delete_api, test_list_api, test_mount_api, test_mount_auth_api, test_read_api, test_rusty_vault_init,
+            init_test_rusty_vault, test_delete_api, test_list_api, test_mount_api, test_mount_auth_api, test_read_api,
             test_write_api, TestHttpServer,
         },
     };
@@ -158,10 +159,9 @@ mod mod_policy_tests {
             "policy": policy,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
-        let resp = test_write_api(core, token, format!("sys/policy/{}", name).as_str(), true, Some(data)).await;
+        let resp = test_write_api(core, token, format!("sys/policy/{}", name).as_str(), true, data).await;
         assert!(resp.is_ok());
     }
 
@@ -194,12 +194,10 @@ mod mod_policy_tests {
             "ttl": ttl,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         let resp =
-            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, Some(user_data))
-                .await;
+            test_write_api(core, token, format!("auth/{}/users/{}", path, username).as_str(), true, user_data).await;
         assert!(resp.is_ok());
     }
 
@@ -215,12 +213,11 @@ mod mod_policy_tests {
             "password": password,
         })
         .as_object()
-        .unwrap()
-        .clone();
+        .cloned();
 
         let mut req = Request::new(format!("auth/{}/login/{}", path, username).as_str());
         req.operation = Operation::Write;
-        req.body = Some(login_data);
+        req.body = login_data;
 
         let resp = core.handle_request(&mut req).await;
         assert!(resp.is_ok());
@@ -233,7 +230,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_curd_api() {
-        let (root_token, core) = test_rusty_vault_init("test_policy_curd_api");
+        let (root_token, core) = init_test_rusty_vault("test_policy_curd_api");
         let core = core.read().unwrap();
 
         let policy1_name = "policy1";
@@ -255,7 +252,7 @@ mod mod_policy_tests {
         assert!(policy1.data.is_some());
         let policy1 = policy1.data.unwrap();
         assert_eq!(policy1["name"], policy1_name);
-        assert_eq!(policy1["rules"], policy1_hcl.trim());
+        assert_eq!(policy1["rules"], policy1_hcl);
 
         // List
         let policies = test_list_api(&core, &root_token, "sys/policy", true).await;
@@ -272,9 +269,11 @@ mod mod_policy_tests {
         test_delete_policy(&core, &root_token, policy1_name).await;
 
         // Read again
-        let policy1 = test_read_policy(&core, &root_token, policy1_name).await;
-        let policy1 = policy1.unwrap();
-        assert!(policy1.is_none());
+        let policy1 = test_read_api(&core, &root_token, format!("sys/policy/{}", policy1_name).as_str(), false).await;
+        let policy1 = policy1.unwrap_err();
+        assert!(policy1.to_string().contains("status: 404,"));
+        assert!(policy1.to_string().contains("No policy named: "));
+        assert!(policy1.to_string().contains(policy1_name));
 
         // List again
         let policies = test_list_api(&core, &root_token, "sys/policy", true).await;
@@ -310,15 +309,14 @@ mod mod_policy_tests {
             "policy": policy1_hcl,
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let ret = test_http_server.write("sys/policy/policy1", Some(data), None);
+        .cloned();
+        let ret = test_http_server.write("sys/policy/policy1", data, None);
         assert!(ret.is_ok());
 
         // Read policy1
         let ret = test_http_server.read("sys/policy/policy1", None);
         assert!(ret.is_ok());
-        assert_eq!(ret.unwrap().1, json!({"name": "policy1", "rules": policy1_hcl.trim()}));
+        assert_eq!(ret.unwrap().1, json!({"name": "policy1", "rules": policy1_hcl}));
 
         // List policies again
         let ret = test_http_server.read("sys/policy", None);
@@ -340,7 +338,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check() {
-        let (root_token, core) = test_rusty_vault_init("test_policy_acl_check");
+        let (root_token, core) = init_test_rusty_vault("test_policy_acl_check");
         let core = core.read().unwrap();
 
         let policy1_name = "policy1";
@@ -386,17 +384,16 @@ mod mod_policy_tests {
             "aa": "bb",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let resp = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+        .cloned();
+        let resp = test_write_api(&core, &xxx_token, "path1/kv1", true, data.clone()).await;
         assert!(resp.is_ok());
 
         // User xxx write path1/kv2 should fail
-        let resp = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+        let resp = test_write_api(&core, &xxx_token, "path1/kv2", false, data.clone()).await;
         assert!(resp.is_err());
 
         // User yyy write path1/kv2 should succeed
-        let resp = test_write_api(&core, &yyy_token, "path1/kv2", true, Some(data.clone())).await;
+        let resp = test_write_api(&core, &yyy_token, "path1/kv2", true, data).await;
         assert!(resp.is_ok());
 
         // User xxx read path1/kv1 should succeed
@@ -434,7 +431,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check_with_policy_parameters() {
-        let (root_token, core) = test_rusty_vault_init("test_policy_acl_check_with_policy_parameters");
+        let (root_token, core) = init_test_rusty_vault("test_policy_acl_check_with_policy_parameters");
         let core = core.read().unwrap();
 
         let policy1_name = "policy1";
@@ -485,21 +482,19 @@ mod mod_policy_tests {
             "key1": "value1",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, data).await;
 
         // User xxx write path path1/kv1 with parameters key1=value2 should succeed
         let data = json!({
             "key1": "value2",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, data.clone()).await;
 
         // User xxx write path1/kv2 should fail
-        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, data).await;
 
         // User xxx write path path1/kv1 with parameters key1=value1 and key2=value3 should succeed
         let data = json!({
@@ -507,9 +502,8 @@ mod mod_policy_tests {
             "key2": "value3",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, data).await;
 
         // User xxx write path path1/kv1 with parameters key1=value1 and key2=value4 should succeed
         let data = json!({
@@ -517,9 +511,8 @@ mod mod_policy_tests {
             "key2": "value4",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", true, data).await;
 
         // User xxx write path path1/kv1 with parameters key1=value2 and key2=value22 should fail
         let data = json!({
@@ -527,9 +520,8 @@ mod mod_policy_tests {
             "key2": "value22",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, data).await;
 
         // User xxx read path1/kv1 without parameters should fail
         let _ = test_read_api(&core, &xxx_token, "path1/kv1", false).await;
@@ -542,27 +534,24 @@ mod mod_policy_tests {
             "key1": "value3",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, data).await;
 
         // User xxx write path path1/kv1 with parameters key2=value3 (missing key1) should fail
         let data = json!({
             "key2": "value3",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv1", false, data).await;
 
         // User xxx write path path1/kv2 with parameters key1 (missing key2 and key3) should fail
         let data = json!({
             "key1": "xx",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, data).await;
 
         // User xxx write path path1/kv2 with parameters key1 and key2 (missing key3) should fail
         let data = json!({
@@ -570,9 +559,8 @@ mod mod_policy_tests {
             "key2": "yy",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", false, data).await;
 
         // User xxx write path path1/kv2 with parameters key1、key2 and key3 should succeed
         let data = json!({
@@ -581,9 +569,8 @@ mod mod_policy_tests {
             "key3": "zz",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv2", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", true, data).await;
 
         // User xxx write path path1/kv2 with parameters key1、key2、key3 and other param should succeed
         let data = json!({
@@ -593,18 +580,16 @@ mod mod_policy_tests {
             "key4": "vv",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv2", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv2", true, data).await;
 
         // User xxx write path path1/kv3 with parameters key1 should fail
         let data = json!({
             "key1": "xx",
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv3", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv3", false, data).await;
 
         // User xxx write path path1/kv3 with parameters key1 should fail
         let data = json!({
@@ -612,18 +597,16 @@ mod mod_policy_tests {
             "key2": "yy"
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv3", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv3", false, data).await;
 
         // User xxx write path path1/kv4 with parameters key1 should succeed
         let data = json!({
             "key1": "xx"
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv4", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", true, data).await;
 
         // User xxx write path path1/kv4 with parameters key1 and key2=yy should succeed
         let data = json!({
@@ -631,9 +614,8 @@ mod mod_policy_tests {
             "key2": "yy"
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv4", true, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", true, data).await;
 
         // User xxx write path path1/kv4 with parameters key1 and key2=value3 should succeed
         let data = json!({
@@ -641,9 +623,8 @@ mod mod_policy_tests {
             "key2": "value3"
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv4", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", false, data).await;
 
         // User xxx write path path1/kv4 with parameters key1 and key2=value4 should succeed
         let data = json!({
@@ -651,8 +632,7 @@ mod mod_policy_tests {
             "key2": "value4"
         })
         .as_object()
-        .unwrap()
-        .clone();
-        let _ = test_write_api(&core, &xxx_token, "path1/kv4", false, Some(data.clone())).await;
+        .cloned();
+        let _ = test_write_api(&core, &xxx_token, "path1/kv4", false, data).await;
     }
 }

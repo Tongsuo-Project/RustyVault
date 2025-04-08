@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    default::Default,
     env, fs,
     sync::{Arc, RwLock},
 };
@@ -331,9 +330,7 @@ async fn test_default_logical() {
 
     let backend = storage::new_backend("file", &conf).unwrap();
 
-    let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
-
-    let c = Arc::new(RwLock::new(Core { physical: backend, barrier: Arc::new(barrier), ..Default::default() }));
+    let c = Arc::new(RwLock::new(Core::new(backend)));
 
     {
         let mut core = c.write().unwrap();

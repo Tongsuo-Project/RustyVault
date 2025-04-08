@@ -29,6 +29,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Run cargo fmt --all -- --check
+      run: cargo fmt --all -- --check
     - name: Build
       run: cargo build --verbose
     - name: ulimit -n
@@ -102,12 +104,14 @@ jobs:
       run: cargo install diesel_cli --no-default-features --features mysql
     - name: init database
       run: diesel setup --database-url mysql://root:password@127.0.0.1:3306/vault
-    - name: Build
-      run: cargo build --features storage_mysql --verbose
     - name: ulimit -n
       run: ulimit -n 65535
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Run tests for macOS
+      if: runner.os == 'macOS'
+      run: cargo test --features storage_mysql --lib --bins --tests --verbose
+    - name: Run tests for non-macOS
+      if: runner.os != 'macOS'
+      run: cargo test --features storage_mysql --verbose
     - name: Build crate doc
       run: cargo doc --no-deps
 
@@ -175,6 +179,6 @@ jobs:
     - name: Build
       run: cargo build --features storage_mysql --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --features storage_mysql --verbose
     - name: Build crate doc
       run: cargo doc --no-deps
