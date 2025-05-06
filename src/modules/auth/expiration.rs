@@ -1204,7 +1204,7 @@ mod mod_expiration_tests {
         let paths = ["prod/aws/foo", "prod/aws/sub/bar", "prod/aws/zip"];
 
         for path in paths.iter() {
-            let mut req = Request::new(path);
+            let mut req = Request::new(*path);
             req.client_token = "foobar".into();
             let mut resp = Response {
                 secret: Some(SecretData {
@@ -1267,7 +1267,7 @@ mod mod_expiration_tests {
         let paths = ["prod/aws/foo", "prod/aws/sub/bar", "prod/aws/zip"];
 
         for path in paths.iter() {
-            let mut req = Request::new(path);
+            let mut req = Request::new(*path);
             req.client_token = "foobar".into();
             let mut resp = Response {
                 secret: Some(SecretData {

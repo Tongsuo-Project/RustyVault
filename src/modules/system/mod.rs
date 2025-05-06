@@ -3,11 +3,10 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, Weak},
 };
 
 use as_any::Downcast;
-use derive_more::Deref;
 use serde_json::{from_value, json, Map, Value};
 
 use crate::{
@@ -19,7 +18,7 @@ use crate::{
     },
     modules::{
         auth::{AuthModule, AUTH_TABLE_TYPE},
-        policy::PolicyModule,
+        policy::{acl::ACL, PolicyModule},
         Module,
     },
     mount::{MountEntry, MOUNT_TABLE_TYPE},
@@ -39,48 +38,59 @@ pub struct SystemModule {
     pub backend: Arc<SystemBackend>,
 }
 
-pub struct SystemBackendInner {
-    pub core: Arc<RwLock<Core>>,
-}
-
-#[derive(Deref)]
 pub struct SystemBackend {
-    #[deref]
-    pub inner: Arc<SystemBackendInner>,
+    pub core: Arc<RwLock<Core>>,
+    pub self_ptr: Weak<SystemBackend>,
 }
 
 impl SystemBackend {
-    pub fn new(core: Arc<RwLock<Core>>) -> Self {
-        Self { inner: Arc::new(SystemBackendInner { core }) }
+    pub fn new(core: Arc<RwLock<Core>>) -> Arc<Self> {
+        let system_backend = SystemBackend { core, self_ptr: Weak::default() };
+
+        system_backend.wrap()
+    }
+
+    pub fn wrap(self) -> Arc<Self> {
+        let mut wrap_self = Arc::new(self);
+        let weak_self = Arc::downgrade(&wrap_self);
+        unsafe {
+            let ptr_self = Arc::into_raw(wrap_self) as *mut Self;
+            (*ptr_self).self_ptr = weak_self;
+            wrap_self = Arc::from_raw(ptr_self);
+        }
+
+        wrap_self
     }
 
     pub fn new_backend(&self) -> LogicalBackend {
-        let sys_backend_mount_table = Arc::clone(&self.inner);
-        let sys_backend_mount_write = Arc::clone(&self.inner);
-        let sys_backend_mount_delete = Arc::clone(&self.inner);
-        let sys_backend_remount = Arc::clone(&self.inner);
-        let sys_backend_renew = Arc::clone(&self.inner);
-        let sys_backend_revoke = Arc::clone(&self.inner);
-        let sys_backend_revoke_prefix = Arc::clone(&self.inner);
-        let sys_backend_auth_table = Arc::clone(&self.inner);
-        let sys_backend_auth_enable = Arc::clone(&self.inner);
-        let sys_backend_auth_disable = Arc::clone(&self.inner);
-        let sys_backend_policy_list1 = Arc::clone(&self.inner);
-        let sys_backend_policy_list2 = Arc::clone(&self.inner);
-        let sys_backend_policy_read = Arc::clone(&self.inner);
-        let sys_backend_policy_write = Arc::clone(&self.inner);
-        let sys_backend_policy_delete = Arc::clone(&self.inner);
-        let sys_backend_policies_list1 = Arc::clone(&self.inner);
-        let sys_backend_policies_list2 = Arc::clone(&self.inner);
-        let sys_backend_policies_read = Arc::clone(&self.inner);
-        let sys_backend_policies_write = Arc::clone(&self.inner);
-        let sys_backend_policies_delete = Arc::clone(&self.inner);
-        let sys_backend_audit_table = Arc::clone(&self.inner);
-        let sys_backend_audit_enable = Arc::clone(&self.inner);
-        let sys_backend_audit_disable = Arc::clone(&self.inner);
-        let sys_backend_raw_read = Arc::clone(&self.inner);
-        let sys_backend_raw_write = Arc::clone(&self.inner);
-        let sys_backend_raw_delete = Arc::clone(&self.inner);
+        let sys_backend_mount_table = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_mount_write = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_mount_delete = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_remount = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_renew = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_revoke = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_revoke_prefix = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_auth_table = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_auth_enable = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_auth_disable = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policy_list1 = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policy_list2 = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policy_read = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policy_write = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policy_delete = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policies_list1 = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policies_list2 = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policies_read = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policies_write = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_policies_delete = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_audit_table = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_audit_enable = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_audit_disable = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_raw_read = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_raw_write = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_raw_delete = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_internal_ui_mounts_read = self.self_ptr.upgrade().unwrap().clone();
+        let sys_backend_internal_ui_mount_read = self.self_ptr.upgrade().unwrap().clone();
 
         let backend = new_logical_backend!({
             paths: [
@@ -301,17 +311,34 @@ impl SystemBackend {
                         {op: Operation::Write, handler: sys_backend_raw_write.handle_raw_write},
                         {op: Operation::Delete, handler: sys_backend_raw_delete.handle_raw_delete}
                     ]
+                },
+                {
+                    pattern: "internal/ui/mounts",
+                    operations: [
+                        {op: Operation::Read, handler: sys_backend_internal_ui_mounts_read.handle_internal_ui_mounts_read}
+                    ]
+                },
+                {
+                    pattern: "internal/ui/mounts/(?P<path>.+)",
+                    fields: {
+                        "path": {
+                            field_type: FieldType::Str,
+                            description: r#"The path of the mount."#
+                        }
+                    },
+                    operations: [
+                        {op: Operation::Read, handler: sys_backend_internal_ui_mount_read.handle_internal_ui_mount_read}
+                    ]
                 }
             ],
             root_paths: ["mounts/*", "auth/*", "remount", "policy", "policy/*", "audit", "audit/*", "seal", "raw/*", "revoke-prefix/*"],
+            unauth_paths: ["internal/ui/mounts", "internal/ui/mounts/*", "init", "seal-status", "unseal"],
             help: SYSTEM_BACKEND_HELP,
         });
 
         backend
     }
-}
 
-impl SystemBackendInner {
     pub fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         let core = self.core.read()?;
         let mut data: Map<String, Value> = Map::new();
@@ -588,6 +615,171 @@ impl SystemBackendInner {
         Ok(None)
     }
 
+    pub fn handle_internal_ui_mounts_read(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
+        let module = self.get_policy_module()?;
+        let policy_mod = module.read()?;
+        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        let module = self.get_auth_module()?;
+        let auth_mod = module.read()?;
+        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        if auth_module.token_store.is_none() {
+            return Err(RvError::ErrPermissionDenied);
+        }
+
+        let mut secret_mounts = Map::new();
+        let mut auth_mounts = Map::new();
+
+        let mut is_authed = false;
+
+        let acl: Option<ACL> =
+            if let Some(auth) = auth_module.token_store.as_ref().unwrap().check_token(&req.path, &req.client_token)? {
+                if auth.policies.is_empty() {
+                    None
+                } else {
+                    is_authed = true;
+                    Some(policy_module.policy_store.new_acl(&auth.policies, None)?)
+                }
+            } else {
+                None
+            };
+
+        let has_access = |me: &MountEntry| -> bool {
+            if !is_authed {
+                return false;
+            }
+
+            if me.table == AUTH_TABLE_TYPE {
+                acl.as_ref().unwrap().has_mount_access(&format!("{}/{}", AUTH_TABLE_TYPE, me.path))
+            } else {
+                acl.as_ref().unwrap().has_mount_access(me.path.as_str())
+            }
+        };
+
+        let core = self.core.read()?;
+        let entries = core.mounts_router.entries.read()?;
+        for (path, entry) in entries.iter() {
+            let me = entry.read()?;
+            if has_access(&me) {
+                if is_authed {
+                    secret_mounts.insert(path.clone(), Value::Object(self.mount_info(&me)));
+                } else {
+                    secret_mounts.insert(
+                        path.clone(),
+                        json!({
+                            "type": me.logical_type.clone(),
+                            "description": me.description.clone(),
+                            "options": me.options.clone(),
+                        }),
+                    );
+                }
+            }
+        }
+
+        let entries = core.mounts_router.entries.read()?;
+        for (path, entry) in entries.iter() {
+            let me = entry.read()?;
+            if has_access(&me) {
+                if is_authed {
+                    secret_mounts.insert(path.clone(), Value::Object(self.mount_info(&me)));
+                } else {
+                    secret_mounts.insert(
+                        path.clone(),
+                        json!({
+                            "type": me.logical_type.clone(),
+                            "description": me.description.clone(),
+                            "options": me.options.clone(),
+                        }),
+                    );
+                }
+            }
+        }
+
+        let module = self.get_auth_module()?;
+        let auth_mod = module.read()?;
+        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        let entries = auth_module.mounts_router.entries.read()?;
+        for (path, entry) in entries.iter() {
+            let me = entry.read()?;
+            if has_access(&me) {
+                if is_authed {
+                    auth_mounts.insert(path.clone(), Value::Object(self.mount_info(&me)));
+                } else {
+                    auth_mounts.insert(
+                        path.clone(),
+                        json!({
+                            "type": me.logical_type.clone(),
+                            "description": me.description.clone(),
+                            "options": me.options.clone(),
+                        }),
+                    );
+                }
+            }
+        }
+
+        let data = json!({
+            "secret": secret_mounts,
+            "auth": auth_mounts,
+        })
+        .as_object()
+        .cloned();
+
+        Ok(Some(Response::data_response(data)))
+    }
+
+    pub fn handle_internal_ui_mount_read(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
+        let module = self.get_policy_module()?;
+        let policy_mod = module.read()?;
+        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        let path = sanitize_path(req.get_data("path")?.as_str().ok_or(RvError::ErrRequestInvalid)?);
+
+        let module = self.get_auth_module()?;
+        let auth_mod = module.read()?;
+        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+
+        if auth_module.token_store.is_none() {
+            return Err(RvError::ErrPermissionDenied);
+        }
+
+        let acl =
+            if let Some(auth) = auth_module.token_store.as_ref().unwrap().check_token(&req.path, &req.client_token)? {
+                if auth.policies.is_empty() {
+                    return Err(RvError::ErrPermissionDenied);
+                } else {
+                    policy_module.policy_store.new_acl(&auth.policies, None)?
+                }
+            } else {
+                return Err(RvError::ErrPermissionDenied);
+            };
+
+        let core = self.core.read()?;
+        let mount_entry = core.mounts_router.router.matching_mount_entry(&path)?.ok_or(RvError::ErrPermissionDenied)?;
+        let me = mount_entry.read()?;
+
+        let full_path =
+            if me.table == AUTH_TABLE_TYPE { &format!("{}/{}", AUTH_TABLE_TYPE, me.path) } else { &me.path };
+
+        if !acl.has_mount_access(full_path) {
+            return Err(RvError::ErrPermissionDenied);
+        }
+
+        let mut data = self.mount_info(&me);
+        data.insert("path".to_string(), Value::String(me.path.clone()));
+
+        Ok(Some(Response::data_response(Some(data))))
+    }
+
     fn get_module(&self, name: &str) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
         let core = self.core.read().unwrap();
         if let Some(module) = core.module_manager.get_module(name) {
@@ -604,11 +796,25 @@ impl SystemBackendInner {
     fn get_policy_module(&self) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
         self.get_module("policy")
     }
+
+    fn mount_info(&self, entry: &MountEntry) -> Map<String, Value> {
+        let info = json!({
+            "type": entry.logical_type.clone(),
+            "description": entry.description.clone(),
+            "uuid": entry.uuid.clone(),
+            "options": entry.options.clone(),
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        info.clone()
+    }
 }
 
 impl SystemModule {
     pub fn new(core: Arc<RwLock<Core>>) -> Self {
-        Self { name: "system".to_string(), backend: Arc::new(SystemBackend::new(core)) }
+        Self { name: "system".to_string(), backend: SystemBackend::new(core) }
     }
 }
 
@@ -641,4 +847,47 @@ fn sanitize_path(path: &str) -> String {
         new_path = new_path[1..].to_string();
     }
     new_path
+}
+
+#[cfg(test)]
+mod mod_system_tests {
+    use super::*;
+    use crate::test_utils::TestHttpServer;
+
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_system_internal_ui_mounts() {
+        let mut test_http_server = TestHttpServer::new("test_system_internal_ui_mounts", true);
+
+        // set token
+        test_http_server.token = test_http_server.root_token.clone();
+
+        let ret = test_http_server.read("sys/internal/ui/mounts", None);
+        assert!(ret.is_ok());
+        let ret = ret.unwrap().1;
+        assert!(ret.is_object());
+        let ret = ret.as_object().unwrap();
+        assert!(ret.contains_key("auth"));
+        assert!(ret.contains_key("secret"));
+        assert_eq!(ret["auth"]["token/"]["type"], Value::String("token".into()));
+        assert!(ret["auth"]["token/"].is_object());
+        assert!(ret["secret"]["secret/"].is_object());
+        assert_eq!(ret["secret"]["secret/"]["type"], Value::String("kv".into()));
+        assert!(ret["secret"]["sys/"].is_object());
+        assert_eq!(ret["secret"]["sys/"]["type"], Value::String("system".into()));
+    }
+
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_system_internal_ui_mounts_path() {
+        let mut test_http_server = TestHttpServer::new("test_system_internal_ui_mounts_path", true);
+
+        // set token
+        test_http_server.token = test_http_server.root_token.clone();
+
+        let ret = test_http_server.read("sys/internal/ui/mounts/secret", None);
+        assert!(ret.is_ok());
+        let ret = ret.unwrap().1;
+        assert!(ret.is_object());
+        let ret = ret.as_object().unwrap();
+        assert_eq!(ret["type"], Value::String("kv".into()));
+    }
 }

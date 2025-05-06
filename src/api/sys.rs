@@ -111,20 +111,20 @@ impl Sys<'_> {
 
     pub fn enable_auth(&self, path: &str, input: &AuthInput) -> Result<HttpResponse, RvError> {
         let data = serde_json::to_value(input)?;
-        self.request_write(&format!("/v1/sys/auth/{}", path), data.as_object().cloned())
+        self.request_write(format!("/v1/sys/auth/{}", path), data.as_object().cloned())
     }
 
     pub fn disable_auth(&self, path: &str) -> Result<HttpResponse, RvError> {
-        self.request_delete(&format!("/v1/sys/auth/{}", path), None)
+        self.request_delete(format!("/v1/sys/auth/{}", path), None)
     }
 
     pub fn mount(&self, path: &str, input: &MountInput) -> Result<HttpResponse, RvError> {
         let data = serde_json::to_value(input)?;
-        self.request_write(&format!("/v1/sys/mounts/{}", path), data.as_object().cloned())
+        self.request_write(format!("/v1/sys/mounts/{}", path), data.as_object().cloned())
     }
 
     pub fn unmount(&self, path: &str) -> Result<HttpResponse, RvError> {
-        self.request_delete(&format!("/v1/sys/mounts/{}", path), None)
+        self.request_delete(format!("/v1/sys/mounts/{}", path), None)
     }
 
     pub fn remount(&self, from: &str, to: &str) -> Result<HttpResponse, RvError> {
@@ -145,7 +145,7 @@ impl Sys<'_> {
     }
 
     pub fn read_policy(&self, name: &str) -> Result<HttpResponse, RvError> {
-        self.request_read(&format!("/v1/sys/policies/acl/{}", name))
+        self.request_read(format!("/v1/sys/policies/acl/{}", name))
     }
 
     pub fn write_policy(&self, name: &str, policy: &str) -> Result<HttpResponse, RvError> {
@@ -153,10 +153,10 @@ impl Sys<'_> {
             "policy": policy,
         });
 
-        self.request_write(&format!("/v1/sys/policies/acl/{}", name), data.as_object().cloned())
+        self.request_write(format!("/v1/sys/policies/acl/{}", name), data.as_object().cloned())
     }
 
     pub fn delete_policy(&self, name: &str) -> Result<HttpResponse, RvError> {
-        self.request_delete(&format!("/v1/sys/policies/acl/{}", name), None)
+        self.request_delete(format!("/v1/sys/policies/acl/{}", name), None)
     }
 }

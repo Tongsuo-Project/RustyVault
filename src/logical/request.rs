@@ -36,20 +36,32 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(path: &str) -> Self {
-        Self { path: path.to_string(), ..Default::default() }
+    pub fn new<S: Into<String>>(path: S) -> Self {
+        Self { path: path.into(), ..Default::default() }
     }
 
-    pub fn new_revoke_request(path: &str, secret: Option<SecretData>, data: Option<Map<String, Value>>) -> Self {
-        Self { operation: Operation::Revoke, path: path.to_string(), secret, data, ..Default::default() }
+    pub fn new_revoke_request<S: Into<String>>(
+        path: S,
+        secret: Option<SecretData>,
+        data: Option<Map<String, Value>>,
+    ) -> Self {
+        Self { operation: Operation::Revoke, path: path.into(), secret, data, ..Default::default() }
     }
 
-    pub fn new_renew_request(path: &str, secret: Option<SecretData>, data: Option<Map<String, Value>>) -> Self {
-        Self { operation: Operation::Renew, path: path.to_string(), secret, data, ..Default::default() }
+    pub fn new_renew_request<S: Into<String>>(
+        path: S,
+        secret: Option<SecretData>,
+        data: Option<Map<String, Value>>,
+    ) -> Self {
+        Self { operation: Operation::Renew, path: path.into(), secret, data, ..Default::default() }
     }
 
-    pub fn new_renew_auth_request(path: &str, auth: Option<Auth>, data: Option<Map<String, Value>>) -> Self {
-        Self { operation: Operation::Renew, path: path.to_string(), auth, data, ..Default::default() }
+    pub fn new_renew_auth_request<S: Into<String>>(
+        path: S,
+        auth: Option<Auth>,
+        data: Option<Map<String, Value>>,
+    ) -> Self {
+        Self { operation: Operation::Renew, path: path.into(), auth, data, ..Default::default() }
     }
 
     pub fn bind_handler(&mut self, handler: Arc<dyn Handler>) {

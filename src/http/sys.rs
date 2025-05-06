@@ -400,6 +400,29 @@ async fn sys_delete_policies_request_handler(
     handle_request(core, &mut r).await
 }
 
+async fn sys_get_internal_ui_mounts_request_handler(
+    req: HttpRequest,
+    core: web::Data<Arc<RwLock<Core>>>,
+) -> Result<HttpResponse, RvError> {
+    let mut r = request_auth(&req);
+    r.path = "sys/internal/ui/mounts".to_string();
+    r.operation = Operation::Read;
+
+    handle_request(core, &mut r).await
+}
+
+async fn sys_get_internal_ui_mount_request_handler(
+    req: HttpRequest,
+    name: web::Path<String>,
+    core: web::Data<Arc<RwLock<Core>>>,
+) -> Result<HttpResponse, RvError> {
+    let mut r = request_auth(&req);
+    r.path = "sys/internal/ui/mounts/".to_owned() + name.into_inner().as_str();
+    r.operation = Operation::Read;
+
+    handle_request(core, &mut r).await
+}
+
 pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/v1/sys")
@@ -452,6 +475,13 @@ pub fn init_sys_service(cfg: &mut web::ServiceConfig) {
                     .route(web::get().to(sys_read_policies_request_handler))
                     .route(web::post().to(sys_write_policies_request_handler))
                     .route(web::delete().to(sys_delete_policies_request_handler)),
+            )
+            .service(
+                web::resource("/internal/ui/mounts").route(web::get().to(sys_get_internal_ui_mounts_request_handler)),
+            )
+            .service(
+                web::resource("/internal/ui/mounts/{name:.*}")
+                    .route(web::get().to(sys_get_internal_ui_mount_request_handler)),
             ),
     );
 }

@@ -8,6 +8,7 @@ use crate::{cli::command::CommandExecutor, EXIT_CODE_INSUFFICIENT_PARAMS, VERSIO
 
 pub mod command;
 pub mod config;
+pub mod kv_util;
 pub mod util;
 
 #[derive(Parser)]
