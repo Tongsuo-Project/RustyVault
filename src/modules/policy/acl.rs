@@ -6,7 +6,7 @@
 //! - `ACLResults`: Contains detailed results from ACL checks, such as permissions and capabilities.
 //! - `SentinelResults`: Holds information about granting policies determined by sentinels.
 //! - `ACL`: Manages rules and policies related to access control, using data structures like `Trie`
-//!    and `DashMap` for efficient storage and retrieval.
+//!   and `DashMap` for efficient storage and retrieval.
 //!
 //! Key Functionality:
 //! - Constructing an ACL from a list of policies.
@@ -382,7 +382,7 @@ impl ACL {
 
         wc_path_descrs.sort();
 
-        wc_path_descrs.into_iter().last().and_then(|pd| pd.perms)
+        wc_path_descrs.into_iter().next_back().and_then(|pd| pd.perms)
     }
 
     pub fn capabilities<S: Into<String>>(&self, path: S) -> Vec<String> {
