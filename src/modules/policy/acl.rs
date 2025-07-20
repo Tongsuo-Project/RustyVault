@@ -6,7 +6,7 @@
 //! - `ACLResults`: Contains detailed results from ACL checks, such as permissions and capabilities.
 //! - `SentinelResults`: Holds information about granting policies determined by sentinels.
 //! - `ACL`: Manages rules and policies related to access control, using data structures like `Trie`
-//!    and `DashMap` for efficient storage and retrieval.
+//!   and `DashMap` for efficient storage and retrieval.
 //!
 //! Key Functionality:
 //! - Constructing an ACL from a list of policies.
@@ -24,7 +24,10 @@ use better_default::Default;
 use dashmap::DashMap;
 use radix_trie::{Trie, TrieCommon};
 
-use super::{policy::Capability, Permissions, Policy, PolicyPathRules, PolicyType};
+use super::{
+    policy::{to_granting_capabilities, Capability},
+    Permissions, Policy, PolicyPathRules, PolicyType,
+};
 use crate::{
     errors::RvError,
     logical::{auth::PolicyInfo, Operation, Request},
@@ -379,8 +382,74 @@ impl ACL {
 
         wc_path_descrs.sort();
 
-        wc_path_descrs.into_iter().last().and_then(|pd| pd.perms)
+        wc_path_descrs.into_iter().next_back().and_then(|pd| pd.perms)
     }
+
+    pub fn capabilities<S: Into<String>>(&self, path: S) -> Vec<String> {
+        let mut req = Request::new(path);
+        req.operation = Operation::List;
+
+        let deny_response: Vec<String> = vec![Capability::Deny.to_string()];
+        let res = match self.allow_operation(&req, true) {
+            Ok(result) => result,
+            Err(_) => return deny_response.clone(),
+        };
+
+        if res.is_root {
+            return vec![Capability::Root.to_string()];
+        }
+
+        let capabilities = res.capabilities_bitmap;
+
+        if capabilities & Capability::Deny.to_bits() > 0 {
+            return deny_response.clone();
+        }
+
+        let path_capabilities = to_granting_capabilities(capabilities);
+
+        if path_capabilities.is_empty() {
+            return deny_response.clone();
+        }
+
+        path_capabilities
+    }
+
+    pub fn has_mount_access(&self, path: &str) -> bool {
+        // If a policy is giving us direct access to the mount path then we can do a fast return.
+        let capabilities = self.capabilities(path);
+        if !capabilities.contains(&Capability::Deny.to_string()) {
+            return true;
+        }
+
+        let mut acl_cap_given = check_path_capability(&self.exact_rules, path);
+        if !acl_cap_given {
+            acl_cap_given = check_path_capability(&self.prefix_rules, path);
+        }
+
+        if !acl_cap_given && self.get_none_exact_paths_permissions(path, true).is_some() {
+            return true;
+        }
+
+        acl_cap_given
+    }
+}
+
+fn check_path_capability(rules: &Trie<String, Permissions>, path: &str) -> bool {
+    !path.is_empty()
+        && rules
+            .iter()
+            .filter(|(p, perms)| p.starts_with(path) && perms.capabilities_bitmap & Capability::Deny.to_bits() == 0)
+            .any(|(_key, perms)| {
+                perms.capabilities_bitmap
+                    & (Capability::Create.to_bits()
+                        | Capability::Delete.to_bits()
+                        | Capability::List.to_bits()
+                        | Capability::Read.to_bits()
+                        | Capability::Sudo.to_bits()
+                        | Capability::Update.to_bits()
+                        | Capability::Patch.to_bits())
+                    > 0
+            })
 }
 
 #[cfg(test)]
@@ -1564,5 +1633,89 @@ path "kv/deny" {
             assert_eq!(case.3, result.granting_policies);
             assert_eq!(case.4, result.allowed);
         }
+    }
+
+    #[test]
+    fn test_acl_capabilities() {
+        let policy = create_test_policy("", TEST_ACL_POLICY);
+        let acl = ACL::new(&[Arc::new(policy)]).unwrap();
+
+        let caps = acl.capabilities("dev");
+        assert_eq!(caps, vec![Capability::Deny.to_string()]);
+
+        let caps = acl.capabilities("dev/");
+        assert_eq!(
+            caps,
+            vec![
+                Capability::Create.to_string(),
+                Capability::Read.to_string(),
+                Capability::Update.to_string(),
+                Capability::Delete.to_string(),
+                Capability::List.to_string(),
+                Capability::Sudo.to_string()
+            ]
+        );
+
+        let caps = acl.capabilities("stage/aws/foo");
+        assert_eq!(
+            caps,
+            vec![
+                Capability::Read.to_string(),
+                Capability::Update.to_string(),
+                Capability::List.to_string(),
+                Capability::Sudo.to_string()
+            ]
+        );
+
+        let caps = acl.capabilities("prod/foo");
+        assert_eq!(caps, vec![Capability::Read.to_string(), Capability::List.to_string()]);
+
+        let caps = acl.capabilities("sys/mount");
+        assert_eq!(caps, vec![Capability::Deny.to_string()]);
+    }
+
+    #[test]
+    fn test_check_path_capability() {
+        let mut rules = Trie::new();
+        rules.insert(
+            "/api".to_string(),
+            Permissions { capabilities_bitmap: Capability::Deny.to_bits(), ..Default::default() },
+        );
+        rules.insert(
+            "/api/v1".to_string(),
+            Permissions {
+                capabilities_bitmap: Capability::Read.to_bits() | Capability::List.to_bits(),
+                ..Default::default()
+            },
+        );
+        rules.insert(
+            "/api/v2".to_string(),
+            Permissions { capabilities_bitmap: Capability::Create.to_bits(), ..Default::default() },
+        );
+        rules.insert(
+            "/api/v3".to_string(),
+            Permissions { capabilities_bitmap: Capability::Deny.to_bits(), ..Default::default() },
+        );
+        rules.insert(
+            "/admin".to_string(),
+            Permissions { capabilities_bitmap: Capability::Sudo.to_bits(), ..Default::default() },
+        );
+        rules.insert(
+            "/root".to_string(),
+            Permissions { capabilities_bitmap: Capability::Deny.to_bits(), ..Default::default() },
+        );
+        rules.insert(
+            "".to_string(),
+            Permissions { capabilities_bitmap: Capability::Read.to_bits(), ..Default::default() },
+        );
+
+        assert!(check_path_capability(&rules, "/api/v1"));
+        assert!(check_path_capability(&rules, "/api/v2"));
+        assert!(!check_path_capability(&rules, "/api/v3"));
+        assert!(!check_path_capability(&rules, "/unknown/path"));
+        assert!(check_path_capability(&rules, "/admin"));
+        assert!(!check_path_capability(&rules, "/root"));
+        assert!(!check_path_capability(&rules, ""));
+        assert!(check_path_capability(&rules, "/api"));
     }
 }

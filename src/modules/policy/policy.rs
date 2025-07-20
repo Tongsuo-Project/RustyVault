@@ -148,6 +148,8 @@ pub enum Capability {
     Sudo = 1 << 6,
     #[strum(to_string = "patch")]
     Patch = 1 << 7,
+    #[strum(to_string = "root")]
+    Root = 1 << 8,
 }
 
 impl Capability {
