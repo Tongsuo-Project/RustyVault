@@ -10,7 +10,7 @@ use crate::{
 
 impl PkiBackend {
     pub fn revoke_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "revoke",
@@ -32,7 +32,7 @@ This allows certificates to be revoked using its serial number. A root token is 
     }
 
     pub fn crl_rotate_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "crl/rotate",

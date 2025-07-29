@@ -32,9 +32,9 @@ pub struct CRLInfo {
 
 impl CertBackend {
     pub fn crl_path(&self) -> Path {
-        let cert_backend_ref1 = Arc::clone(&self.inner);
-        let cert_backend_ref2 = Arc::clone(&self.inner);
-        let cert_backend_ref3 = Arc::clone(&self.inner);
+        let cert_backend_ref1 = self.inner.clone();
+        let cert_backend_ref2 = self.inner.clone();
+        let cert_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"crls/(?P<name>\w[\w-]+\w)",
@@ -81,7 +81,7 @@ one of them expiring.
     }
 
     pub fn crl_list_path(&self) -> Path {
-        let cert_backend_ref = Arc::clone(&self.inner);
+        let cert_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"crls/?$",

@@ -20,7 +20,7 @@
 
 use std::{
     str::FromStr,
-    sync::{Arc, RwLock, Weak},
+    sync::{Arc, Weak},
 };
 
 use better_default::Default;
@@ -194,7 +194,6 @@ pub struct PolicyEntry {
 /// The main policy store structure.
 #[derive(Default)]
 pub struct PolicyStore {
-    pub core: Arc<RwLock<Core>>,
     pub router: Arc<Router>,
     pub acl_view: Option<Arc<BarrierView>>,
     pub rgp_view: Option<Arc<BarrierView>>,
@@ -219,18 +218,18 @@ impl PolicyStore {
     ///
     /// * `Result<Arc<PolicyStore>, RvError>` - An Arc-wrapped `PolicyStore` instance or an error.
     pub fn new(core: &Core) -> Result<Arc<PolicyStore>, RvError> {
-        if core.system_view.is_none() {
+        let Some(system_view) = core.state.load().system_view.as_ref().cloned() else {
             return Err(RvError::ErrBarrierSealed);
-        }
+        };
 
-        let acl_view = core.system_view.as_ref().unwrap().new_sub_view(POLICY_ACL_SUB_PATH);
-        let rgp_view = core.system_view.as_ref().unwrap().new_sub_view(POLICY_RGP_SUB_PATH);
-        let egp_view = core.system_view.as_ref().unwrap().new_sub_view(POLICY_EGP_SUB_PATH);
+        let acl_view = system_view.new_sub_view(POLICY_ACL_SUB_PATH);
+        let rgp_view = system_view.new_sub_view(POLICY_RGP_SUB_PATH);
+        let egp_view = system_view.new_sub_view(POLICY_EGP_SUB_PATH);
 
         let keys = acl_view.get_keys()?;
 
         let mut policy_store = PolicyStore {
-            router: Arc::clone(&core.router),
+            router: core.router.clone(),
             acl_view: Some(Arc::new(acl_view)),
             rgp_view: Some(Arc::new(rgp_view)),
             egp_view: Some(Arc::new(egp_view)),
@@ -545,21 +544,21 @@ impl PolicyStore {
 
     fn get_acl_view(&self) -> Result<Arc<BarrierView>, RvError> {
         match &self.acl_view {
-            Some(view) => Ok(Arc::clone(view)),
+            Some(view) => Ok(view.clone()),
             None => Err(rv_error_string!("unable to get the barrier subview for policy type acl")),
         }
     }
 
     fn get_rgp_view(&self) -> Result<Arc<BarrierView>, RvError> {
         match &self.rgp_view {
-            Some(view) => Ok(Arc::clone(view)),
+            Some(view) => Ok(view.clone()),
             None => Err(rv_error_string!("unable to get the barrier subview for policy type rpg")),
         }
     }
 
     fn get_egp_view(&self) -> Result<Arc<BarrierView>, RvError> {
         match &self.egp_view {
-            Some(view) => Ok(Arc::clone(view)),
+            Some(view) => Ok(view.clone()),
             None => Err(rv_error_string!("unable to get the barrier subview for policy type epg")),
         }
     }
@@ -680,12 +679,11 @@ impl AuthHandler for PolicyStore {
 #[cfg(test)]
 mod mod_policy_store_tests {
     use super::{super::policy::Capability, *};
-    use crate::test_utils::init_test_rusty_vault;
+    use crate::test_utils::new_unseal_test_rusty_vault;
 
     #[test]
     fn test_policy_store_crud() {
-        let (_, core) = init_test_rusty_vault("test_policy_store_crud");
-        let core = core.read().unwrap();
+        let (_rvault, core, _root_token) = new_unseal_test_rusty_vault("test_policy_store_crud");
 
         let policy_store = PolicyStore::new(&core).unwrap();
 
@@ -743,8 +741,7 @@ mod mod_policy_store_tests {
 
     #[test]
     fn test_policy_load_default() {
-        let (_, core) = init_test_rusty_vault("test_policy_load_default");
-        let core = core.read().unwrap();
+        let (_rvault, core, _root_token) = new_unseal_test_rusty_vault("test_policy_load_default");
 
         let policy_store = PolicyStore::new(&core).unwrap();
 
@@ -764,8 +761,7 @@ mod mod_policy_store_tests {
 
     #[test]
     fn test_policy_root() {
-        let (_, core) = init_test_rusty_vault("test_policy_root");
-        let core = core.read().unwrap();
+        let (_, core, _) = new_unseal_test_rusty_vault("test_policy_root");
 
         let policy_store = PolicyStore::new(&core).unwrap();
 
@@ -784,8 +780,7 @@ mod mod_policy_store_tests {
 
     #[test]
     fn test_policy_new_acl() {
-        let (_, core) = init_test_rusty_vault("test_policy_new_acl");
-        let core = core.read().unwrap();
+        let (_, core, _) = new_unseal_test_rusty_vault("test_policy_new_acl");
 
         let policy_store = PolicyStore::new(&core).unwrap();
 

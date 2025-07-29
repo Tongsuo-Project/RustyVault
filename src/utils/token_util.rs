@@ -222,7 +222,7 @@ mod test {
         // init the storage backend
         let backend = new_test_backend("test_token_util");
 
-        let barrier = AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = AESGCMBarrier::new(backend);
 
         let token_fields = token_fields();
         let mut path = Path::new("/");

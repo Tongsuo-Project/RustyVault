@@ -1,8 +1,6 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, RwLock},
-};
+use std::{any::Any, str::FromStr, sync::Arc};
 
+use arc_swap::ArcSwap;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use better_default::Default;
 use serde_json::{Map, Value};
@@ -29,25 +27,21 @@ pub mod acl;
 pub struct PolicyModule {
     #[default("policy".into())]
     pub name: String,
-    pub core: Arc<RwLock<Core>>,
-    pub policy_store: Arc<PolicyStore>,
+    pub core: Arc<Core>,
+    pub policy_store: ArcSwap<PolicyStore>,
 }
 
 impl PolicyModule {
-    pub fn new(core: &Core) -> Self {
-        Self {
-            name: "policy".into(),
-            core: Arc::clone(core.self_ref.as_ref().unwrap()),
-            policy_store: Arc::new(PolicyStore::default()),
-        }
+    pub fn new(core: Arc<Core>) -> Self {
+        Self { name: "policy".into(), core, policy_store: ArcSwap::new(Arc::new(PolicyStore::default())) }
     }
 
-    pub fn setup_policy(&mut self) -> Result<(), RvError> {
-        self.policy_store.load_default_acl_policy()
+    pub fn setup_policy(&self) -> Result<(), RvError> {
+        self.policy_store.load().load_default_acl_policy()
     }
 
     pub fn handle_policy_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let mut policies = self.policy_store.list_policy(PolicyType::Acl)?;
+        let mut policies = self.policy_store.load().list_policy(PolicyType::Acl)?;
 
         // TODO: After the "namespace" feature is added here, it is necessary to determine whether it is the root
         // namespace before the root can be added.
@@ -64,7 +58,7 @@ impl PolicyModule {
 
     pub fn handle_policy_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
-        if let Some(policy) = self.policy_store.get_policy(&name, PolicyType::Acl)? {
+        if let Some(policy) = self.policy_store.load().get_policy(&name, PolicyType::Acl)? {
             let mut resp_data = Map::new();
             resp_data.insert("name".into(), Value::String(name));
 
@@ -101,14 +95,14 @@ impl PolicyModule {
             policy.input_sentinel_policy_data(req)?;
         }
 
-        self.policy_store.set_policy(policy)?;
+        self.policy_store.load().set_policy(policy)?;
 
         Ok(None)
     }
 
     pub fn handle_policy_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
-        self.policy_store.delete_policy(&name, PolicyType::Acl)?;
+        self.policy_store.load().delete_policy(&name, PolicyType::Acl)?;
         Ok(None)
     }
 }
@@ -118,23 +112,29 @@ impl Module for PolicyModule {
         self.name.clone()
     }
 
-    fn setup(&mut self, _core: &Core) -> Result<(), RvError> {
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
+    }
+
+    fn setup(&self, _core: &Core) -> Result<(), RvError> {
         Ok(())
     }
 
-    fn init(&mut self, core: &Core) -> Result<(), RvError> {
-        self.policy_store = PolicyStore::new(core)?;
+    fn init(&self, core: &Core) -> Result<(), RvError> {
+        let policy_store = PolicyStore::new(core)?;
+        self.policy_store.store(policy_store.clone());
 
         self.setup_policy()?;
 
-        core.add_auth_handler(Arc::clone(&self.policy_store) as Arc<dyn AuthHandler>)?;
+        core.add_auth_handler(policy_store as Arc<dyn AuthHandler>)?;
 
         Ok(())
     }
 
-    fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
-        core.delete_auth_handler(Arc::clone(&self.policy_store) as Arc<dyn AuthHandler>)?;
-        self.policy_store = Arc::new(PolicyStore::default());
+    fn cleanup(&self, core: &Core) -> Result<(), RvError> {
+        core.delete_auth_handler(self.policy_store.load().clone() as Arc<dyn AuthHandler>)?;
+        let policy_store = Arc::new(PolicyStore::default());
+        self.policy_store.swap(policy_store);
         Ok(())
     }
 }
@@ -148,8 +148,8 @@ mod mod_policy_tests {
     use crate::{
         logical::{Operation, Request},
         test_utils::{
-            init_test_rusty_vault, test_delete_api, test_list_api, test_mount_api, test_mount_auth_api, test_read_api,
-            test_write_api, TestHttpServer,
+            new_unseal_test_rusty_vault, test_delete_api, test_list_api, test_mount_api, test_mount_auth_api,
+            test_read_api, test_write_api, TestHttpServer,
         },
     };
 
@@ -230,8 +230,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_curd_api() {
-        let (root_token, core) = init_test_rusty_vault("test_policy_curd_api");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_curd_api");
 
         let policy1_name = "policy1";
         let policy1_hcl = r#"
@@ -338,8 +337,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check() {
-        let (root_token, core) = init_test_rusty_vault("test_policy_acl_check");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_acl_check");
 
         let policy1_name = "policy1";
         let policy1_hcl = r#"
@@ -431,8 +429,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check_with_policy_parameters() {
-        let (root_token, core) = init_test_rusty_vault("test_policy_acl_check_with_policy_parameters");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_acl_check_with_policy_parameters");
 
         let policy1_name = "policy1";
         let policy1_hcl = r#"

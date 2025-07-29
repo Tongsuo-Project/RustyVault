@@ -16,7 +16,7 @@ use crate::{
 
 impl AppRoleBackend {
     pub fn login_path(&self) -> Path {
-        let approle_backend_ref = Arc::clone(&self.inner);
+        let approle_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"login$",

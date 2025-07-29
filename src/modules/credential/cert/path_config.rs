@@ -20,8 +20,8 @@ pub struct Config {
 
 impl CertBackend {
     pub fn config_path(&self) -> Path {
-        let cert_backend_ref1 = Arc::clone(&self.inner);
-        let cert_backend_ref2 = Arc::clone(&self.inner);
+        let cert_backend_ref1 = self.inner.clone();
+        let cert_backend_ref2 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"config",

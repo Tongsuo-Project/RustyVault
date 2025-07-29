@@ -19,7 +19,7 @@ use crate::{
 
 impl PkiBackend {
     pub fn issue_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"issue/(?P<role>\w[\w-]+\w)",

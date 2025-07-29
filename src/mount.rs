@@ -63,11 +63,11 @@ lazy_static! {
 }
 
 pub struct MountsMonitor {
-    core: Arc<RwLock<Core>>,
+    core: Arc<Core>,
     interval: u64,
     tables: Arc<RwLock<Vec<Arc<MountsRouter>>>>,
     running: Arc<AtomicBool>,
-    handle: Option<JoinHandle<()>>,
+    handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 #[derive(Deref)]
@@ -122,7 +122,7 @@ impl MountsRouter {
         }
     }
 
-    pub fn setup(&self, core: &Arc<RwLock<Core>>) -> Result<(), RvError> {
+    pub fn setup(&self, core: Arc<Core>) -> Result<(), RvError> {
         let mounts = self.mounts.entries.read()?;
 
         for mount_entry in mounts.values() {
@@ -135,7 +135,7 @@ impl MountsRouter {
             let view = BarrierView::new(self.barrier.clone(), &barrier_path);
             let path = format!("{}{}", self.router_prefix, &entry.path);
 
-            self.router.mount(backend, &path, Arc::clone(mount_entry), view)?;
+            self.router.mount(backend, &path, mount_entry.clone(), view)?;
 
             if entry.tainted {
                 self.router.taint(&entry.path)?;
@@ -378,13 +378,13 @@ impl MountTable {
 }
 
 impl MountsMonitor {
-    pub fn new(core: Arc<RwLock<Core>>, interval: u64) -> Self {
+    pub fn new(core: Arc<Core>, interval: u64) -> Self {
         Self {
             core,
             interval,
             tables: Arc::new(RwLock::new(Vec::new())),
             running: Arc::new(AtomicBool::new(false)),
-            handle: None,
+            handle: Mutex::new(None),
         }
     }
 
@@ -398,7 +398,7 @@ impl MountsMonitor {
         tables.retain(|mt| mt.path != table.path);
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&self) {
         if self.running.load(Ordering::Relaxed) {
             return;
         }
@@ -406,7 +406,7 @@ impl MountsMonitor {
         self.running.store(true, Ordering::Relaxed);
         let running_flag = self.running.clone();
 
-        let core_cloned = self.core.clone();
+        let core = self.core.clone();
         let mount_tables = self.tables.clone();
 
         let ticker = tick(Duration::from_secs(self.interval));
@@ -414,17 +414,10 @@ impl MountsMonitor {
             while running_flag.load(Ordering::Relaxed) {
                 select! {
                     recv(ticker) -> _ => {
-                        let core = match core_cloned.try_read() {
-                            Ok(c) => c,
-                            _ => {
-                                continue;
-                            }
-                        };
-
                         let mut changed = false;
                         let tables = mount_tables.read().unwrap();
                         for table in tables.iter() {
-                            match table.load(core.barrier.as_storage(), Some(&core.hmac_key), core.mount_entry_hmac_level) {
+                            match table.load(core.barrier.as_storage(), Some(&core.state.load().hmac_key), core.mount_entry_hmac_level) {
                                 Ok(Some(())) => changed = true,
                                 _ => continue,
                             }
@@ -434,7 +427,7 @@ impl MountsMonitor {
                             let _ = core.router.clear();
 
                             for table in tables.iter() {
-                                if let Err(err) = table.setup(&core_cloned) {
+                                if let Err(err) = table.setup(core.clone()) {
                                     log::error!("update mount table failed, path: {}, err: {:?}", table.path, err);
                                 }
                             }
@@ -444,12 +437,12 @@ impl MountsMonitor {
             }
         });
 
-        self.handle = Some(handle);
+        self.handle.lock().unwrap().replace(handle);
     }
 
-    pub fn stop(&mut self) {
+    pub fn stop(&self) {
         self.running.store(false, Ordering::Relaxed);
-        if let Some(handle) = self.handle.take() {
+        if let Some(handle) = self.handle.lock().unwrap().take() {
             let _ = handle.join();
         }
     }
@@ -479,7 +472,7 @@ impl Core {
             }
 
             let backend_new_func = self.get_logical_backend(&me.logical_type)?;
-            let backend = backend_new_func(Arc::clone(self.self_ref.as_ref().unwrap()))?;
+            let backend = backend_new_func(self.self_ptr.upgrade().unwrap().clone())?;
 
             entry.uuid = generate_uuid();
 
@@ -488,11 +481,11 @@ impl Core {
 
             let path = entry.path.clone();
 
-            entry.calc_hmac(&self.hmac_key)?;
+            entry.calc_hmac(&self.state.load().hmac_key)?;
 
             let mount_entry = Arc::new(RwLock::new(entry));
 
-            self.router.mount(backend, &path, Arc::clone(&mount_entry), view)?;
+            self.router.mount(backend, &path, mount_entry.clone(), view)?;
 
             table.insert(path, mount_entry);
         }
@@ -572,7 +565,7 @@ impl Core {
         let src_path = src_entry.path.clone();
         src_entry.path.clone_from(&dst);
         src_entry.tainted = false;
-        src_entry.calc_hmac(&self.hmac_key)?;
+        src_entry.calc_hmac(&self.state.load().hmac_key)?;
 
         std::mem::drop(src_entry);
 
@@ -580,7 +573,7 @@ impl Core {
             let mut src_entry = src_match.as_ref().unwrap().write()?;
             src_entry.path = src_path;
             src_entry.tainted = true;
-            src_entry.calc_hmac(&self.hmac_key)?;
+            src_entry.calc_hmac(&self.state.load().hmac_key)?;
             return Err(e);
         }
 
@@ -591,10 +584,9 @@ impl Core {
         Ok(())
     }
 
-    pub fn unload_mounts(&mut self) -> Result<(), RvError> {
+    pub fn unload_mounts(&self) -> Result<(), RvError> {
         let _ = self.router.clear();
         let _ = self.mounts_router.clear();
-        self.system_view = None;
         Ok(())
     }
 

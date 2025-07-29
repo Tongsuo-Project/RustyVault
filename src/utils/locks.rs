@@ -30,7 +30,7 @@ impl Locks {
 
     pub fn get_lock(&self, key: &str) -> Arc<LockEntry> {
         let index: usize = blake2b256_hash(key)[0].into();
-        Arc::clone(&self.locks[index])
+        self.locks[index].clone()
     }
 }
 
@@ -68,8 +68,8 @@ mod test {
     fn test_locks_writer_reader() {
         let data = Arc::new(MyTestData { lock: Locks::new(), num: RwLock::new(11) });
 
-        let data_writer = Arc::clone(&data);
-        let data_reader = Arc::clone(&data);
+        let data_writer = data.clone();
+        let data_reader = data.clone();
 
         let writer = thread::spawn(move || {
             let num = write_case(data_writer);
@@ -94,8 +94,8 @@ mod test {
     fn test_locks_reader_writer() {
         let data = Arc::new(MyTestData { lock: Locks::new(), num: RwLock::new(11) });
 
-        let data_writer = Arc::clone(&data);
-        let data_reader = Arc::clone(&data);
+        let data_writer = data.clone();
+        let data_reader = data.clone();
 
         let reader = thread::spawn(move || {
             let num = read_case(data_reader);
@@ -119,8 +119,8 @@ mod test {
     fn test_locks_writer_writer() {
         let data = Arc::new(MyTestData { lock: Locks::new(), num: RwLock::new(11) });
 
-        let data_writer1 = Arc::clone(&data);
-        let data_writer2 = Arc::clone(&data);
+        let data_writer1 = data.clone();
+        let data_writer2 = data.clone();
 
         let writer1 = thread::spawn(move || {
             let num = write_case(data_writer1);
@@ -144,8 +144,8 @@ mod test {
     fn test_locks_reader_reader() {
         let data = Arc::new(MyTestData { lock: Locks::new(), num: RwLock::new(11) });
 
-        let data_reader1 = Arc::clone(&data);
-        let data_reader2 = Arc::clone(&data);
+        let data_reader1 = data.clone();
+        let data_reader2 = data.clone();
 
         let reader1 = thread::spawn(move || {
             let num = read_case(data_reader1);

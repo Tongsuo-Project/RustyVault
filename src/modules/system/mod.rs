@@ -2,11 +2,11 @@
 //! path is provided here to support mounting new modules in RustyVault via RESTful HTTP request.
 
 use std::{
+    any::Any,
     collections::HashMap,
-    sync::{Arc, RwLock, Weak},
+    sync::{Arc, Weak},
 };
 
-use as_any::Downcast;
 use serde_json::{from_value, json, Map, Value};
 
 use crate::{
@@ -39,12 +39,12 @@ pub struct SystemModule {
 }
 
 pub struct SystemBackend {
-    pub core: Arc<RwLock<Core>>,
+    pub core: Arc<Core>,
     pub self_ptr: Weak<SystemBackend>,
 }
 
 impl SystemBackend {
-    pub fn new(core: Arc<RwLock<Core>>) -> Arc<Self> {
+    pub fn new(core: Arc<Core>) -> Arc<Self> {
         let system_backend = SystemBackend { core, self_ptr: Weak::default() };
 
         system_backend.wrap()
@@ -340,10 +340,9 @@ impl SystemBackend {
     }
 
     pub fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
-        let core = self.core.read()?;
         let mut data: Map<String, Value> = Map::new();
 
-        let mounts = core.mounts_router.entries.read()?;
+        let mounts = self.core.mounts_router.entries.read()?;
 
         for mount_entry in mounts.values() {
             let entry = mount_entry.read()?;
@@ -374,8 +373,7 @@ impl SystemBackend {
         let mut me = MountEntry::new(MOUNT_TABLE_TYPE, path, logical_type, description);
         me.options = options.as_map();
 
-        let core = self.core.read()?;
-        core.mount(&me)?;
+        self.core.mount(&me)?;
         Ok(None)
     }
 
@@ -385,8 +383,7 @@ impl SystemBackend {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let core = self.core.read()?;
-        core.unmount(suffix)?;
+        self.core.unmount(suffix)?;
         Ok(None)
     }
 
@@ -402,12 +399,11 @@ impl SystemBackend {
 
         let from_path = sanitize_path(from);
         let to_path = sanitize_path(to);
-        let core = self.core.read()?;
 
-        if let Some(me) = core.router.matching_mount_entry(&from_path)? {
+        if let Some(me) = self.core.router.matching_mount_entry(&from_path)? {
             let mount_entry = me.read()?;
 
-            let dst_path_match = core.router.matching_mount(to)?;
+            let dst_path_match = self.core.router.matching_mount(to)?;
             if !dst_path_match.is_empty() {
                 return Err(rv_error_response_status!(409, &format!("path already in use at {}", dst_path_match)));
             }
@@ -418,14 +414,11 @@ impl SystemBackend {
 
             match mount_entry_table_type.as_str() {
                 AUTH_TABLE_TYPE => {
-                    let module = self.get_auth_module()?;
-                    let auth_mod = module.read()?;
-                    let auth_module =
-                        auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+                    let auth_module = self.get_module::<AuthModule>("auth")?;
                     auth_module.remount_auth(&from_path, &to_path)?;
                 }
                 MOUNT_TABLE_TYPE => {
-                    core.remount(&from_path, &to_path)?;
+                    self.core.remount(&from_path, &to_path)?;
                 }
                 _ => {
                     return Err(rv_error_response_status!(409, "Unknown mount table type."));
@@ -459,9 +452,7 @@ impl SystemBackend {
     pub fn handle_auth_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut data: Map<String, Value> = Map::new();
 
-        let module = self.get_auth_module()?;
-        let auth_mod = module.read()?;
-        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let auth_module = self.get_module::<AuthModule>("auth")?;
 
         let mounts = auth_module.mounts_router.entries.read()?;
 
@@ -495,9 +486,7 @@ impl SystemBackend {
 
         me.options = options.as_map();
 
-        let module = self.get_auth_module()?;
-        let auth_mod = module.read()?;
-        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let auth_module = self.get_module::<AuthModule>("auth")?;
 
         auth_module.enable_auth(&me)?;
 
@@ -510,9 +499,7 @@ impl SystemBackend {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let module = self.get_auth_module()?;
-        let auth_mod = module.read()?;
-        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let auth_module = self.get_module::<AuthModule>("auth")?;
 
         auth_module.disable_auth(&path)?;
 
@@ -520,33 +507,25 @@ impl SystemBackend {
     }
 
     pub fn handle_policy_list(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let module = self.get_policy_module()?;
-        let policy_mod = module.read()?;
-        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_list(backend, req)
     }
 
     pub fn handle_policy_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let module = self.get_policy_module()?;
-        let policy_mod = module.read()?;
-        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_read(backend, req)
     }
 
     pub fn handle_policy_write(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let module = self.get_policy_module()?;
-        let policy_mod = module.read()?;
-        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_write(backend, req)
     }
 
     pub fn handle_policy_delete(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let module = self.get_policy_module()?;
-        let policy_mod = module.read()?;
-        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_delete(backend, req)
     }
@@ -572,8 +551,7 @@ impl SystemBackend {
 
         let path = path.as_str().unwrap();
 
-        let core = self.core.read()?;
-        let entry = core.barrier.get(path)?;
+        let entry = self.core.barrier.get(path)?;
         if entry.is_none() {
             return Ok(None);
         }
@@ -594,11 +572,9 @@ impl SystemBackend {
         let path = path.as_str().unwrap();
         let value = value.as_str().unwrap();
 
-        let core = self.core.read()?;
-
         let entry = StorageEntry { key: path.to_string(), value: value.as_bytes().to_vec() };
 
-        core.barrier.put(&entry)?;
+        self.core.barrier.put(&entry)?;
 
         Ok(None)
     }
@@ -608,9 +584,7 @@ impl SystemBackend {
 
         let path = path.as_str().unwrap();
 
-        let core = self.core.read()?;
-
-        core.barrier.delete(path)?;
+        self.core.barrier.delete(path)?;
 
         Ok(None)
     }
@@ -620,15 +594,10 @@ impl SystemBackend {
         _backend: &dyn Backend,
         req: &mut Request,
     ) -> Result<Option<Response>, RvError> {
-        let module = self.get_policy_module()?;
-        let policy_mod = module.read()?;
-        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let policy_module = self.get_module::<PolicyModule>("policy")?;
+        let auth_module = self.get_module::<AuthModule>("auth")?;
 
-        let module = self.get_auth_module()?;
-        let auth_mod = module.read()?;
-        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
-
-        if auth_module.token_store.is_none() {
+        if auth_module.token_store.load().is_none() {
             return Err(RvError::ErrPermissionDenied);
         }
 
@@ -637,17 +606,18 @@ impl SystemBackend {
 
         let mut is_authed = false;
 
-        let acl: Option<ACL> =
-            if let Some(auth) = auth_module.token_store.as_ref().unwrap().check_token(&req.path, &req.client_token)? {
-                if auth.policies.is_empty() {
-                    None
-                } else {
-                    is_authed = true;
-                    Some(policy_module.policy_store.new_acl(&auth.policies, None)?)
-                }
-            } else {
+        let acl: Option<ACL> = if let Some(auth) =
+            auth_module.token_store.load().as_ref().unwrap().check_token(&req.path, &req.client_token)?
+        {
+            if auth.policies.is_empty() {
                 None
-            };
+            } else {
+                is_authed = true;
+                Some(policy_module.policy_store.load().new_acl(&auth.policies, None)?)
+            }
+        } else {
+            None
+        };
 
         let has_access = |me: &MountEntry| -> bool {
             if !is_authed {
@@ -661,8 +631,7 @@ impl SystemBackend {
             }
         };
 
-        let core = self.core.read()?;
-        let entries = core.mounts_router.entries.read()?;
+        let entries = self.core.mounts_router.entries.read()?;
         for (path, entry) in entries.iter() {
             let me = entry.read()?;
             if has_access(&me) {
@@ -681,7 +650,7 @@ impl SystemBackend {
             }
         }
 
-        let entries = core.mounts_router.entries.read()?;
+        let entries = self.core.mounts_router.entries.read()?;
         for (path, entry) in entries.iter() {
             let me = entry.read()?;
             if has_access(&me) {
@@ -699,10 +668,6 @@ impl SystemBackend {
                 }
             }
         }
-
-        let module = self.get_auth_module()?;
-        let auth_mod = module.read()?;
-        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
 
         let entries = auth_module.mounts_router.entries.read()?;
         for (path, entry) in entries.iter() {
@@ -738,33 +703,29 @@ impl SystemBackend {
         _backend: &dyn Backend,
         req: &mut Request,
     ) -> Result<Option<Response>, RvError> {
-        let module = self.get_policy_module()?;
-        let policy_mod = module.read()?;
-        let policy_module = policy_mod.as_ref().downcast_ref::<PolicyModule>().ok_or(RvError::ErrRustDowncastFailed)?;
+        let policy_module = self.get_module::<PolicyModule>("policy")?;
+        let auth_module = self.get_module::<AuthModule>("auth")?;
 
         let path = sanitize_path(req.get_data("path")?.as_str().ok_or(RvError::ErrRequestInvalid)?);
 
-        let module = self.get_auth_module()?;
-        let auth_mod = module.read()?;
-        let auth_module = auth_mod.as_ref().downcast_ref::<AuthModule>().ok_or(RvError::ErrRustDowncastFailed)?;
-
-        if auth_module.token_store.is_none() {
+        if auth_module.token_store.load().is_none() {
             return Err(RvError::ErrPermissionDenied);
         }
 
-        let acl =
-            if let Some(auth) = auth_module.token_store.as_ref().unwrap().check_token(&req.path, &req.client_token)? {
-                if auth.policies.is_empty() {
-                    return Err(RvError::ErrPermissionDenied);
-                } else {
-                    policy_module.policy_store.new_acl(&auth.policies, None)?
-                }
-            } else {
+        let acl = if let Some(auth) =
+            auth_module.token_store.load().as_ref().unwrap().check_token(&req.path, &req.client_token)?
+        {
+            if auth.policies.is_empty() {
                 return Err(RvError::ErrPermissionDenied);
-            };
+            } else {
+                policy_module.policy_store.load().new_acl(&auth.policies, None)?
+            }
+        } else {
+            return Err(RvError::ErrPermissionDenied);
+        };
 
-        let core = self.core.read()?;
-        let mount_entry = core.mounts_router.router.matching_mount_entry(&path)?.ok_or(RvError::ErrPermissionDenied)?;
+        let mount_entry =
+            self.core.mounts_router.router.matching_mount_entry(&path)?.ok_or(RvError::ErrPermissionDenied)?;
         let me = mount_entry.read()?;
 
         let full_path =
@@ -780,21 +741,12 @@ impl SystemBackend {
         Ok(Some(Response::data_response(Some(data))))
     }
 
-    fn get_module(&self, name: &str) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
-        let core = self.core.read().unwrap();
-        if let Some(module) = core.module_manager.get_module(name) {
+    fn get_module<T: Any + Send + Sync>(&self, name: &str) -> Result<Arc<T>, RvError> {
+        if let Some(module) = self.core.module_manager.get_module::<T>(name) {
             return Ok(module);
         }
 
         Err(RvError::ErrModuleNotFound)
-    }
-
-    fn get_auth_module(&self) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
-        self.get_module("auth")
-    }
-
-    fn get_policy_module(&self) -> Result<Arc<RwLock<Box<dyn Module>>>, RvError> {
-        self.get_module("policy")
     }
 
     fn mount_info(&self, entry: &MountEntry) -> Map<String, Value> {
@@ -813,7 +765,7 @@ impl SystemBackend {
 }
 
 impl SystemModule {
-    pub fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub fn new(core: Arc<Core>) -> Self {
         Self { name: "system".to_string(), backend: SystemBackend::new(core) }
     }
 }
@@ -823,9 +775,13 @@ impl Module for SystemModule {
         self.name.clone()
     }
 
-    fn setup(&mut self, core: &Core) -> Result<(), RvError> {
-        let sys = Arc::clone(&self.backend);
-        let sys_backend_new_func = move |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
+    }
+
+    fn setup(&self, core: &Core) -> Result<(), RvError> {
+        let sys = self.backend.clone();
+        let sys_backend_new_func = move |_c: Arc<Core>| -> Result<Arc<dyn Backend>, RvError> {
             let mut sys_backend = sys.new_backend();
             sys_backend.init()?;
             Ok(Arc::new(sys_backend))
@@ -833,7 +789,7 @@ impl Module for SystemModule {
         core.add_logical_backend("system", Arc::new(sys_backend_new_func))
     }
 
-    fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
+    fn cleanup(&self, core: &Core) -> Result<(), RvError> {
         core.delete_logical_backend("system")
     }
 }

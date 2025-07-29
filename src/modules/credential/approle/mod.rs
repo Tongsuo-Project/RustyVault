@@ -41,9 +41,12 @@
 //! For example, `secret_id_bound_cidrs` will only allow logins coming from IP addresses belonging
 //! to configured CIDR blocks on the AppRole.
 
-use std::sync::{atomic::AtomicU32, Arc, RwLock};
+use std::{
+    any::Any,
+    sync::{atomic::AtomicU32, Arc},
+};
 
-use as_any::Downcast;
+use arc_swap::ArcSwapOption;
 use derive_more::Deref;
 
 use crate::{
@@ -86,8 +89,8 @@ pub struct AppRoleModule {
 }
 
 pub struct AppRoleBackendInner {
-    pub core: Arc<RwLock<Core>>,
-    pub salt: RwLock<Option<Salt>>,
+    pub core: Arc<Core>,
+    pub salt: ArcSwapOption<Salt>,
     pub role_locks: Locks,
     pub role_id_locks: Locks,
     pub secret_id_locks: Locks,
@@ -102,12 +105,12 @@ pub struct AppRoleBackend {
 }
 
 impl AppRoleBackend {
-    pub fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub fn new(core: Arc<Core>) -> Self {
         Self { inner: Arc::new(AppRoleBackendInner::new(core)) }
     }
 
     pub fn new_backend(&self) -> LogicalBackend {
-        let approle_backend_ref = Arc::clone(&self.inner);
+        let approle_backend_ref = self.inner.clone();
 
         let mut backend = new_logical_backend!({
             unauth_paths: ["login"],
@@ -127,10 +130,10 @@ impl AppRoleBackend {
 }
 
 impl AppRoleBackendInner {
-    pub fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub fn new(core: Arc<Core>) -> Self {
         Self {
             core,
-            salt: RwLock::new(None),
+            salt: ArcSwapOption::new(None),
             role_locks: Locks::new(),
             role_id_locks: Locks::new(),
             secret_id_locks: Locks::new(),
@@ -141,11 +144,8 @@ impl AppRoleBackendInner {
 }
 
 impl AppRoleModule {
-    pub fn new(core: &Core) -> Self {
-        Self {
-            name: "approle".to_string(),
-            backend: Arc::new(AppRoleBackend::new(Arc::clone(core.self_ref.as_ref().unwrap()))),
-        }
+    pub fn new(core: Arc<Core>) -> Self {
+        Self { name: "approle".to_string(), backend: Arc::new(AppRoleBackend::new(core)) }
     }
 }
 
@@ -153,22 +153,20 @@ impl Module for AppRoleModule {
     fn name(&self) -> String {
         self.name.clone()
     }
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
+    }
 
-    fn setup(&mut self, core: &Core) -> Result<(), RvError> {
-        let approle = Arc::clone(&self.backend);
-        let approle_backend_new_func = move |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
+    fn setup(&self, core: &Core) -> Result<(), RvError> {
+        let approle = self.backend.clone();
+        let approle_backend_new_func = move |_c: Arc<Core>| -> Result<Arc<dyn Backend>, RvError> {
             let mut approle_backend = approle.new_backend();
             approle_backend.init()?;
             Ok(Arc::new(approle_backend))
         };
 
-        if let Some(module) = core.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                return auth_module.add_auth_backend("approle", Arc::new(approle_backend_new_func));
-            } else {
-                log::error!("downcast auth module failed!");
-            }
+        if let Some(auth_module) = core.module_manager.get_module::<AuthModule>("auth") {
+            return auth_module.add_auth_backend("approle", Arc::new(approle_backend_new_func));
         } else {
             log::error!("get auth module failed!");
         }
@@ -176,27 +174,22 @@ impl Module for AppRoleModule {
         Ok(())
     }
 
-    fn init(&mut self, core: &Core) -> Result<(), RvError> {
+    fn init(&self, core: &Core) -> Result<(), RvError> {
         if core.get_system_view().is_none() {
             return Err(RvError::ErrBarrierSealed);
         }
 
-        let salt = Salt::new(Some(core.get_system_storage()), None)?;
+        let system_view = core.get_system_view().unwrap();
+        let salt = Salt::new(Some(system_view.as_storage()), None)?;
 
-        let mut approle_salt = self.backend.inner.salt.write()?;
-        *approle_salt = Some(salt);
+        self.backend.inner.salt.store(Some(Arc::new(salt)));
 
         Ok(())
     }
 
-    fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
-        if let Some(module) = core.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                return auth_module.delete_auth_backend("approle");
-            } else {
-                log::error!("downcast auth module failed!");
-            }
+    fn cleanup(&self, core: &Core) -> Result<(), RvError> {
+        if let Some(auth_module) = core.module_manager.get_module::<AuthModule>("auth") {
+            return auth_module.delete_auth_backend("approle");
         } else {
             log::error!("get auth module failed!");
         }
@@ -213,7 +206,9 @@ mod test {
     use crate::{
         core::Core,
         logical::{field::FieldTrait, Operation, Request},
-        test_utils::{init_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api},
+        test_utils::{
+            new_unseal_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api,
+        },
     };
 
     #[maybe_async::maybe_async]
@@ -551,8 +546,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_credential_approle_module() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_module");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_credential_approle_module");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle/").await;

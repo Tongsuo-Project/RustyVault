@@ -63,9 +63,9 @@ pub struct RoleEntry {
 
 impl PkiBackend {
     pub fn roles_path(&self) -> Path {
-        let pki_backend_ref1 = Arc::clone(&self.inner);
-        let pki_backend_ref2 = Arc::clone(&self.inner);
-        let pki_backend_ref3 = Arc::clone(&self.inner);
+        let pki_backend_ref1 = self.inner.clone();
+        let pki_backend_ref2 = self.inner.clone();
+        let pki_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"roles/(?P<name>\w[\w-]+\w)",

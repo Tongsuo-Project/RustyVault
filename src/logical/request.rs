@@ -40,6 +40,22 @@ impl Request {
         Self { path: path.into(), ..Default::default() }
     }
 
+    pub fn new_read_request<S: Into<String>>(path: S) -> Self {
+        Self { operation: Operation::Read, path: path.into(), ..Default::default() }
+    }
+
+    pub fn new_write_request<S: Into<String>>(path: S, data: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Write, path: path.into(), data, ..Default::default() }
+    }
+
+    pub fn new_delete_request<S: Into<String>>(path: S, data: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Delete, path: path.into(), data, ..Default::default() }
+    }
+
+    pub fn new_list_request<S: Into<String>>(path: S) -> Self {
+        Self { operation: Operation::List, path: path.into(), ..Default::default() }
+    }
+
     pub fn new_revoke_request<S: Into<String>>(
         path: S,
         secret: Option<SecretData>,

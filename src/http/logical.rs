@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use actix_web::{
     cookie::{time::OffsetDateTime, Cookie},
@@ -44,7 +40,7 @@ async fn logical_request_handler(
     mut body: web::Bytes,
     method: Method,
     path: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let conn = req.conn_data::<Connection>().unwrap();
     log::debug!("logical request, connection info: {:?}, method: {:?}, path: {:?}", conn, method, path);
@@ -82,9 +78,9 @@ async fn logical_request_handler(
         }
     }
     #[cfg(feature = "sync_handler")]
-    let ret = core.read()?.handle_request(&mut r)?;
+    let ret = core.handle_request(&mut r)?;
     #[cfg(not(feature = "sync_handler"))]
-    let ret = core.read()?.handle_request(&mut r).await?;
+    let ret = core.handle_request(&mut r).await?;
 
     match ret {
         Some(resp) => response_logical(&resp, &r.path),

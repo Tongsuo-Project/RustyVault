@@ -37,9 +37,9 @@ pub struct UserEntry {
 
 impl UserPassBackend {
     pub fn users_path(&self) -> Path {
-        let userpass_backend_ref1 = Arc::clone(&self.inner);
-        let userpass_backend_ref2 = Arc::clone(&self.inner);
-        let userpass_backend_ref3 = Arc::clone(&self.inner);
+        let userpass_backend_ref1 = self.inner.clone();
+        let userpass_backend_ref2 = self.inner.clone();
+        let userpass_backend_ref3 = self.inner.clone();
 
         let mut path = new_path!({
             pattern: r"users/(?P<username>\w[\w-]+\w)",
@@ -91,7 +91,7 @@ then the next renew will cause the lease to expire.
     }
 
     pub fn user_list_path(&self) -> Path {
-        let userpass_backend_ref = Arc::clone(&self.inner);
+        let userpass_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"users/?",
@@ -105,7 +105,7 @@ then the next renew will cause the lease to expire.
     }
 
     pub fn user_password_path(&self) -> Path {
-        let userpass_backend_ref = Arc::clone(&self.inner);
+        let userpass_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"users/(?P<username>\w[\w-]+\w)/password$",

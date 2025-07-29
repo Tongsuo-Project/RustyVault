@@ -1,6 +1,5 @@
-use std::sync::{Arc, RwLock};
+use std::{any::Any, sync::Arc};
 
-use as_any::Downcast;
 use derive_more::Deref;
 
 use crate::{
@@ -30,7 +29,7 @@ pub struct UserPassModule {
 }
 
 pub struct UserPassBackendInner {
-    pub core: Arc<RwLock<Core>>,
+    pub core: Arc<Core>,
 }
 
 #[derive(Deref)]
@@ -40,12 +39,12 @@ pub struct UserPassBackend {
 }
 
 impl UserPassBackend {
-    pub fn new(core: Arc<RwLock<Core>>) -> Self {
+    pub fn new(core: Arc<Core>) -> Self {
         Self { inner: Arc::new(UserPassBackendInner { core }) }
     }
 
     pub fn new_backend(&self) -> LogicalBackend {
-        let userpass_backend_ref = Arc::clone(&self.inner);
+        let userpass_backend_ref = self.inner.clone();
 
         let mut backend = new_logical_backend!({
             unauth_paths: ["login/*"],
@@ -63,11 +62,8 @@ impl UserPassBackend {
 }
 
 impl UserPassModule {
-    pub fn new(core: &Core) -> Self {
-        Self {
-            name: "userpass".to_string(),
-            backend: Arc::new(UserPassBackend::new(Arc::clone(core.self_ref.as_ref().unwrap()))),
-        }
+    pub fn new(core: Arc<Core>) -> Self {
+        Self { name: "userpass".to_string(), backend: Arc::new(UserPassBackend::new(core)) }
     }
 }
 
@@ -76,21 +72,20 @@ impl Module for UserPassModule {
         self.name.clone()
     }
 
-    fn setup(&mut self, core: &Core) -> Result<(), RvError> {
-        let userpass = Arc::clone(&self.backend);
-        let userpass_backend_new_func = move |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
+    }
+
+    fn setup(&self, core: &Core) -> Result<(), RvError> {
+        let userpass = self.backend.clone();
+        let userpass_backend_new_func = move |_c: Arc<Core>| -> Result<Arc<dyn Backend>, RvError> {
             let mut userpass_backend = userpass.new_backend();
             userpass_backend.init()?;
             Ok(Arc::new(userpass_backend))
         };
 
-        if let Some(module) = core.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                return auth_module.add_auth_backend("userpass", Arc::new(userpass_backend_new_func));
-            } else {
-                log::error!("downcast auth module failed!");
-            }
+        if let Some(auth_module) = core.module_manager.get_module::<AuthModule>("auth") {
+            return auth_module.add_auth_backend("userpass", Arc::new(userpass_backend_new_func));
         } else {
             log::error!("get auth module failed!");
         }
@@ -98,14 +93,9 @@ impl Module for UserPassModule {
         Ok(())
     }
 
-    fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
-        if let Some(module) = core.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                return auth_module.delete_auth_backend("userpass");
-            } else {
-                log::error!("downcast auth module failed!");
-            }
+    fn cleanup(&self, core: &Core) -> Result<(), RvError> {
+        if let Some(auth_module) = core.module_manager.get_module::<AuthModule>("auth") {
+            return auth_module.delete_auth_backend("userpass");
         } else {
             log::error!("get auth module failed!");
         }
@@ -124,7 +114,9 @@ mod test {
     use crate::{
         core::Core,
         logical::{Operation, Request},
-        test_utils::{init_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api},
+        test_utils::{
+            new_unseal_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api,
+        },
     };
 
     #[maybe_async::maybe_async]
@@ -183,8 +175,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_userpass_module() {
-        let (root_token, core) = init_test_rusty_vault("test_userpass_module");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_userpass_module");
 
         // mount userpass auth to path: auth/pass
         test_mount_auth_api(&core, &root_token, "userpass", "pass").await;

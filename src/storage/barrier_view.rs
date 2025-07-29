@@ -46,7 +46,7 @@ impl BarrierView {
     }
 
     pub fn new_sub_view(&self, prefix: &str) -> Self {
-        Self { barrier: Arc::clone(&self.barrier), prefix: self.expand_key(prefix) }
+        Self { barrier: self.barrier.clone(), prefix: self.expand_key(prefix) }
     }
 
     pub fn get_keys(&self) -> Result<Vec<String>, RvError> {
@@ -120,7 +120,7 @@ mod test {
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
 
-        let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+        let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(backend.clone());
 
         let init = aes_gcm_view.init(key.as_slice());
         assert!(init.is_ok());

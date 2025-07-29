@@ -5,7 +5,7 @@
 //! It's important for the developers who want to implement a new RustyVault module themselves to
 //! get the `trait Module` implemented correctly.
 
-use as_any::AsAny;
+use std::{any::Any, sync::Arc};
 
 use crate::{core::Core, errors::RvError};
 
@@ -17,18 +17,21 @@ pub mod pki;
 pub mod policy;
 pub mod system;
 
-pub trait Module: AsAny + Send + Sync {
+pub trait Module: Any + Send + Sync {
     //! Description for a trait itself.
     fn name(&self) -> String;
-    fn init(&mut self, _core: &Core) -> Result<(), RvError> {
+
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
+
+    fn init(&self, _core: &Core) -> Result<(), RvError> {
         Ok(())
     }
 
-    fn setup(&mut self, _core: &Core) -> Result<(), RvError> {
+    fn setup(&self, _core: &Core) -> Result<(), RvError> {
         Ok(())
     }
 
-    fn cleanup(&mut self, _core: &Core) -> Result<(), RvError> {
+    fn cleanup(&self, _core: &Core) -> Result<(), RvError> {
         Ok(())
     }
 }

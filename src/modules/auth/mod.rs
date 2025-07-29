@@ -2,15 +2,19 @@
 //!
 //! After a successful authentication, a client will be granted a token for further operations.
 
-use std::sync::{Arc, RwLock};
+use std::{
+    any::Any,
+    sync::{Arc, RwLock},
+};
 
+use arc_swap::ArcSwapOption;
 use lazy_static::lazy_static;
 
 use crate::{
     cli::config::MountEntryHMACLevel,
     core::{Core, LogicalBackendNewFunc},
     errors::RvError,
-    handler::Handler,
+    handler::{AuthHandler, Handler},
     logical::Backend,
     modules::Module,
     mount::{MountEntry, MountTable, MountsRouter},
@@ -45,29 +49,33 @@ lazy_static! {
 
 pub struct AuthModule {
     pub name: String,
-    pub core: Arc<RwLock<Core>>,
+    pub core: Arc<Core>,
     pub barrier: Arc<dyn SecurityBarrier>,
     pub mounts_router: Arc<MountsRouter>,
-    pub token_store: Option<Arc<TokenStore>>,
-    pub expiration: Option<Arc<ExpirationManager>>,
+    pub token_store: ArcSwapOption<TokenStore>,
+    pub expiration: ArcSwapOption<ExpirationManager>,
 }
 
 impl AuthModule {
-    pub fn new(core: &Core) -> Result<Self, RvError> {
+    pub fn new(core: Arc<Core>) -> Result<Self, RvError> {
         Ok(Self {
             name: "auth".to_string(),
-            core: Arc::clone(core.self_ref.as_ref().unwrap()),
-            barrier: Arc::clone(&core.barrier),
+            core: core.clone(),
+            barrier: core.barrier.clone(),
             mounts_router: Arc::new(MountsRouter::new(
                 Arc::new(MountTable::new(AUTH_CONFIG_PATH)),
-                Arc::clone(&core.router),
-                Arc::clone(&core.barrier),
+                core.router.clone(),
+                core.barrier.clone(),
                 AUTH_BARRIER_PREFIX,
                 AUTH_ROUTER_PREFIX,
             )),
-            token_store: None,
-            expiration: None,
+            token_store: ArcSwapOption::empty(),
+            expiration: ArcSwapOption::empty(),
         })
+    }
+
+    pub fn set_auth_handlers(&self, handlers: Arc<Vec<Arc<dyn AuthHandler>>>) {
+        self.token_store.load().as_ref().unwrap().auth_handlers.store(handlers);
     }
 
     pub fn enable_auth(&self, me: &MountEntry) -> Result<(), RvError> {
@@ -105,7 +113,7 @@ impl AuthModule {
             }
 
             let backend_new_func = self.get_auth_backend(&entry.logical_type)?;
-            let backend = backend_new_func(Arc::clone(&self.core))?;
+            let backend = backend_new_func(self.core.clone())?;
 
             entry.uuid = generate_uuid();
 
@@ -117,7 +125,7 @@ impl AuthModule {
 
             let mount_entry = Arc::new(RwLock::new(entry));
 
-            mounts_router.router.mount(backend, &path, Arc::clone(&mount_entry), view)?;
+            mounts_router.router.mount(backend, &path, mount_entry.clone(), view)?;
 
             auth_table.insert(key, mount_entry);
         }
@@ -261,7 +269,7 @@ impl AuthModule {
     }
 
     pub fn setup_auth(&self) -> Result<(), RvError> {
-        self.mounts_router.setup(&self.core)
+        self.mounts_router.setup(self.core.clone())
     }
 
     pub fn get_auth_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
@@ -306,28 +314,32 @@ impl Module for AuthModule {
         self.name.clone()
     }
 
-    fn init(&mut self, core: &Core) -> Result<(), RvError> {
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
+    }
+
+    fn init(&self, core: &Core) -> Result<(), RvError> {
         let expiration = ExpirationManager::new(core)?.wrap();
         let token_store = TokenStore::new(core, expiration.clone())?.wrap();
 
         expiration.set_token_store(&token_store)?;
 
-        self.expiration = Some(expiration.clone());
-        self.token_store = Some(token_store.clone());
+        self.expiration.store(Some(expiration.clone()));
+        self.token_store.store(Some(token_store.clone()));
 
         let ts = token_store.clone();
 
-        let token_backend_new_func = move |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
+        let token_backend_new_func = move |_c: Arc<Core>| -> Result<Arc<dyn Backend>, RvError> {
             let mut backend = token_store.new_backend();
             backend.init()?;
             Ok(Arc::new(backend))
         };
 
         self.add_auth_backend("token", Arc::new(token_backend_new_func))?;
-        self.load_auth(Some(&core.hmac_key), core.mount_entry_hmac_level)?;
+        self.load_auth(Some(&core.state.load().hmac_key), core.mount_entry_hmac_level)?;
         self.setup_auth()?;
 
-        core.mounts_monitor.as_ref().unwrap().add_mounts_router(self.mounts_router.clone());
+        core.mounts_monitor.load().as_ref().unwrap().add_mounts_router(self.mounts_router.clone());
 
         expiration.restore()?;
         expiration.start_check_expired_lease_entries();
@@ -337,9 +349,9 @@ impl Module for AuthModule {
         Ok(())
     }
 
-    fn cleanup(&mut self, core: &Core) -> Result<(), RvError> {
-        core.mounts_monitor.as_ref().unwrap().remove_mounts_router(self.mounts_router.clone());
-        core.delete_handler(self.token_store.as_ref().unwrap().clone() as Arc<dyn Handler>)?;
+    fn cleanup(&self, core: &Core) -> Result<(), RvError> {
+        core.mounts_monitor.load().as_ref().unwrap().remove_mounts_router(self.mounts_router.clone());
+        core.delete_handler(self.token_store.load().as_ref().unwrap().clone() as Arc<dyn Handler>)?;
         self.delete_auth_backend("token")?;
         self.teardown_auth()?;
         Ok(())

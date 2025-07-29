@@ -60,9 +60,9 @@ pub struct CertEntry {
 
 impl CertBackend {
     pub fn certs_path(&self) -> Path {
-        let cert_backend_ref1 = Arc::clone(&self.inner);
-        let cert_backend_ref2 = Arc::clone(&self.inner);
-        let cert_backend_ref3 = Arc::clone(&self.inner);
+        let cert_backend_ref1 = self.inner.clone();
+        let cert_backend_ref2 = self.inner.clone();
+        let cert_backend_ref3 = self.inner.clone();
 
         let mut path = new_path!({
             pattern: r"certs/(?P<name>\w[\w-]+\w)",
@@ -218,7 +218,7 @@ then the next renew will cause the lease to expire.
     }
 
     pub fn certs_list_path(&self) -> Path {
-        let cert_backend_ref = Arc::clone(&self.inner);
+        let cert_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"certs/?",

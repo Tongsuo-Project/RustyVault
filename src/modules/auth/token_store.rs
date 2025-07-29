@@ -5,10 +5,11 @@
 //! different stages of request handling, such as pre-routing and post-routing.
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock, Weak},
+    sync::{Arc, Weak},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use arc_swap::ArcSwap;
 use better_default::Default;
 use humantime::parse_duration;
 use lazy_static::lazy_static;
@@ -113,7 +114,7 @@ pub struct TokenStore {
     pub view: Option<Arc<dyn Storage + Send + Sync>>,
     pub salt: String,
     pub expiration: Arc<ExpirationManager>,
-    pub auth_handlers: Arc<RwLock<Vec<Arc<dyn AuthHandler>>>>,
+    pub auth_handlers: ArcSwap<Vec<Arc<dyn AuthHandler>>>,
 }
 
 impl TokenStore {
@@ -132,11 +133,11 @@ impl TokenStore {
 
     /// Creates a new `TokenStore` and initializes it with the necessary components.
     pub fn new(core: &Core, expiration: Arc<ExpirationManager>) -> Result<TokenStore, RvError> {
-        if core.system_view.is_none() {
+        let Some(system_view) = core.state.load().system_view.as_ref().cloned() else {
             return Err(RvError::ErrBarrierSealed);
-        }
+        };
 
-        let view = core.system_view.as_ref().unwrap().new_sub_view(TOKEN_SUB_PATH);
+        let view = system_view.new_sub_view(TOKEN_SUB_PATH);
         let salt = view.get(TOKEN_SALT_LOCATION)?;
 
         let mut token_store = TokenStore {
@@ -144,7 +145,7 @@ impl TokenStore {
             router: core.router.clone(),
             view: None,
             salt: String::new(),
-            auth_handlers: Arc::clone(&core.auth_handlers),
+            auth_handlers: ArcSwap::new(core.auth_handlers.load().clone()),
             expiration,
         };
 
@@ -748,10 +749,7 @@ impl Handler for TokenStore {
 
         req.handle_phase = HandlePhase::PreAuth;
 
-        let auth_handlers: Vec<_> = {
-            let handlers = self.auth_handlers.read()?;
-            handlers.iter().cloned().collect::<Vec<_>>()
-        };
+        let auth_handlers = self.auth_handlers.load();
 
         for auth_handler in auth_handlers.iter() {
             match auth_handler.pre_auth(req).await {
@@ -895,15 +893,14 @@ mod mod_token_store_tests {
     use crate::{
         context::Context,
         logical::{Backend, Request, Response, Secret},
-        test_utils::init_test_rusty_vault,
+        test_utils::new_unseal_test_rusty_vault,
     };
 
     macro_rules! mock_token_store {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
             println!("init_test_rusty_vault, name: {}", name);
-            let (_, core) = init_test_rusty_vault(&name);
-            let core = core.read().unwrap();
+            let (_, core, _) = new_unseal_test_rusty_vault(&name);
 
             let expiration = ExpirationManager::new(&core).unwrap().wrap();
             let token_store = TokenStore::new(&core, expiration.clone()).unwrap().wrap();

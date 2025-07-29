@@ -8,7 +8,9 @@
 //! piece of code that implements some functionality. Although usually that piece of code is
 //! organized in the form of a module of crate `rusty_vault` in Rust language concept.
 
-use std::sync::{Arc, RwLock};
+use std::{any::Any, sync::Arc};
+
+use arc_swap::ArcSwap;
 
 use crate::{
     core::Core,
@@ -17,72 +19,96 @@ use crate::{
 };
 
 pub struct ModuleManager {
-    pub modules: Vec<Arc<RwLock<Box<dyn Module>>>>,
+    pub modules: ArcSwap<Vec<Arc<dyn Module>>>,
 }
 
 impl ModuleManager {
     pub fn new() -> Self {
-        Self { modules: Vec::new() }
+        Self { modules: ArcSwap::from_pointee(Vec::new()) }
     }
 
-    pub fn set_default_modules(&mut self, core: Arc<RwLock<Core>>) -> Result<(), RvError> {
-        self.modules = vec![
-            Arc::new(RwLock::new(Box::new(KvModule::new(Arc::clone(&core))))),
-            Arc::new(RwLock::new(Box::new(SystemModule::new(core)))),
-        ];
+    pub fn set_default_modules(&self, core: Arc<Core>) -> Result<(), RvError> {
+        let modules: Vec<Arc<dyn Module>> =
+            vec![Arc::new(KvModule::new(core.clone())), Arc::new(SystemModule::new(core))];
+        self.modules.store(Arc::new(modules));
         Ok(())
     }
 
-    pub fn get_module(&self, name: &str) -> Option<Arc<RwLock<Box<dyn Module>>>> {
-        for it in &self.modules {
-            let m = it.read().unwrap();
+    #[inline]
+    pub fn get_module<T: Any + Send + Sync>(&self, name: &str) -> Option<Arc<T>> {
+        let modules = self.modules.load();
+        for m in modules.iter() {
             if m.name().as_str() == name {
-                return Some(Arc::clone(it));
+                let any_arc = m.clone().as_any_arc();
+                return Arc::downcast::<T>(any_arc).ok();
             }
         }
 
         None
     }
 
-    pub fn add_module(&mut self, module: Arc<RwLock<Box<dyn Module>>>) -> Result<(), RvError> {
-        {
-            let m = module.read()?;
-            if self.get_module(m.name().as_str()).is_some() {
+    #[inline]
+    pub fn add_module(&self, module: Arc<dyn Module>) -> Result<(), RvError> {
+        let modules = self.modules.load();
+        for m in modules.iter() {
+            if m.name().as_str() == module.name().as_str() {
                 return Err(RvError::ErrModuleConflict);
             }
         }
 
-        self.modules.push(module);
+        let old_modules = self.modules.load_full();
+        let mut modules = (*old_modules).clone();
+        modules.push(module);
+
+        let modules = Arc::new(modules);
+
+        if !Arc::ptr_eq(&self.modules.load().clone(), &old_modules) {
+            return Err(RvError::ErrModuleConflict);
+        }
+
+        self.modules.store(modules);
+
         Ok(())
     }
 
-    pub fn remove_module(&mut self, name: &str) -> Result<(), RvError> {
-        self.modules.retain(|m| m.read().unwrap().name().as_str() != name);
+    pub fn remove_module(&self, name: &str) -> Result<(), RvError> {
+        let old_modules = self.modules.load_full();
+        let mut modules = (*old_modules).clone();
+        modules.retain(|m| m.name().as_str() != name);
+
+        let modules = Arc::new(modules);
+
+        if !Arc::ptr_eq(&self.modules.load().clone(), &old_modules) {
+            return Err(RvError::ErrModuleConflict);
+        }
+
+        self.modules.store(modules);
+
         Ok(())
     }
 
     pub fn setup(&self, core: &Core) -> Result<(), RvError> {
-        for module in &self.modules {
-            let mut m = module.write()?;
-            m.setup(core)?
+        let modules = self.modules.load().clone();
+        for module in modules.iter() {
+            module.setup(core)?;
         }
 
         Ok(())
     }
 
     pub fn init(&self, core: &Core) -> Result<(), RvError> {
-        for module in &self.modules {
-            let mut m = module.write()?;
-            m.init(core)?
+        let modules = self.modules.load().clone();
+        for module in modules.iter() {
+            module.init(core)?;
         }
 
         Ok(())
     }
 
     pub fn cleanup(&self, core: &Core) -> Result<(), RvError> {
-        for module in &self.modules {
-            let mut m = module.write()?;
-            m.cleanup(core)?
+        let modules = self.modules.load().clone();
+        for module in modules.iter() {
+            module.cleanup(core)?;
         }
 
         Ok(())

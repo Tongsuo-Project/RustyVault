@@ -9,26 +9,21 @@
 
 use std::{
     ops::{Deref, DerefMut},
-    sync::{Arc, RwLock},
+    sync::{Arc, Weak},
 };
 
-use as_any::Downcast;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use go_defer::defer;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::{
-    cli::config::{Config, MountEntryHMACLevel},
+    cli::config::MountEntryHMACLevel,
     errors::RvError,
     handler::{AuthHandler, HandlePhase, Handler},
     logical::{Backend, Request, Response},
     module_manager::ModuleManager,
-    modules::{
-        auth::AuthModule,
-        credential::{approle::AppRoleModule, cert::CertModule, userpass::UserPassModule},
-        pki::PkiModule,
-        policy::PolicyModule,
-    },
+    modules::auth::AuthModule,
     mount::{
         MountTable, MountsMonitor, MountsRouter, CORE_MOUNT_CONFIG_PATH, LOGICAL_BARRIER_PREFIX, SYSTEM_BARRIER_PREFIX,
     },
@@ -36,11 +31,11 @@ use crate::{
     shamir::{ShamirSecret, SHAMIR_OVERHEAD},
     storage::{
         barrier::SecurityBarrier, barrier_aes_gcm, barrier_view::BarrierView, physical, Backend as PhysicalBackend,
-        BackendEntry as PhysicalBackendEntry, Storage,
+        BackendEntry as PhysicalBackendEntry,
     },
 };
 
-pub type LogicalBackendNewFunc = dyn Fn(Arc<RwLock<Core>>) -> Result<Arc<dyn Backend>, RvError> + Send + Sync;
+pub type LogicalBackendNewFunc = dyn Fn(Arc<Core>) -> Result<Arc<dyn Backend>, RvError> + Send + Sync;
 
 pub const SEAL_CONFIG_PATH: &str = "core/seal-config";
 
@@ -66,53 +61,60 @@ pub struct InitResult {
     pub root_token: String,
 }
 
-pub struct Core {
-    pub self_ref: Option<Arc<RwLock<Core>>>,
-    pub physical: Arc<dyn PhysicalBackend>,
-    pub barrier: Arc<dyn SecurityBarrier>,
+#[derive(Clone)]
+pub struct CoreState {
     pub system_view: Option<Arc<BarrierView>>,
-    pub handlers: RwLock<Vec<Arc<dyn Handler>>>,
-    pub auth_handlers: Arc<RwLock<Vec<Arc<dyn AuthHandler>>>>,
-    pub router: Arc<Router>,
-    pub mounts_router: Arc<MountsRouter>,
-    pub module_manager: ModuleManager,
     pub sealed: bool,
     pub unseal_key_shares: Vec<Vec<u8>>,
     pub hmac_key: Vec<u8>,
+}
+
+pub struct Core {
+    pub self_ptr: Weak<Core>,
+    pub physical: Arc<dyn PhysicalBackend>,
+    pub barrier: Arc<dyn SecurityBarrier>,
+    pub mounts_router: Arc<MountsRouter>,
+    pub router: Arc<Router>,
+    pub handlers: ArcSwap<Vec<Arc<dyn Handler>>>,
+    pub auth_handlers: ArcSwap<Vec<Arc<dyn AuthHandler>>>,
+    pub module_manager: ModuleManager,
     pub mount_entry_hmac_level: MountEntryHMACLevel,
-    pub mounts_monitor: Option<MountsMonitor>,
+    pub mounts_monitor: ArcSwapOption<MountsMonitor>,
     pub mounts_monitor_interval: u64,
+    pub state: ArcSwap<CoreState>,
+}
+
+impl Default for CoreState {
+    fn default() -> Self {
+        Self { system_view: None, sealed: true, unseal_key_shares: Vec::new(), hmac_key: Vec::new() }
+    }
 }
 
 impl Default for Core {
     fn default() -> Self {
         let backend: Arc<dyn PhysicalBackend> = Arc::new(physical::mock::MockBackend::new());
-        let barrier = Arc::new(barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend)));
-        let barrier_cloned = Arc::clone(&barrier);
+        let barrier = Arc::new(barrier_aes_gcm::AESGCMBarrier::new(backend.clone()));
         let router = Arc::new(Router::new());
 
         Core {
-            self_ref: None,
+            self_ptr: Weak::new(),
             physical: backend,
-            barrier: barrier_cloned,
-            system_view: None,
-            router: Arc::clone(&router),
+            barrier: barrier.clone(),
+            router: router.clone(),
             mounts_router: Arc::new(MountsRouter::new(
                 Arc::new(MountTable::new(CORE_MOUNT_CONFIG_PATH)),
-                Arc::clone(&router),
-                barrier,
+                router.clone(),
+                barrier.clone(),
                 LOGICAL_BARRIER_PREFIX,
                 "",
             )),
-            handlers: RwLock::new(vec![router]),
-            auth_handlers: Arc::new(RwLock::new(Vec::new())),
+            handlers: ArcSwap::from_pointee(vec![router]),
+            auth_handlers: ArcSwap::from_pointee(Vec::new()),
             module_manager: ModuleManager::new(),
-            sealed: true,
-            unseal_key_shares: Vec::new(),
-            hmac_key: Vec::new(),
             mount_entry_hmac_level: MountEntryHMACLevel::None,
-            mounts_monitor: None,
+            mounts_monitor: ArcSwapOption::empty(),
             mounts_monitor_interval: 5,
+            state: ArcSwap::from_pointee(CoreState::default()),
         }
     }
 }
@@ -120,83 +122,42 @@ impl Default for Core {
 #[maybe_async::maybe_async]
 impl Core {
     pub fn new(backend: Arc<dyn PhysicalBackend>) -> Self {
-        let barrier = Arc::new(barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend)));
-        let barrier_cloned = Arc::clone(&barrier);
+        let barrier = Arc::new(barrier_aes_gcm::AESGCMBarrier::new(backend.clone()));
         let router = Arc::new(Router::new());
 
         Core {
+            handlers: ArcSwap::from_pointee(vec![router.clone()]),
             physical: backend,
-            barrier: barrier_cloned,
-            router: Arc::clone(&router),
+            barrier: barrier.clone(),
+            router: router.clone(),
             mounts_router: Arc::new(MountsRouter::new(
                 Arc::new(MountTable::new(CORE_MOUNT_CONFIG_PATH)),
-                Arc::clone(&router),
+                router,
                 barrier,
                 LOGICAL_BARRIER_PREFIX,
                 "",
             )),
-            handlers: RwLock::new(vec![router]),
             ..Default::default()
         }
     }
 
-    pub fn config(&mut self, core: Arc<RwLock<Core>>, config: Option<&Config>) -> Result<(), RvError> {
-        if let Some(conf) = config {
-            self.mount_entry_hmac_level = conf.mount_entry_hmac_level;
-            self.mounts_monitor_interval = conf.mounts_monitor_interval;
+    pub fn wrap(self) -> Arc<Self> {
+        let mut wrap_self = Arc::new(self);
+        let weak_self = Arc::downgrade(&wrap_self);
+        unsafe {
+            let ptr_self = Arc::into_raw(wrap_self) as *mut Self;
+            (*ptr_self).self_ptr = weak_self;
+            wrap_self = Arc::from_raw(ptr_self);
         }
 
-        self.module_manager.set_default_modules(Arc::clone(&core))?;
-        self.self_ref = Some(Arc::clone(&core));
-
-        // add auth_module
-        let auth_module = AuthModule::new(self)?;
-        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(auth_module))))?;
-
-        // add policy_module
-        let policy_module = PolicyModule::new(self);
-        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(policy_module))))?;
-
-        // add pki_module
-        let pki_module = PkiModule::new(self);
-        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(pki_module))))?;
-
-        // add credential module: userpass
-        let userpass_module = UserPassModule::new(self);
-        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(userpass_module))))?;
-
-        // add credential module: approle
-        let approle_module = AppRoleModule::new(self);
-        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(approle_module))))?;
-
-        // add credential module: cert
-        let cert_module = CertModule::new(self);
-        self.module_manager.add_module(Arc::new(RwLock::new(Box::new(cert_module))))?;
-
-        self.mounts_monitor = Some(MountsMonitor::new(core, self.mounts_monitor_interval));
-
-        let handlers = { self.handlers.read()?.clone() };
-        for handler in handlers.iter() {
-            match handler.post_config(self, config) {
-                Ok(_) => {
-                    continue;
-                }
-                Err(error) => {
-                    if error != RvError::ErrHandlerDefault {
-                        return Err(error);
-                    }
-                }
-            }
-        }
-
-        Ok(())
+        wrap_self
     }
 
     pub fn inited(&self) -> Result<bool, RvError> {
         self.barrier.inited()
     }
 
-    pub fn init(&mut self, seal_config: &SealConfig) -> Result<InitResult, RvError> {
+    pub fn init(&self, seal_config: &SealConfig) -> Result<InitResult, RvError> {
         let inited = self.inited()?;
         if inited {
             return Err(RvError::ErrBarrierAlreadyInit);
@@ -214,7 +175,7 @@ impl Core {
         };
         self.physical.put(&pe)?;
 
-        let barrier = Arc::clone(&self.barrier);
+        let barrier = &self.barrier;
         // Generate a master key
         // The newly generated master key will be zeroized on drop.
         let master_key = barrier.generate_key()?;
@@ -244,23 +205,27 @@ impl Core {
         // Unseal the barrier
         barrier.unseal(master_key.deref().as_slice())?;
 
+        let state_old = self.state.load_full();
+        let mut state = (*self.state.load_full()).clone();
+
+        state.hmac_key = barrier.derive_hmac_key()?;
+        state.system_view = Some(Arc::new(BarrierView::new(barrier.clone(), SYSTEM_BARRIER_PREFIX)));
+        state.sealed = false;
+        self.state.store(Arc::new(state));
+
         defer! (
             // Ensure the barrier is re-sealed
             let _ = barrier.seal();
+            self.state.store(state_old);
         );
 
         // Perform initial setup
         self.post_unseal()?;
 
         // Generate a new root token
-        if let Some(module) = self.module_manager.get_module("auth") {
-            let auth_mod = module.read()?;
-            if let Some(auth_module) = auth_mod.as_ref().downcast_ref::<AuthModule>() {
-                let te = auth_module.token_store.as_ref().unwrap().root_token()?;
-                init_result.root_token = te.id;
-            } else {
-                log::error!("downcast auth module failed!");
-            }
+        if let Some(auth_module) = self.module_manager.get_module::<AuthModule>("auth") {
+            let te = auth_module.token_store.load().as_ref().unwrap().root_token()?;
+            init_result.root_token = te.id;
         } else {
             log::error!("get auth module failed!");
         }
@@ -272,11 +237,7 @@ impl Core {
     }
 
     pub fn get_system_view(&self) -> Option<Arc<BarrierView>> {
-        self.system_view.clone()
-    }
-
-    pub fn get_system_storage(&self) -> &dyn Storage {
-        self.system_view.as_ref().unwrap().as_storage()
+        self.state.load().system_view.clone()
     }
 
     pub fn get_logical_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
@@ -292,34 +253,54 @@ impl Core {
     }
 
     pub fn add_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
-        let mut handlers = self.handlers.write()?;
+        let handlers = self.handlers.load();
         if handlers.iter().any(|h| h.name() == handler.name()) {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
+        let mut handlers = (*self.handlers.load_full()).clone();
+
         handlers.push(handler);
+        self.handlers.store(Arc::new(handlers));
         Ok(())
     }
 
     pub fn delete_handler(&self, handler: Arc<dyn Handler>) -> Result<(), RvError> {
-        let mut handlers = self.handlers.write()?;
+        let mut handlers = (*self.handlers.load_full()).clone();
         handlers.retain(|h| h.name() != handler.name());
+        self.handlers.store(Arc::new(handlers));
         Ok(())
     }
 
     pub fn add_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
-        let mut auth_handlers = self.auth_handlers.write()?;
+        let auth_handlers = self.auth_handlers.load();
         if auth_handlers.iter().any(|h| h.name() == auth_handler.name()) {
             return Err(RvError::ErrCoreHandlerExist);
         }
 
+        let mut auth_handlers = (*self.auth_handlers.load_full()).clone();
+
         auth_handlers.push(auth_handler);
+        self.auth_handlers.store(Arc::new(auth_handlers));
+
+        // update auth_module
+        if let Some(auth_module) = self.module_manager.get_module::<AuthModule>("auth") {
+            auth_module.set_auth_handlers(self.auth_handlers.load().clone());
+        }
+
         Ok(())
     }
 
     pub fn delete_auth_handler(&self, auth_handler: Arc<dyn AuthHandler>) -> Result<(), RvError> {
-        let mut auth_handlers = self.auth_handlers.write()?;
+        let mut auth_handlers = (*self.auth_handlers.load_full()).clone();
         auth_handlers.retain(|h| h.name() != auth_handler.name());
+        self.auth_handlers.store(Arc::new(auth_handlers));
+
+        // update auth_module
+        if let Some(auth_module) = self.module_manager.get_module::<AuthModule>("auth") {
+            auth_module.set_auth_handlers(self.auth_handlers.load().clone());
+        }
+
         Ok(())
     }
 
@@ -336,22 +317,20 @@ impl Core {
     }
 
     pub fn sealed(&self) -> bool {
-        self.sealed
+        self.state.load().sealed
     }
 
     pub fn unseal_progress(&self) -> usize {
-        self.unseal_key_shares.len()
+        self.state.load().unseal_key_shares.len()
     }
 
-    pub fn unseal(&mut self, key: &[u8]) -> Result<bool, RvError> {
-        let barrier = Arc::clone(&self.barrier);
-
-        let inited = barrier.inited()?;
+    pub fn unseal(&self, key: &[u8]) -> Result<bool, RvError> {
+        let inited = self.barrier.inited()?;
         if !inited {
             return Err(RvError::ErrBarrierNotInit);
         }
 
-        let sealed = barrier.sealed()?;
+        let sealed = self.barrier.sealed()?;
         if !sealed {
             return Err(RvError::ErrBarrierUnsealed);
         }
@@ -362,84 +341,102 @@ impl Core {
             return Err(RvError::ErrBarrierKeyInvalid);
         }
 
+        let state_old = self.state.load_full();
+        let mut state = (*self.state.load_full()).clone();
         let config = self.seal_config()?;
-        if self.unseal_key_shares.iter().any(|v| *v == key) {
+        if state.unseal_key_shares.iter().any(|v| *v == key) {
             return Ok(false);
         }
 
-        self.unseal_key_shares.push(key.to_vec());
-        if self.unseal_key_shares.len() < config.secret_threshold as usize {
+        state.unseal_key_shares.push(key.to_vec());
+        if state.unseal_key_shares.len() < config.secret_threshold as usize {
+            self.state.store(Arc::new(state));
             return Ok(false);
         }
 
         let master_key: Vec<u8>;
         if config.secret_threshold == 1 {
-            master_key = self.unseal_key_shares[0].clone();
-            self.unseal_key_shares.clear();
-        } else if let Some(res) = ShamirSecret::combine(self.unseal_key_shares.clone()) {
+            master_key = state.unseal_key_shares[0].clone();
+            state.unseal_key_shares.clear();
+        } else if let Some(res) = ShamirSecret::combine(state.unseal_key_shares.clone()) {
             master_key = res;
-            self.unseal_key_shares.clear();
+            state.unseal_key_shares.clear();
         } else {
             //TODO
-            self.unseal_key_shares.clear();
+            state.unseal_key_shares.clear();
+            self.state.store(Arc::new(state));
             return Err(RvError::ErrBarrierKeyInvalid);
         }
 
         log::debug!("unseal, recover master_key: {}", hex::encode(&master_key));
         // Unseal the barrier
-        barrier.unseal(master_key.as_slice())?;
+        self.barrier.unseal(master_key.as_slice())?;
+
+        state.hmac_key = self.barrier.derive_hmac_key()?;
+        state.system_view = Some(Arc::new(BarrierView::new(self.barrier.clone(), SYSTEM_BARRIER_PREFIX)));
+        state.sealed = false;
+
+        self.state.store(Arc::new(state));
 
         // Perform initial setup
-        self.post_unseal()?;
-
-        self.sealed = false;
+        if let Err(e) = self.post_unseal() {
+            self.state.store(state_old);
+            return Err(e);
+        }
 
         Ok(true)
     }
 
-    pub fn seal(&mut self, _token: &str) -> Result<(), RvError> {
-        let barrier = Arc::clone(&self.barrier);
-
-        let inited = barrier.inited()?;
+    pub fn seal(&self, _token: &str) -> Result<(), RvError> {
+        let inited = self.barrier.inited()?;
         if !inited {
             return Err(RvError::ErrBarrierNotInit);
         }
 
-        let sealed = barrier.sealed()?;
+        let sealed = self.barrier.sealed()?;
         if sealed {
             return Err(RvError::ErrBarrierSealed);
         }
+
         self.pre_seal()?;
-        self.sealed = true;
-        barrier.seal()
+
+        let mut state = (*self.state.load_full()).clone();
+        state.sealed = true;
+        state.system_view = None;
+        state.unseal_key_shares.clear();
+        state.hmac_key.clear();
+        self.state.store(Arc::new(state));
+
+        self.barrier.seal()
     }
 
-    fn post_unseal(&mut self) -> Result<(), RvError> {
+    fn post_unseal(&self) -> Result<(), RvError> {
         self.module_manager.setup(self)?;
 
         // Perform initial setup
-        self.hmac_key = self.barrier.derive_hmac_key()?;
         self.mounts_router.load_or_default(
             self.barrier.as_storage(),
-            Some(&self.hmac_key),
+            Some(&self.state.load().hmac_key),
             self.mount_entry_hmac_level,
         )?;
 
-        self.mounts_router.setup(self.self_ref.as_ref().unwrap())?;
-
-        self.system_view = Some(Arc::new(BarrierView::new(self.barrier.clone(), SYSTEM_BARRIER_PREFIX)));
+        self.mounts_router.setup(self.self_ptr.upgrade().unwrap().clone())?;
 
         self.module_manager.init(self)?;
 
-        self.mounts_monitor.as_ref().unwrap().add_mounts_router(self.mounts_router.clone());
-        self.mounts_monitor.as_mut().unwrap().start();
+        if let Some(mounts_monitor) = self.mounts_monitor.load().as_ref() {
+            mounts_monitor.add_mounts_router(self.mounts_router.clone());
+            mounts_monitor.start();
+        }
 
         Ok(())
     }
 
-    fn pre_seal(&mut self) -> Result<(), RvError> {
-        self.mounts_monitor.as_ref().unwrap().remove_mounts_router(self.mounts_router.clone());
-        self.mounts_monitor.as_mut().unwrap().stop();
+    fn pre_seal(&self) -> Result<(), RvError> {
+        if let Some(mounts_monitor) = self.mounts_monitor.load().as_ref() {
+            mounts_monitor.remove_mounts_router(self.mounts_router.clone());
+            mounts_monitor.stop();
+        }
         self.module_manager.cleanup(self)?;
         self.unload_mounts()?;
         Ok(())
@@ -449,9 +446,9 @@ impl Core {
     pub async fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut resp = None;
         let mut err: Option<RvError> = None;
-        let handlers = self.handlers.read()?;
+        let handlers = self.handlers.load();
 
-        if self.sealed {
+        if self.state.load().sealed {
             return Err(RvError::ErrBarrierSealed);
         }
 
@@ -579,10 +576,10 @@ impl Core {
 
 #[cfg(test)]
 mod test {
-    use crate::test_utils::init_test_rusty_vault;
+    use crate::test_utils::new_unseal_test_rusty_vault;
 
     #[test]
     fn test_core_init() {
-        let _ = init_test_rusty_vault("test_core_init");
+        let _ = new_unseal_test_rusty_vault("test_core_init");
     }
 }

@@ -133,7 +133,7 @@ mod test {
 
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());
-        let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+        let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(backend);
 
         let init = aes_gcm_view.init(key.as_slice());
         assert!(init.is_ok());

@@ -127,7 +127,7 @@ impl Router {
         let root = self.root.read()?;
         if let Some(entry) = root.get_ancestor(path) {
             let router_entry = entry.value().unwrap();
-            Ok(Some(Arc::clone(&router_entry.mount_entry)))
+            Ok(Some(router_entry.mount_entry.clone()))
         } else {
             Ok(None)
         }
@@ -137,7 +137,7 @@ impl Router {
         let root = self.root.read()?;
         if let Some(entry) = root.get_ancestor(path) {
             let router_entry = entry.value().unwrap();
-            Ok(Some(Arc::clone(&router_entry.view)))
+            Ok(Some(router_entry.view.clone()))
         } else {
             Ok(None)
         }

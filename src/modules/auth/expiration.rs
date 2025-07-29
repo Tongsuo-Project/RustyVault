@@ -133,16 +133,16 @@ impl LeaseEntry {
 impl ExpirationManager {
     /// Creates a new ExpirationManager instance.
     pub fn new(core: &Core) -> Result<ExpirationManager, RvError> {
-        if core.system_view.is_none() {
+        let Some(system_view) = core.state.load().system_view.as_ref().cloned() else {
             return Err(RvError::ErrBarrierSealed);
-        }
+        };
 
-        let id_view = core.system_view.as_ref().unwrap().new_sub_view(LEASE_VIEW_PREFIX);
-        let token_view = core.system_view.as_ref().unwrap().new_sub_view(TOKEN_VIEW_PREFIX);
+        let id_view = system_view.new_sub_view(LEASE_VIEW_PREFIX);
+        let token_view = system_view.new_sub_view(TOKEN_VIEW_PREFIX);
 
         let expiration = ExpirationManager {
             self_ptr: Weak::new(),
-            router: Arc::clone(&core.router),
+            router: core.router.clone(),
             id_view: Arc::new(id_view),
             token_view: Arc::new(token_view),
             token_store: RwLock::new(Weak::new()),
@@ -432,13 +432,13 @@ impl ExpirationManager {
 
     /// Starts a background task to check for and handle expired lease entries.
     pub fn start_check_expired_lease_entries(&self) {
-        let queue = Arc::clone(&self.queue);
-        let expiration = Arc::clone(&self.self_ptr.upgrade().unwrap());
+        let queue = self.queue.clone();
+        let expiration = self.self_ptr.upgrade().unwrap().clone();
 
         let ticker = tick(Duration::from_millis(200));
         thread::spawn(move || {
-            let queue_cloned = Arc::clone(&queue);
-            let expiration_cloned = Arc::clone(&expiration);
+            let queue_cloned = queue;
+            let expiration_cloned = expiration;
             loop {
                 select! {
                     recv(ticker) -> _ => {
@@ -687,19 +687,17 @@ mod mod_expiration_tests {
         mount::{MountEntry, MOUNT_TABLE_TYPE},
         new_fields, new_fields_internal, new_logical_backend, new_logical_backend_internal, new_path,
         new_path_internal, new_secret, new_secret_internal,
-        test_utils::{init_test_rusty_vault, NoopBackend},
+        test_utils::{new_unseal_test_rusty_vault, NoopBackend},
     };
 
     macro_rules! mock_expiration_manager {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
             println!("init_test_rusty_vault, name: {}", name);
-            let (_, core) = init_test_rusty_vault(&name);
-            let core_cloned = core.clone();
-            let core_locked = core_cloned.read().unwrap();
+            let (_, core, _) = new_unseal_test_rusty_vault(&name);
 
-            let expiration = ExpirationManager::new(&core_locked).unwrap().wrap();
-            let token_store = TokenStore::new(&core_locked, expiration.clone()).unwrap().wrap();
+            let expiration = ExpirationManager::new(&core).unwrap().wrap();
+            let token_store = TokenStore::new(&core, expiration.clone()).unwrap().wrap();
 
             expiration.set_token_store(&token_store).unwrap();
             expiration.restore().unwrap();
@@ -719,7 +717,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_secret_expiration() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let new_now: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
         let new_now_cloned = new_now.clone();
         let renew_flag = Arc::new(Mutex::new(false));
@@ -805,7 +802,7 @@ mod mod_expiration_tests {
 
         core.add_logical_backend(
             "test",
-            Arc::new(move |_c: Arc<RwLock<Core>>| -> Result<Arc<dyn Backend>, RvError> {
+            Arc::new(move |_c: Arc<Core>| -> Result<Arc<dyn Backend>, RvError> {
                 let mut test_backend = new_backend_fn();
                 test_backend.init()?;
                 Ok(Arc::new(test_backend))
@@ -1082,7 +1079,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_revoke() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let noop = Arc::new(NoopBackend::default());
         let me_uuid = generate_uuid();
@@ -1132,7 +1128,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_revoke_on_expire() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let noop = Arc::new(NoopBackend::default());
         let me_uuid = generate_uuid();
@@ -1181,7 +1176,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_revoke_prefix() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let noop = Arc::new(NoopBackend::default());
         let me_uuid = generate_uuid();
@@ -1244,7 +1238,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_revoke_by_token() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let noop = Arc::new(NoopBackend::default());
         let me_uuid = generate_uuid();
@@ -1374,7 +1367,6 @@ mod mod_expiration_tests {
         let (core, expiration, token_store) = mock_expiration_manager!();
         let root = token_store.root_token().unwrap();
 
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let noop = Arc::new(NoopBackend {
             response: Some(Response {
@@ -1469,7 +1461,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_renew() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let me_uuid = generate_uuid();
         let noop = Arc::new(NoopBackend {
@@ -1538,7 +1529,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_renew_not_renewable() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let me_uuid = generate_uuid();
         let noop = Arc::new(NoopBackend::default());
@@ -1589,7 +1579,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_renew_revoke_on_expire() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let me_uuid = generate_uuid();
         let noop = Arc::new(NoopBackend {
@@ -1657,7 +1646,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_renew_final_second() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let me_uuid = generate_uuid();
         let noop = Arc::new(NoopBackend {
@@ -1728,7 +1716,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_renew_final_second_lease() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let me_uuid = generate_uuid();
         let noop = Arc::new(NoopBackend::default());
@@ -1784,7 +1771,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_revoke_entry() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let noop = Arc::new(NoopBackend::default());
         let me_uuid = generate_uuid();
@@ -1873,7 +1859,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_renew_entry() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "logical/");
         let me_uuid = generate_uuid();
         let noop = Arc::new(NoopBackend {
@@ -1947,7 +1932,6 @@ mod mod_expiration_tests {
     #[test]
     fn test_expiration_renew_auth_entry() {
         let (core, expiration, _token_store) = mock_expiration_manager!();
-        let core = core.read().unwrap();
         let view = BarrierView::new(core.barrier.clone(), "auth/");
         let me_uuid = generate_uuid();
         let noop = Arc::new(NoopBackend {

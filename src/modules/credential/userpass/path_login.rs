@@ -11,7 +11,7 @@ use crate::{
 
 impl UserPassBackend {
     pub fn login_path(&self) -> Path {
-        let userpass_backend_ref = Arc::clone(&self.inner);
+        let userpass_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"login/(?P<username>\w[\w-]+\w)",

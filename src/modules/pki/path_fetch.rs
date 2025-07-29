@@ -15,7 +15,7 @@ use crate::{
 
 impl PkiBackend {
     pub fn fetch_ca_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "ca(/pem)?",
@@ -32,7 +32,7 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
     }
 
     pub fn fetch_crl_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "crl(/pem)?",
@@ -49,7 +49,7 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
     }
 
     pub fn fetch_cert_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"cert/(?P<serial>[0-9A-Fa-f-:]+)",
@@ -72,7 +72,7 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
     }
 
     pub fn fetch_cert_crl_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "cert/crl",

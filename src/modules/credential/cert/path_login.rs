@@ -53,7 +53,7 @@ pub struct ParsedCert {
 
 impl CertBackend {
     pub fn login_path(&self) -> Path {
-        let cert_backend_ref1 = Arc::clone(&self.inner);
+        let cert_backend_ref1 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"login",

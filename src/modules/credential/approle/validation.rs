@@ -243,7 +243,7 @@ impl AppRoleBackendInner {
             return Err(RvError::ErrResponse("missing secret id accessor".to_string()));
         }
 
-        let salt = self.salt.read()?;
+        let salt = self.salt.load();
         if salt.is_none() {
             return Err(RvError::ErrResponse("approle module not initialized".to_string()));
         }
@@ -283,7 +283,7 @@ impl AppRoleBackendInner {
     ) -> Result<(), RvError> {
         entry.secret_id_accessor = utils::generate_uuid();
 
-        let salt = self.salt.read()?;
+        let salt = self.salt.load();
         if salt.is_none() {
             return Err(RvError::ErrResponse("approle module not initialized".to_string()));
         }
@@ -315,7 +315,7 @@ impl AppRoleBackendInner {
         secret_id_accessor: &str,
         role_secret_id_prefix: &str,
     ) -> Result<(), RvError> {
-        let salt = self.salt.read()?;
+        let salt = self.salt.load();
         if salt.is_none() {
             return Err(RvError::ErrResponse("approle module not initialized".to_string()));
         }

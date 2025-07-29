@@ -10,8 +10,8 @@ use crate::{
 
 impl PkiBackend {
     pub fn config_crl_path(&self) -> Path {
-        let pki_backend_ref1 = Arc::clone(&self.inner);
-        let pki_backend_ref2 = Arc::clone(&self.inner);
+        let pki_backend_ref1 = self.inner.clone();
+        let pki_backend_ref2 = self.inner.clone();
 
         let path = new_path!({
             pattern: "config/crl",
