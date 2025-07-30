@@ -88,6 +88,7 @@ pub struct RustyVault {
     pub token: String,
 }
 
+#[maybe_async::maybe_async]
 impl RustyVault {
     pub fn new(backend: Arc<dyn Backend>, config: Option<&Config>) -> Result<Self, RvError> {
         let mut core = Core::new(backend);
