@@ -50,7 +50,7 @@ impl CommandExecutor for Disable {
                     std::process::exit(2);
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
 
         Ok(())

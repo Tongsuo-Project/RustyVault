@@ -38,7 +38,7 @@ impl CommandExecutor for Seal {
         match self.main() {
             Ok(_) => EXIT_CODE_OK,
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 EXIT_CODE_INSUFFICIENT_PARAMS
             }
         }
@@ -53,7 +53,7 @@ impl CommandExecutor for Seal {
             Ok(_) => {
                 println!("Success! RustyVault is sealed.");
             }
-            Err(e) => eprintln!("Error sealing: {}", e),
+            Err(e) => eprintln!("Error sealing: {e}"),
         }
         Ok(())
     }

@@ -114,7 +114,7 @@ impl Backend for FileBackend {
 
     fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
         let (path, key) = self.path_key(lock_name);
-        let file_path = path.join(format!("{}.lock", key));
+        let file_path = path.join(format!("{key}.lock"));
         loop {
             if let Ok(lock) = Lockfile::create_with_parents(&file_path) {
                 return Ok(Box::new(lock));

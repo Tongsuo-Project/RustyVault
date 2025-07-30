@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    env, fs,
-    sync::{Arc, RwLock},
-};
+use std::{collections::HashMap, env, fs};
 
 use go_defer::defer;
 use rusty_vault::{
@@ -69,9 +65,7 @@ async fn test_list_api(core: &Core, token: &str, path: &str, is_ok: bool, keys_l
 }
 
 #[maybe_async::maybe_async]
-async fn test_default_secret(core: Arc<RwLock<Core>>, token: &str) {
-    let core = core.read().unwrap();
-
+async fn test_default_secret(core: &Core, token: &str) {
     // create secret
     let kv_data = json!({
         "foo": "bar",
@@ -80,21 +74,19 @@ async fn test_default_secret(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "secret/goo", true, Some(kv_data.clone())).await;
+    test_write_api(core, token, "secret/goo", true, Some(kv_data.clone())).await;
 
     // get secret
-    test_read_api(&core, token, "secret/goo", true, Some(kv_data)).await;
-    test_read_api(&core, token, "secret/foo", true, None).await;
-    test_read_api(&core, token, "secret1/foo", false, None).await;
+    test_read_api(core, token, "secret/goo", true, Some(kv_data)).await;
+    test_read_api(core, token, "secret/foo", true, None).await;
+    test_read_api(core, token, "secret1/foo", false, None).await;
 
     // list secret
-    test_list_api(&core, token, "secret/", true, 1).await;
+    test_list_api(core, token, "secret/", true, 1).await;
 }
 
 #[maybe_async::maybe_async]
-async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
-    let core = core.read().unwrap();
-
+async fn test_kv_logical_backend(core: &Core, token: &str) {
     // mount kv backend to path: kv/
     let mount_data = json!({
         "type": "kv",
@@ -102,7 +94,7 @@ async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/mounts/kv/", true, Some(mount_data)).await;
+    test_write_api(core, token, "sys/mounts/kv/", true, Some(mount_data)).await;
 
     let kv_data = json!({
         "foo": "bar",
@@ -112,18 +104,18 @@ async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     .unwrap()
     .clone();
 
-    test_read_api(&core, token, "secret/foo", true, None).await;
+    test_read_api(core, token, "secret/foo", true, None).await;
 
     // create secret
-    test_write_api(&core, token, "kv/secret", true, Some(kv_data.clone())).await;
-    test_write_api(&core, token, "kv1/secret", false, Some(kv_data.clone())).await;
+    test_write_api(core, token, "kv/secret", true, Some(kv_data.clone())).await;
+    test_write_api(core, token, "kv1/secret", false, Some(kv_data.clone())).await;
 
     // get secret
-    test_read_api(&core, token, "kv/secret", true, Some(kv_data)).await;
-    test_read_api(&core, token, "kv/secret1", true, None).await;
+    test_read_api(core, token, "kv/secret", true, Some(kv_data)).await;
+    test_read_api(core, token, "kv/secret1", true, None).await;
 
     // list secret
-    test_list_api(&core, token, "kv/", true, 1).await;
+    test_list_api(core, token, "kv/", true, 1).await;
 
     // update secret
     let kv_data = json!({
@@ -132,10 +124,10 @@ async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "kv/secret", true, Some(kv_data.clone())).await;
+    test_write_api(core, token, "kv/secret", true, Some(kv_data.clone())).await;
 
     // check whether the secret is updated successfully
-    test_read_api(&core, token, "kv/secret", true, Some(kv_data)).await;
+    test_read_api(core, token, "kv/secret", true, Some(kv_data)).await;
 
     // add secret
     let kv_data = json!({
@@ -144,17 +136,17 @@ async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "kv/foo", true, Some(kv_data.clone())).await;
+    test_write_api(core, token, "kv/foo", true, Some(kv_data.clone())).await;
 
     // list secret
-    test_list_api(&core, token, "kv/", true, 2).await;
+    test_list_api(core, token, "kv/", true, 2).await;
 
     // delete secret
-    test_delete_api(&core, token, "kv/secret", true).await;
-    test_delete_api(&core, token, "kv/secret11", true).await;
+    test_delete_api(core, token, "kv/secret", true).await;
+    test_delete_api(core, token, "kv/secret11", true).await;
 
     // list secret again
-    test_list_api(&core, token, "kv/", true, 1).await;
+    test_list_api(core, token, "kv/", true, 1).await;
 
     // remount kv backend to path: kv/
     let remount_data = json!({
@@ -164,22 +156,20 @@ async fn test_kv_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/remount", true, Some(remount_data)).await;
+    test_write_api(core, token, "sys/remount", true, Some(remount_data)).await;
 
     // get secret from new mount path
-    test_read_api(&core, token, "vk/foo", true, Some(kv_data)).await;
+    test_read_api(core, token, "vk/foo", true, Some(kv_data)).await;
 
     // unmount
-    test_delete_api(&core, token, "sys/mounts/vk/", true).await;
+    test_delete_api(core, token, "sys/mounts/vk/", true).await;
 
     // Getting the secret should fail
-    test_read_api(&core, token, "vk/foo", false, None).await;
+    test_read_api(core, token, "vk/foo", false, None).await;
 }
 
 #[maybe_async::maybe_async]
-async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
-    let core = core.read().unwrap();
-
+async fn test_sys_mount_feature(core: &Core, token: &str) {
     // test api: "mounts"
     let mut req = Request::new("sys/mounts");
     req.operation = Operation::Read;
@@ -199,10 +189,10 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/mounts/kv/", true, Some(mount_data.clone())).await;
+    test_write_api(core, token, "sys/mounts/kv/", true, Some(mount_data.clone())).await;
 
     // test api: "mounts/kv" with path conflict
-    test_write_api(&core, token, "sys/mounts/kv/", false, Some(mount_data)).await;
+    test_write_api(core, token, "sys/mounts/kv/", false, Some(mount_data)).await;
 
     // test api: "mounts/nope" with valid type
     let mount_data = json!({
@@ -211,7 +201,7 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/mounts/nope/", false, Some(mount_data)).await;
+    test_write_api(core, token, "sys/mounts/nope/", false, Some(mount_data)).await;
 
     // test api: "remount" with valid path
     let remount_data = json!({
@@ -221,7 +211,7 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/remount", true, Some(remount_data)).await;
+    test_write_api(core, token, "sys/remount", true, Some(remount_data)).await;
 
     // test api: "remount" with invalid path
     let remount_data = json!({
@@ -231,7 +221,7 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/remount", false, Some(remount_data)).await;
+    test_write_api(core, token, "sys/remount", false, Some(remount_data)).await;
 
     // test api: "remount" with dis-path conflict
     let remount_data = json!({
@@ -241,7 +231,7 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/remount", false, Some(remount_data)).await;
+    test_write_api(core, token, "sys/remount", false, Some(remount_data)).await;
 
     // test api: "remount" with protect path
     let remount_data = json!({
@@ -251,7 +241,7 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/remount", false, Some(remount_data)).await;
+    test_write_api(core, token, "sys/remount", false, Some(remount_data)).await;
 
     // test api: "remount" with default src-path
     let remount_data = json!({
@@ -261,13 +251,11 @@ async fn test_sys_mount_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/remount", true, Some(remount_data)).await;
+    test_write_api(core, token, "sys/remount", true, Some(remount_data)).await;
 }
 
 #[maybe_async::maybe_async]
-async fn test_sys_raw_api_feature(core: Arc<RwLock<Core>>, token: &str) {
-    let core = core.read().unwrap();
-
+async fn test_sys_raw_api_feature(core: &Core, token: &str) {
     // test raw read
     let mut req = Request::new("sys/raw/core/mounts");
     req.operation = Operation::Read;
@@ -287,7 +275,7 @@ async fn test_sys_raw_api_feature(core: Arc<RwLock<Core>>, token: &str) {
     .as_object()
     .unwrap()
     .clone();
-    test_write_api(&core, token, "sys/raw/test", true, Some(test_data.clone())).await;
+    test_write_api(core, token, "sys/raw/test", true, Some(test_data.clone())).await;
 
     // test raw read again
     let mut req = Request::new("sys/raw/test");
@@ -301,20 +289,22 @@ async fn test_sys_raw_api_feature(core: Arc<RwLock<Core>>, token: &str) {
     assert_eq!(data.as_ref().unwrap()["value"].as_str().unwrap(), test_data["value"].as_str().unwrap());
 
     // test raw delete
-    test_delete_api(&core, token, "sys/raw/test", true).await;
+    test_delete_api(core, token, "sys/raw/test", true).await;
 
     // test raw read again
-    test_read_api(&core, token, "sys/raw/test", true, None).await;
+    test_read_api(core, token, "sys/raw/test", true, None).await;
 }
 
 #[maybe_async::maybe_async]
-async fn test_sys_logical_backend(core: Arc<RwLock<Core>>, token: &str) {
-    test_sys_mount_feature(Arc::clone(&core), token).await;
+async fn test_sys_logical_backend(core: &Core, token: &str) {
+    test_sys_mount_feature(core, token).await;
     test_sys_raw_api_feature(core, token).await;
 }
 
 #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
 async fn test_default_logical() {
+    use rusty_vault::RustyVault;
+
     let dir = env::temp_dir().join("rusty_vault_core_init");
     let _ = fs::remove_dir_all(&dir);
     assert!(fs::create_dir(&dir).is_ok());
@@ -330,36 +320,32 @@ async fn test_default_logical() {
 
     let backend = storage::new_backend("file", &conf).unwrap();
 
-    let c = Arc::new(RwLock::new(Core::new(backend)));
+    let rvault = RustyVault::new(backend, None).unwrap();
+    let core = rvault.core.load();
 
-    {
-        let mut core = c.write().unwrap();
-        assert!(core.config(Arc::clone(&c), None).is_ok());
+    let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
 
-        let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
+    let result = rvault.init(&seal_config);
+    assert!(result.is_ok());
+    let init_result = result.unwrap();
+    println!("init_result: {:?}", init_result);
 
-        let result = core.init(&seal_config);
-        assert!(result.is_ok());
-        let init_result = result.unwrap();
-        println!("init_result: {:?}", init_result);
-
-        let mut unsealed = false;
-        for i in 0..seal_config.secret_threshold {
-            let key = &init_result.secret_shares[i as usize];
-            let unseal = core.unseal(key);
-            assert!(unseal.is_ok());
-            unsealed = unseal.unwrap();
-        }
-
-        root_token = init_result.root_token;
-
-        assert!(unsealed);
+    let mut unsealed = false;
+    for i in 0..seal_config.secret_threshold {
+        let key = &init_result.secret_shares[i as usize];
+        let unseal = rvault.unseal(key);
+        assert!(unseal.is_ok());
+        unsealed = unseal.unwrap();
     }
+
+    root_token = init_result.root_token;
+
+    assert!(unsealed);
 
     {
         println!("root_token: {:?}", root_token);
-        test_default_secret(Arc::clone(&c), &root_token).await;
-        test_kv_logical_backend(Arc::clone(&c), &root_token).await;
-        test_sys_logical_backend(Arc::clone(&c), &root_token).await;
+        test_default_secret(&core, &root_token).await;
+        test_kv_logical_backend(&core, &root_token).await;
+        test_sys_logical_backend(&core, &root_token).await;
     }
 }

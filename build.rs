@@ -67,7 +67,7 @@ fn main() {
                 if let Some(bin_entry_table) = bin_entry.as_table() {
                     if let Some(name_value) = bin_entry_table.get("name") {
                         if let Some(name_str) = name_value.as_str() {
-                            println!("cargo:rustc-env=CARGO_BIN_NAME={}", name_str);
+                            println!("cargo:rustc-env=CARGO_BIN_NAME={name_str}");
                         }
                     }
                 }

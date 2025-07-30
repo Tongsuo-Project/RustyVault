@@ -416,7 +416,7 @@ mod test {
     fn test_barrier_aes256_gcm() {
         let backend = new_test_backend("test_barriew_aes256_gcm");
 
-        let barrier = AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = AESGCMBarrier::new(backend.clone());
 
         let inited = barrier.inited();
         assert!(inited.is_ok());
@@ -454,7 +454,7 @@ mod test {
     fn test_barrier_storage_api() {
         let backend = new_test_backend("test_barriew_storage_api");
 
-        let barrier = AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = AESGCMBarrier::new(backend.clone());
 
         let mut key = vec![0u8; 32];
         thread_rng().fill(key.as_mut_slice());

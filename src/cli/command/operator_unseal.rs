@@ -47,7 +47,7 @@ impl CommandExecutor for Unseal {
         match self.main() {
             Ok(_) => EXIT_CODE_OK,
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 EXIT_CODE_INSUFFICIENT_PARAMS
             }
         }
@@ -78,7 +78,7 @@ impl CommandExecutor for Unseal {
                     ret.print_debug_info();
                 }
             }
-            Err(e) => eprintln!("Error sealing: {}", e),
+            Err(e) => eprintln!("Error sealing: {e}"),
         }
         Ok(())
     }

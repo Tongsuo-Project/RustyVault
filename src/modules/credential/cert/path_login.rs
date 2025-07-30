@@ -53,7 +53,7 @@ pub struct ParsedCert {
 
 impl CertBackend {
     pub fn login_path(&self) -> Path {
-        let cert_backend_ref1 = Arc::clone(&self.inner);
+        let cert_backend_ref1 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"login",
@@ -258,8 +258,7 @@ impl CertBackendInner {
             if !ret_err.is_empty() {
                 return Err(rv_error_response!(&format!(
                     "invalid certificate or no client certificate supplied; additionally got errors during \
-                     verification:: {:?}",
-                    ret_err
+                     verification:: {ret_err:?}"
                 )));
             }
             return Err(rv_error_response!("invalid certificate or no client certificate supplied"));
@@ -278,8 +277,7 @@ impl CertBackendInner {
         if !ret_err.is_empty() {
             return Err(rv_error_response!(&format!(
                 "no chain matching all constraints could be found for this login certificate; additionally got errors \
-                 during verification: {:?}",
-                ret_err
+                 during verification: {ret_err:?}"
             )));
         }
 
@@ -304,7 +302,7 @@ impl CertBackendInner {
         for name in names.iter() {
             if let Some(entry) = self.get_cert(req, name.trim_start_matches("cert/"))? {
                 if entry.certificate.is_empty() {
-                    log::error!("failed to parse certificate, name: {}", name);
+                    log::error!("failed to parse certificate, name: {name}");
                     continue;
                 }
 

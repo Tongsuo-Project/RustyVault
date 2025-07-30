@@ -73,7 +73,7 @@ impl CommandExecutor for List {
                     ret.print_debug_info();
                 }
             }
-            Err(e) => eprintln!("Error sealing: {}", e),
+            Err(e) => eprintln!("Error sealing: {e}"),
         }
         Ok(())
     }

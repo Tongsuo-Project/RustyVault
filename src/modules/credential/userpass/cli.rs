@@ -41,7 +41,7 @@ impl LoginHandler for UsesPassCliHandler {
         if mount.is_empty() {
             mount = &self.default_mount;
         }
-        let path = format!("auth/{}/login/{}", mount, username);
+        let path = format!("auth/{mount}/login/{username}");
 
         let logical = client.logical();
 

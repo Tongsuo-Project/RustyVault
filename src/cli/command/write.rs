@@ -65,7 +65,7 @@ impl CommandExecutor for Write {
                     ret.print_debug_info();
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
 
         Ok(())

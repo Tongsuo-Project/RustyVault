@@ -117,7 +117,7 @@ impl CommandExecutor for Login {
 
         let login_handler = LoginHandlers.get(&auth_method);
         if login_handler.is_none() {
-            println!("Unknown auth method: {}.", auth_method);
+            println!("Unknown auth method: {auth_method}.");
             println!(r#"Use "rvault auth list" to see the complete list of auth methods."#);
             println!("Additionally, some auth methods are only available via the HTTP API.");
             std::process::exit(1);

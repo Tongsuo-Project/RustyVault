@@ -46,7 +46,7 @@ impl Router {
         mount_entry: Arc<RwLock<MountEntry>>,
         view: BarrierView,
     ) -> Result<(), RvError> {
-        log::debug!("mount, prefix: {}", prefix);
+        log::debug!("mount, prefix: {prefix}");
         let mut root = self.root.write()?;
 
         // Check if this is a nested mount
@@ -71,14 +71,14 @@ impl Router {
     }
 
     pub fn unmount(&self, prefix: &str) -> Result<(), RvError> {
-        log::debug!("unmount, prefix: {}", prefix);
+        log::debug!("unmount, prefix: {prefix}");
         let mut root = self.root.write()?;
         root.remove(prefix);
         Ok(())
     }
 
     pub fn remount(&self, dst: &str, src: &str) -> Result<(), RvError> {
-        log::debug!("remount, src: {}, dst: {}", src, dst);
+        log::debug!("remount, src: {src}, dst: {dst}");
         let mut root = self.root.write()?;
         if let Some(raw) = root.remove(src) {
             root.insert(dst.to_string(), raw);
@@ -127,7 +127,7 @@ impl Router {
         let root = self.root.read()?;
         if let Some(entry) = root.get_ancestor(path) {
             let router_entry = entry.value().unwrap();
-            Ok(Some(Arc::clone(&router_entry.mount_entry)))
+            Ok(Some(router_entry.mount_entry.clone()))
         } else {
             Ok(None)
         }
@@ -137,7 +137,7 @@ impl Router {
         let root = self.root.read()?;
         if let Some(entry) = root.get_ancestor(path) {
             let router_entry = entry.value().unwrap();
-            Ok(Some(Arc::clone(&router_entry.view)))
+            Ok(Some(router_entry.view.clone()))
         } else {
             Ok(None)
         }

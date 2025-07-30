@@ -2,11 +2,7 @@
 //! connection, HTTP request reading, HTTP response writing, data encoding/decoding, TLS stuffs, etc.
 //! This module utilize `actix_web` crate as the underlying provider.
 
-use std::{
-    any::Any,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use actix_tls::accept::openssl::TlsStream;
 use actix_web::{
@@ -197,8 +193,7 @@ pub fn response_json_ok<T: Serialize>(cookie: Option<Cookie>, body: T) -> HttpRe
     response_json(StatusCode::OK, cookie, body)
 }
 
-pub async fn handle_request(core: web::Data<Arc<RwLock<Core>>>, req: &mut Request) -> Result<HttpResponse, RvError> {
-    let core = core.read()?;
+pub async fn handle_request(core: web::Data<Arc<Core>>, req: &mut Request) -> Result<HttpResponse, RvError> {
     #[cfg(feature = "sync_handler")]
     let resp = core.handle_request(req)?;
     #[cfg(not(feature = "sync_handler"))]

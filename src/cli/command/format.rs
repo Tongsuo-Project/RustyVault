@@ -320,7 +320,7 @@ impl OutputOptions {
 
     pub fn print_value(&self, value: &Value, title_casing: bool) -> Result<(), RvError> {
         let fm = self.format.to_string();
-        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {}", fm)))?;
+        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {fm}")))?;
         let data = if self.format == Format::Table && title_casing { &convert_keys(value) } else { value };
 
         formater.output(data, None)
@@ -332,7 +332,7 @@ impl OutputOptions {
         }
 
         let fm = self.format.to_string();
-        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {}", fm)))?;
+        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {fm}")))?;
 
         let data = if fm == "table" { &table_data_add_header(value, &["Keys"])? } else { value };
 
@@ -341,7 +341,7 @@ impl OutputOptions {
 
     pub fn print_data(&self, value: &Value, field: Option<&str>) -> Result<(), RvError> {
         let fm = self.format.to_string();
-        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {}", fm)))?;
+        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {fm}")))?;
 
         let map = value["data"].as_object().unwrap();
 
@@ -366,7 +366,7 @@ impl OutputOptions {
 
     pub fn print_secret(&self, secret: &Secret, _field: Option<&str>) -> Result<(), RvError> {
         let fm = self.format.to_string();
-        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {}", fm)))?;
+        let formater = Formatters.get(&fm).ok_or(RvError::ErrString(format!("Invalid output format: {fm}")))?;
 
         let value = if fm == "table" && secret.auth.is_some() {
             let auth = secret.auth.as_ref().unwrap();
@@ -382,7 +382,7 @@ impl OutputOptions {
             .unwrap()
             .clone();
             for (key, val) in auth.metadata.iter() {
-                v.insert(format!("token_meta_{}", key).to_string(), Value::String(val.clone()));
+                v.insert(format!("token_meta_{key}").to_string(), Value::String(val.clone()));
             }
             let val = Value::Object(v);
             table_data_add_header(&val, &["Key", "Value"])?

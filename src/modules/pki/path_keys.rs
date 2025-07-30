@@ -17,7 +17,7 @@ const PKI_CONFIG_KEY_PREFIX: &str = "config/key/";
 
 impl PkiBackend {
     pub fn keys_generate_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"keys/generate/(exported|internal)",
@@ -54,7 +54,7 @@ used for sign,verify,encrypt,decrypt.
     }
 
     pub fn keys_import_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"keys/import",
@@ -92,7 +92,7 @@ used for sign,verify,encrypt,decrypt.
     }
 
     pub fn keys_sign_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"keys/sign",
@@ -118,7 +118,7 @@ used for sign,verify,encrypt,decrypt.
     }
 
     pub fn keys_verify_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"keys/verify",
@@ -149,7 +149,7 @@ used for sign,verify,encrypt,decrypt.
     }
 
     pub fn keys_encrypt_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"keys/encrypt",
@@ -180,7 +180,7 @@ used for sign,verify,encrypt,decrypt.
     }
 
     pub fn keys_decrypt_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"keys/decrypt",
@@ -431,7 +431,7 @@ impl PkiBackendInner {
     }
 
     pub fn fetch_key(&self, req: &Request, key_name: &str) -> Result<KeyBundle, RvError> {
-        let entry = req.storage_get(format!("{}{}", PKI_CONFIG_KEY_PREFIX, key_name).as_str())?;
+        let entry = req.storage_get(format!("{PKI_CONFIG_KEY_PREFIX}{key_name}").as_str())?;
         if entry.is_none() {
             return Err(RvError::ErrPkiCertNotFound);
         }

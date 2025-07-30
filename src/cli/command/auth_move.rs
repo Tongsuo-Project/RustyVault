@@ -59,22 +59,22 @@ impl CommandExecutor for Move {
 
         let mut from = util::ensure_trailing_slash(&self.source);
         if !from.starts_with(AUTH_ROUTER_PREFIX) {
-            from = format!("{}{}", AUTH_ROUTER_PREFIX, from);
+            from = format!("{AUTH_ROUTER_PREFIX}{from}");
         }
 
         let mut to = util::ensure_trailing_slash(&self.destination);
         if !to.starts_with(AUTH_ROUTER_PREFIX) {
-            to = format!("{}{}", AUTH_ROUTER_PREFIX, to);
+            to = format!("{AUTH_ROUTER_PREFIX}{to}");
         }
 
         match sys.remount(&from, &to) {
             Ok(ret) => match ret.response_status {
                 200 | 204 => {
-                    println!("Success! Finished moving auth method {} to {}.", from, to);
+                    println!("Success! Finished moving auth method {from} to {to}.");
                 }
                 _ => ret.print_debug_info(),
             },
-            Err(e) => eprintln!("Error moving auth method {} to {}: {}", from, to, e),
+            Err(e) => eprintln!("Error moving auth method {from} to {to}: {e}"),
         }
         Ok(())
     }

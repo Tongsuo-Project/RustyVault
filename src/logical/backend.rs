@@ -62,7 +62,7 @@ impl Backend for LogicalBackend {
     }
 
     fn get_ctx(&self) -> Option<Arc<Context>> {
-        Some(Arc::clone(&self.ctx))
+        Some(self.ctx.clone())
     }
 
     fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
@@ -308,7 +308,7 @@ mod test {
 
         let t = MyTest::new();
 
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(backend.clone());
 
         let mut logical_backend = new_logical_backend!({
             paths: [
@@ -461,7 +461,7 @@ mod test {
     fn test_logical_path_field() {
         let backend = new_test_backend("test_logical_path_field");
 
-        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(Arc::clone(&backend));
+        let barrier = storage::barrier_aes_gcm::AESGCMBarrier::new(backend.clone());
 
         let mut logical_backend = new_logical_backend!({
             paths: [

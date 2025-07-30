@@ -45,7 +45,7 @@ impl CommandExecutor for Delete {
                     return Err(rv_error_string!("Unkonwn"));
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
         Ok(())
     }

@@ -12,7 +12,7 @@ use crate::{
 
 impl PkiBackend {
     pub fn root_generate_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let mut path = new_path!({
             pattern: r"root/generate/(?P<exported>.+)",
@@ -30,7 +30,7 @@ impl PkiBackend {
     }
 
     pub fn root_delete_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"root",

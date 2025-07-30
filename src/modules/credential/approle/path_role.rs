@@ -109,7 +109,7 @@ impl AppRoleBackend {
     //
     // role/ - For listing all the registered roles
     pub fn role_path(&self) -> Path {
-        let approle_backend_ref = Arc::clone(&self.inner);
+        let approle_backend_ref = self.inner.clone();
 
         let mut path = new_path!({
             pattern: r"role/?",
@@ -126,9 +126,9 @@ impl AppRoleBackend {
 
     // role/<role_name> - For registering a role
     pub fn role_name_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let mut path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)",
@@ -210,9 +210,9 @@ configured using the fields of this endpoint.
 
     // role/<role_name>/policies - For updating the param
     pub fn role_policies_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/policies$",
@@ -250,7 +250,7 @@ defined on the role, can access the role.
 
     // role/<role_name>/local-secret-ids - For reading the param
     pub fn role_local_secret_ids_path(&self) -> Path {
-        let approle_backend_ref = Arc::clone(&self.inner);
+        let approle_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/local-secret-ids$",
@@ -274,9 +274,9 @@ This can only be set during role creation and once set, it can't be reset later.
 
     // role/<role_name>/bound-cidr-list - For updating the param
     pub fn role_bound_cidr_list_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/bound-cidr-list$",
@@ -309,9 +309,9 @@ IP is not encompassed by it, login fails
 
     // role/<role_name>/secret-id-bound-cidrs - For updating the param
     pub fn role_secret_id_bound_cidrs_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id-bound-cidrs$",
@@ -344,9 +344,9 @@ IP is not encompassed by it, login fails
 
     // role/<role_name>/token-bound-cidrs - For updating the param
     pub fn role_token_bound_cidrs_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/token-bound-cidrs$",
@@ -378,9 +378,9 @@ IP is not encompassed by it, token use fails
 
     // role/<role_name>/bind-secret-id - For updating the param
     pub fn role_bind_secret_id_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/bind-secret-id$",
@@ -412,9 +412,9 @@ The value of 'secret_id' can be retrieved using 'role/<role_name>/secret-id' end
 
     // role/<role_name>/secret-id-num-users - For updating the param
     pub fn role_secret_id_num_uses_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id-num-uses$",
@@ -448,9 +448,9 @@ However, this option may be overriden by the request's 'num_uses' field.
 
     // role/<role_name>/secret-id-ttl - For updating the param
     pub fn role_secret_id_ttl_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id-ttl$",
@@ -484,9 +484,9 @@ However, this option may be overridden by the request's 'ttl' field.
 
     // role/<role_name>/period - For updating the param
     pub fn role_period_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/period$",
@@ -525,9 +525,9 @@ will pick up the new value during its next renewal.
 
     // role/<role_name>/token-num-uses - For updating the param
     pub fn role_token_num_uses_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/token-num-uses$",
@@ -556,9 +556,9 @@ will pick up the new value during its next renewal.
 
     // role/<role_name>/token-ttl - For updating the param
     pub fn role_token_ttl_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/token-ttl$",
@@ -591,9 +591,9 @@ lifetime of the token issued, before which the token needs to be renewed.
 
     // role/<role_name>/token-max-ttl - For updating the param
     pub fn role_token_max_ttl_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
-        let approle_backend_ref3 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
+        let approle_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/token-max-ttl$",
@@ -628,8 +628,8 @@ This value will be capped by the backend mount's maximum TTL value.
 
     // role/<role_name>/role-id - For updating the param
     pub fn role_role_id_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/role-id$",
@@ -659,8 +659,8 @@ this endpoint."#
 
     // role/<role_name>/secret-id - For issuing a secret_id against a role, also to list the secret_id_accessors
     pub fn role_secret_id_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id/?$",
@@ -714,7 +714,7 @@ and/or the backend mount's maximum TTL value."#
 
     // role/<role_name>/secret-id/lookup - For reading the properties of a secret_id
     pub fn role_secret_id_lookup_path(&self) -> Path {
-        let approle_backend_ref = Arc::clone(&self.inner);
+        let approle_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id/lookup/?$",
@@ -740,8 +740,8 @@ and/or the backend mount's maximum TTL value."#
 
     // role/<role_name>/secret-id/destroy - For deleting a secret_id
     pub fn role_secret_id_destroy_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id/destroy/?$",
@@ -768,7 +768,7 @@ and/or the backend mount's maximum TTL value."#
 
     // role/<role_name>/secret-id-accessor/lookup - For reading secret_id using accessor
     pub fn role_secret_id_accessor_lookup_path(&self) -> Path {
-        let approle_backend_ref = Arc::clone(&self.inner);
+        let approle_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id-accessor/lookup/?$",
@@ -799,8 +799,8 @@ represents a non-expiring 'secret_id'."#
 
     // role/<role_name>/secret-id-accessor/destroy - For deleting secret_id using accessor
     pub fn role_secret_id_accessor_destroy_path(&self) -> Path {
-        let approle_backend_ref1 = Arc::clone(&self.inner);
-        let approle_backend_ref2 = Arc::clone(&self.inner);
+        let approle_backend_ref1 = self.inner.clone();
+        let approle_backend_ref2 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/secret-id-accessor/destroy/?$",
@@ -832,7 +832,7 @@ represents a non-expiring 'secret_id'."#
 
     // role/<role_name>/custom-secret-id - For assigning a custom SecretID against a role
     pub fn role_custom_secret_id_path(&self) -> Path {
-        let approle_backend_ref = Arc::clone(&self.inner);
+        let approle_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"role/(?P<role_name>\w[\w-]+\w)/custom-secret-id$",
@@ -923,13 +923,13 @@ impl AppRoleBackendInner {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
-        let salt = self.salt.read()?;
+        let salt = self.salt.load();
         if salt.is_none() {
             return Err(RvError::ErrResponse("salt not found".to_string()));
         }
 
         let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
-        let storage_entry = req.storage_get(format!("role_id/{}", salt_id).as_str())?;
+        let storage_entry = req.storage_get(format!("role_id/{salt_id}").as_str())?;
         if storage_entry.is_none() {
             return Ok(None);
         }
@@ -941,14 +941,14 @@ impl AppRoleBackendInner {
     }
 
     pub fn set_role_id(&self, req: &mut Request, role_id: &str, role_id_entry: &RoleIdEntry) -> Result<(), RvError> {
-        let salt = self.salt.read()?;
+        let salt = self.salt.load();
         if salt.is_none() {
             return Err(RvError::ErrResponse("salt not found".to_string()));
         }
 
         let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
 
-        let entry = StorageEntry::new(format!("role_id/{}", salt_id).as_str(), role_id_entry)?;
+        let entry = StorageEntry::new(format!("role_id/{salt_id}").as_str(), role_id_entry)?;
 
         req.storage_put(&entry)
     }
@@ -958,14 +958,14 @@ impl AppRoleBackendInner {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
-        let salt = self.salt.read()?;
+        let salt = self.salt.load();
         if salt.is_none() {
             return Err(RvError::ErrResponse("salt not found".to_string()));
         }
 
         let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
 
-        req.storage_delete(format!("role_id/{}", salt_id).as_str())?;
+        req.storage_delete(format!("role_id/{salt_id}").as_str())?;
 
         Ok(())
     }
@@ -1062,7 +1062,7 @@ impl AppRoleBackendInner {
 
         if role_name.len() > HMAC_INPUT_LEN_MAX {
             return Err(RvError::ErrResponse(
-                format!("role_name is longer than maximum of {} bytes", HMAC_INPUT_LEN_MAX).to_string(),
+                format!("role_name is longer than maximum of {HMAC_INPUT_LEN_MAX} bytes").to_string(),
             ));
         }
 
@@ -1419,7 +1419,7 @@ impl AppRoleBackendInner {
             "bound_cidr_list" | "secret_id_bound_cidrs" | "token_bound_cidrs" => {
                 cidr_list = field_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
                 if cidr_list.is_empty() {
-                    return Err(RvError::ErrResponse(format!("missing {}", field).to_string()));
+                    return Err(RvError::ErrResponse(format!("missing {field}").to_string()));
                 }
 
                 let cidrs: Vec<&str> = cidr_list.iter().map(AsRef::as_ref).collect();
@@ -1834,7 +1834,7 @@ impl AppRoleBackendInner {
             return Ok(Some(Response::list_response(&list_items)));
         }
 
-        Err(RvError::ErrResponse(format!("role {} does not exist", role_name)))
+        Err(RvError::ErrResponse(format!("role {role_name} does not exist")))
     }
 
     pub fn update_role_secret_id_common(
@@ -1853,7 +1853,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -1971,7 +1971,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2029,7 +2029,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2070,7 +2070,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2097,7 +2097,7 @@ impl AppRoleBackendInner {
         } else {
             return Err(RvError::ErrResponseStatus(
                 404,
-                format!("failed to find accessor entry for secret_id_accessor: {}", secret_id_accessor),
+                format!("failed to find accessor entry for secret_id_accessor: {secret_id_accessor}"),
             ));
         }
 
@@ -2129,7 +2129,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2156,7 +2156,7 @@ impl AppRoleBackendInner {
             {
                 return Err(RvError::ErrResponseStatus(
                     403,
-                    format!("invalid secret_id_accessor: {}", secret_id_accessor),
+                    format!("invalid secret_id_accessor: {secret_id_accessor}"),
                 ));
             }
 
@@ -2171,7 +2171,7 @@ impl AppRoleBackendInner {
         } else {
             return Err(RvError::ErrResponseStatus(
                 404,
-                format!("failed to find accessor entry for secret_id_accessor: {}", secret_id_accessor),
+                format!("failed to find accessor entry for secret_id_accessor: {secret_id_accessor}"),
             ));
         }
 
@@ -2191,7 +2191,6 @@ impl AppRoleBackendInner {
 mod test {
     use std::{default::Default, sync::Arc};
 
-    use as_any::Downcast;
     use serde_json::{json, Value};
 
     use super::{
@@ -2206,14 +2205,14 @@ mod test {
         modules::auth::expiration::MAX_LEASE_DURATION_SECS,
         storage::Storage,
         test_utils::{
-            init_test_rusty_vault, test_delete_api, test_list_api, test_mount_auth_api, test_read_api, test_write_api,
+            new_unseal_test_rusty_vault, test_delete_api, test_list_api, test_mount_auth_api, test_read_api,
+            test_write_api,
         },
     };
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_read_local_secret_ids() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_read_local_secret_ids");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_read_local_secret_ids");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2238,8 +2237,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_local_non_secret_ids() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_local_non_secret_ids");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_local_non_secret_ids");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2293,15 +2291,12 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_upgrade_secret_id_prefix() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_upgrade_secret_id_prefix");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_upgrade_secret_id_prefix");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        let module = core.module_manager.get_module("approle").unwrap();
-        let approle_mod = module.read().unwrap();
-        let approle_module = approle_mod.as_ref().downcast_ref::<AppRoleModule>().unwrap();
+        let approle_module = core.module_manager.get_module::<AppRoleModule>("approle").unwrap();
 
         let mut req = Request::new("/auth/approle/testrole");
         req.operation = Operation::Write;
@@ -2339,8 +2334,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_local_secret_id_immutablility() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_local_secret_id_immutablility");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_local_secret_id_immutablility");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2363,8 +2357,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_upgrade_bound_cidr_list() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_upgrade_bound_cidr_list");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_upgrade_bound_cidr_list");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2389,9 +2382,7 @@ mod test {
             data["bound_cidr_list"].as_comma_string_slice().unwrap().iter().map(|s| Value::String(s.clone())).collect();
         assert_eq!(resp_data["secret_id_bound_cidrs"].as_array().unwrap().clone(), expected);
 
-        let module = core.module_manager.get_module("approle").unwrap();
-        let approle_mod = module.read().unwrap();
-        let approle_module = approle_mod.as_ref().downcast_ref::<AppRoleModule>().unwrap();
+        let approle_module = core.module_manager.get_module::<AppRoleModule>("approle").unwrap();
 
         let mut req = Request::new("/auth/approle/testrole");
         req.operation = Operation::Write;
@@ -2433,15 +2424,12 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_name_lower_casing() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_name_lower_casing");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_name_lower_casing");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        let module = core.module_manager.get_module("approle").unwrap();
-        let approle_mod = module.read().unwrap();
-        let approle_module = approle_mod.as_ref().downcast_ref::<AppRoleModule>().unwrap();
+        let approle_module = core.module_manager.get_module::<AppRoleModule>("approle").unwrap();
 
         let mut req = Request::new("/auth/approle/testrole");
         req.operation = Operation::Write;
@@ -2567,15 +2555,12 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_read_set_index() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_read_set_index");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_read_set_index");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
 
-        let module = core.module_manager.get_module("approle").unwrap();
-        let approle_mod = module.read().unwrap();
-        let approle_module = approle_mod.as_ref().downcast_ref::<AppRoleModule>().unwrap();
+        let approle_module = core.module_manager.get_module::<AppRoleModule>("approle").unwrap();
         let mock_backend = approle_module.new_backend();
 
         // Create a role
@@ -2646,8 +2631,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_cidr_subset() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_cidr_subset");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_cidr_subset");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2695,8 +2679,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_token_bound_cidr_subset_32_mask() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_token_bound_cidr_subset_32_mask");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_token_bound_cidr_subset_32_mask");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2738,8 +2721,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_constraints() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_constraints");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_constraints");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2773,8 +2755,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_update_role_id() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_update_role_id");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_update_role_id");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2803,8 +2784,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_id_uniqueness() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_id_uniqueness");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_id_uniqueness");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2861,8 +2841,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_delete_secret_id() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_delete_secret_id");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_delete_secret_id");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2885,8 +2864,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_and_destroy_role_secret_id() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2925,8 +2903,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_and_destroy_role_secret_id_accessor() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id_accessor");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id_accessor");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2972,8 +2950,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_role_secret_id_accessor() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_lookup_role_secret_id_accessor");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_lookup_role_secret_id_accessor");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2993,8 +2970,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_list_role_secret_id() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_list_role_secret_id");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_list_role_secret_id");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3017,8 +2993,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_list_role() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_list_role");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_list_role");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3041,8 +3016,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_without_fields() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_without_fields");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_secret_id_without_fields");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3095,8 +3069,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_valid_fields() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_with_valid_fields");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_secret_id_with_valid_fields");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3159,8 +3132,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_invalid_fields() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_with_invalid_fields");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_role_secret_id_with_invalid_fields");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3273,8 +3246,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_crud() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_crud");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_crud");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3603,8 +3575,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_bound_cidrs_crud() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_token_bound_cidrs_crud");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_token_bound_cidrs_crud");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3768,8 +3739,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_type_crud() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_token_type_crud");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_token_type_crud");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3852,8 +3822,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_token_util_upgrade() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_token_util_upgrade");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_token_util_upgrade");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3973,8 +3942,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_ttl() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_with_ttl");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_secret_id_with_ttl");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -4026,8 +3994,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_accessor_cross_delete() {
-        let (root_token, core) = init_test_rusty_vault("test_approle_role_secret_id_accessor_cross_delete");
-        let core = core.read().unwrap();
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_role_secret_id_accessor_cross_delete");
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;

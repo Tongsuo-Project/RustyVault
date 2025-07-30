@@ -15,7 +15,7 @@ use crate::{
 
 impl PkiBackend {
     pub fn fetch_ca_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "ca(/pem)?",
@@ -32,7 +32,7 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
     }
 
     pub fn fetch_crl_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "crl(/pem)?",
@@ -49,7 +49,7 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
     }
 
     pub fn fetch_cert_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"cert/(?P<serial>[0-9A-Fa-f-:]+)",
@@ -72,7 +72,7 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
     }
 
     pub fn fetch_cert_crl_path(&self) -> Path {
-        let pki_backend_ref = Arc::clone(&self.inner);
+        let pki_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: "cert/crl",
@@ -157,7 +157,7 @@ impl PkiBackendInner {
     }
 
     pub fn fetch_cert(&self, req: &Request, serial_number: &str) -> Result<X509, RvError> {
-        let entry = req.storage_get(format!("certs/{}", serial_number).as_str())?;
+        let entry = req.storage_get(format!("certs/{serial_number}").as_str())?;
         if entry.is_none() {
             return Err(RvError::ErrPkiCertNotFound);
         }
@@ -168,13 +168,13 @@ impl PkiBackendInner {
 
     pub fn store_cert(&self, req: &Request, serial_number: &str, cert: &X509) -> Result<(), RvError> {
         let value = cert.to_der()?;
-        let entry = StorageEntry { key: format!("certs/{}", serial_number), value };
+        let entry = StorageEntry { key: format!("certs/{serial_number}"), value };
         req.storage_put(&entry)?;
         Ok(())
     }
 
     pub fn delete_cert(&self, req: &Request, serial_number: &str) -> Result<(), RvError> {
-        req.storage_delete(format!("certs/{}", serial_number).as_str())?;
+        req.storage_delete(format!("certs/{serial_number}").as_str())?;
         Ok(())
     }
 }

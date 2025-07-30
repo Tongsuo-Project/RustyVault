@@ -134,13 +134,13 @@ impl CommandExecutor for Enable {
         match sys.mount(&mount_path, &mount_input) {
             Ok(ret) => {
                 if ret.response_status == 200 || ret.response_status == 204 {
-                    println!("Success! Enabled the secrets engine at: {}", mount_path);
+                    println!("Success! Enabled the secrets engine at: {mount_path}");
                 } else {
                     ret.print_debug_info();
                     std::process::exit(2);
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
 
         Ok(())

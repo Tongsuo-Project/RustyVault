@@ -32,9 +32,9 @@ pub struct CRLInfo {
 
 impl CertBackend {
     pub fn crl_path(&self) -> Path {
-        let cert_backend_ref1 = Arc::clone(&self.inner);
-        let cert_backend_ref2 = Arc::clone(&self.inner);
-        let cert_backend_ref3 = Arc::clone(&self.inner);
+        let cert_backend_ref1 = self.inner.clone();
+        let cert_backend_ref2 = self.inner.clone();
+        let cert_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"crls/(?P<name>\w[\w-]+\w)",
@@ -81,7 +81,7 @@ one of them expiring.
     }
 
     pub fn crl_list_path(&self) -> Path {
-        let cert_backend_ref = Arc::clone(&self.inner);
+        let cert_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"crls/?$",
@@ -141,7 +141,7 @@ impl CertBackendInner {
             }
         }
 
-        let entry = StorageEntry::new(format!("crls/{}", name).as_str(), &crl_info)?;
+        let entry = StorageEntry::new(format!("crls/{name}").as_str(), &crl_info)?;
         req.storage_put(&entry)?;
 
         self.crls.insert(name.to_string(), crl_info);
@@ -178,7 +178,7 @@ impl CertBackendInner {
 
         let crl = self.crls.get(&name);
         if crl.is_none() {
-            log::error!("no such CRL {}", name);
+            log::error!("no such CRL {name}");
             return Err(RvError::ErrRequestInvalid);
         };
         let crl_info = crl.unwrap();
@@ -224,7 +224,7 @@ impl CertBackendInner {
         self.update_crl_cache(req)?;
 
         if self.crls.get(&name).is_none() {
-            log::error!("no such CRL {}", name);
+            log::error!("no such CRL {name}");
             return Err(RvError::ErrRequestInvalid);
         }
 
@@ -259,7 +259,7 @@ impl CertBackendInner {
         }
 
         for key in &keys {
-            let entry = match req.storage_get(&format!("crls/{}", key)) {
+            let entry = match req.storage_get(&format!("crls/{key}")) {
                 Ok(None) => continue,
                 Ok(Some(entry)) => entry,
                 Err(err) => {

@@ -22,11 +22,10 @@ use sysexits::ExitCode;
 
 use crate::{
     cli::{command, config},
-    core::Core,
     errors::RvError,
     http,
     metrics::{manager::MetricsManager, middleware::metrics_midleware},
-    storage, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
+    storage, RustyVault, EXIT_CODE_INSUFFICIENT_PARAMS, EXIT_CODE_LOAD_CONFIG_FAILURE, EXIT_CODE_OK,
 };
 
 pub const WORK_DIR_PATH_DEFAULT: &str = "/tmp/rusty_vault";
@@ -58,7 +57,7 @@ impl Server {
             return match self.main(config_path) {
                 Ok(_) => EXIT_CODE_OK,
                 Err(e) => {
-                    println!("server error: {:?}", e);
+                    println!("server error: {e:?}");
                     std::process::exit(EXIT_CODE_LOAD_CONFIG_FAILURE as i32);
                 }
             };
@@ -92,14 +91,14 @@ impl Server {
         }
 
         if !Path::new(work_dir.as_str()).exists() {
-            log::info!("create work_dir: {}", work_dir);
+            log::info!("create work_dir: {work_dir}");
             fs::create_dir_all(work_dir.as_str())?;
         }
 
         #[cfg(not(windows))]
         if config.daemon {
             // start daemon
-            let log_path = format!("{}/rusty_vault.log", work_dir);
+            let log_path = format!("{work_dir}/rusty_vault.log");
             let mut pid_path = config.pid_file.clone();
             if !config.pid_file.starts_with('/') {
                 pid_path = work_dir.clone() + pid_path.as_str();
@@ -137,10 +136,10 @@ impl Server {
             match daemonize.start() {
                 Ok(_) => {
                     let pid = std::fs::read_to_string(pid_path)?;
-                    log::info!("The rusty_vault server daemon process started successfully, pid is {}", pid);
-                    log::debug!("run user: {}, group: {}", user, group);
+                    log::info!("The rusty_vault server daemon process started successfully, pid is {pid}");
+                    log::debug!("run user: {user}, group: {group}");
                 }
-                Err(e) => log::error!("Error, {}", e),
+                Err(e) => log::error!("Error, {e}"),
             }
         }
 
@@ -151,21 +150,17 @@ impl Server {
         let backend = storage::new_backend(storage.stype.as_str(), &storage.config).unwrap();
 
         let metrics_manager = Arc::new(RwLock::new(MetricsManager::new(config.collection_interval)));
-        let system_metrics = Arc::clone(&metrics_manager.read().unwrap().system_metrics);
+        let system_metrics = metrics_manager.read().unwrap().system_metrics.clone();
 
-        let core = Arc::new(RwLock::new(Core::new(backend)));
-
-        {
-            let mut c = core.write()?;
-            c.config(Arc::clone(&core), Some(&config))?;
-        }
+        let rvault = RustyVault::new(backend, Some(&config))?;
+        let core = rvault.core.load().clone();
 
         let mut http_server = HttpServer::new(move || {
             App::new()
                 .wrap(middleware::Logger::default())
                 .wrap(from_fn(metrics_midleware))
-                .app_data(web::Data::new(Arc::clone(&core)))
-                .app_data(web::Data::new(Arc::clone(&metrics_manager)))
+                .app_data(web::Data::new(core.clone()))
+                .app_data(web::Data::new(metrics_manager.clone()))
                 .configure(http::init_service)
                 .default_service(web::to(HttpResponse::NotFound))
         })

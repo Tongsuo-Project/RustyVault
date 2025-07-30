@@ -6,6 +6,8 @@
 //! The `Handler` trait should be implemented in other module, such as the `rusty_vault::router`
 //! for instance.
 
+use std::sync::Arc;
+
 use derive_more::Display;
 
 use crate::{
@@ -19,7 +21,7 @@ use crate::{
 pub trait Handler: Send + Sync {
     fn name(&self) -> String;
 
-    fn post_config(&self, _core: &mut Core, _config: Option<&Config>) -> Result<(), RvError> {
+    fn post_config(&self, _core: Arc<Core>, _config: Option<&Config>) -> Result<(), RvError> {
         Err(RvError::ErrHandlerDefault)
     }
 

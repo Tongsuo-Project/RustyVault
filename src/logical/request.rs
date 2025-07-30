@@ -40,6 +40,22 @@ impl Request {
         Self { path: path.into(), ..Default::default() }
     }
 
+    pub fn new_read_request<S: Into<String>>(path: S) -> Self {
+        Self { operation: Operation::Read, path: path.into(), ..Default::default() }
+    }
+
+    pub fn new_write_request<S: Into<String>>(path: S, data: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Write, path: path.into(), data, ..Default::default() }
+    }
+
+    pub fn new_delete_request<S: Into<String>>(path: S, data: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Delete, path: path.into(), data, ..Default::default() }
+    }
+
+    pub fn new_list_request<S: Into<String>>(path: S) -> Self {
+        Self { operation: Operation::List, path: path.into(), ..Default::default() }
+    }
+
     pub fn new_revoke_request<S: Into<String>>(
         path: S,
         secret: Option<SecretData>,
@@ -160,7 +176,7 @@ impl Request {
     pub fn get_data_as_str(&self, key: &str) -> Result<String, RvError> {
         self.get_data(key)?.as_str().ok_or(RvError::ErrRequestFieldInvalid).and_then(|s| {
             if s.trim().is_empty() {
-                Err(RvError::ErrResponse(format!("missing {}", key)))
+                Err(RvError::ErrResponse(format!("missing {key}")))
             } else {
                 Ok(s.trim().to_string())
             }

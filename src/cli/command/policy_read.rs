@@ -53,13 +53,13 @@ impl CommandExecutor for Read {
                         self.output.print_value(&value, false)?;
                     }
                 } else if ret.response_status == 404 {
-                    println!("No policy named: {}", policy_name);
+                    println!("No policy named: {policy_name}");
                     return Err(RvError::ErrRequestNoData);
                 } else {
                     ret.print_debug_info();
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
 
         Ok(())

@@ -46,7 +46,7 @@ impl CommandExecutor for Status {
                     ret.print_debug_info();
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
         Ok(())
     }

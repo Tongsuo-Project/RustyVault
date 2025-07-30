@@ -27,7 +27,7 @@ impl KvPairParse for Vec<String> {
                     match fs::read_to_string(file_path) {
                         Ok(content) => Value::String(content),
                         Err(err) => {
-                            eprintln!("Error reading file '{}': {}", file_path, err);
+                            eprintln!("Error reading file '{file_path}': {err}");
                             Value::Null
                         }
                     }
@@ -37,7 +37,7 @@ impl KvPairParse for Vec<String> {
                     match io::stdin().read_to_string(&mut stdin_content) {
                         Ok(_) => Value::String(stdin_content),
                         Err(err) => {
-                            eprintln!("Error reading from stdin: {}", err);
+                            eprintln!("Error reading from stdin: {err}");
                             Value::Null
                         }
                     }
@@ -48,7 +48,7 @@ impl KvPairParse for Vec<String> {
 
                 map.insert(key, parsed_value);
             } else {
-                eprintln!("Invalid key=value format: '{}'", entry);
+                eprintln!("Invalid key=value format: '{entry}'");
             }
         }
 

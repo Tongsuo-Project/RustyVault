@@ -168,7 +168,7 @@ impl Client {
         } else {
             format!("{}/{}", self.address, path)
         };
-        log::debug!("request url: {}, method: {}", url, method);
+        log::debug!("request url: {url}, method: {method}");
 
         let mut req = self.http_client.request(&method.to_uppercase(), &url);
 
@@ -199,7 +199,7 @@ impl Client {
                 Ok(ret.clone())
             }
             Err(e) => {
-                log::error!("Request failed: {}", e);
+                log::error!("Request failed: {e}");
                 Err(RvError::UreqError { source: e })
             }
         }

@@ -11,7 +11,7 @@ use crate::{
 
 impl UserPassBackend {
     pub fn login_path(&self) -> Path {
-        let userpass_backend_ref = Arc::clone(&self.inner);
+        let userpass_backend_ref = self.inner.clone();
 
         let path = new_path!({
             pattern: r"login/(?P<username>\w[\w-]+\w)",
@@ -47,7 +47,7 @@ impl UserPassBackendInner {
 
         let user = self.get_user(req, &username)?;
         if user.is_none() {
-            log::error!("{}", err_info);
+            log::error!("{err_info}");
             let resp = Response::error_response(err_info);
             return Ok(Some(resp));
         }
@@ -56,7 +56,7 @@ impl UserPassBackendInner {
 
         let check = self.verify_password_hash(password, &user.password_hash)?;
         if !check {
-            log::error!("{}", err_info);
+            log::error!("{err_info}");
             let resp = Response::error_response(err_info);
             return Ok(Some(resp));
         }

@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
@@ -64,9 +64,7 @@ struct PolicyRequest {
     policy: String,
 }
 
-fn response_seal_status(core: web::Data<Arc<RwLock<Core>>>) -> Result<HttpResponse, RvError> {
-    let core = core.read()?;
-
+fn response_seal_status(core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
     let progress = core.unseal_progress();
     let sealed = core.sealed();
     let seal_config = core.seal_config()?;
@@ -76,12 +74,8 @@ fn response_seal_status(core: web::Data<Arc<RwLock<Core>>>) -> Result<HttpRespon
     Ok(response_json_ok(None, resp))
 }
 
-async fn sys_init_get_request_handler(
-    _req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
-) -> Result<HttpResponse, RvError> {
+async fn sys_init_get_request_handler(_req: HttpRequest, core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
     //let conn = req.conn_data::<Connection>().unwrap();
-    let core = core.read()?;
     let inited = core.inited()?;
     Ok(response_ok(
         None,
@@ -98,13 +92,12 @@ async fn sys_init_get_request_handler(
 async fn sys_init_put_request_handler(
     _req: HttpRequest,
     mut body: web::Bytes,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let payload = serde_json::from_slice::<InitRequest>(&body)?;
     body.clear();
     let seal_config = SealConfig { secret_shares: payload.secret_shares, secret_threshold: payload.secret_threshold };
 
-    let mut core = core.write()?;
     let result = core.init(&seal_config)?;
 
     let resp =
@@ -115,16 +108,12 @@ async fn sys_init_put_request_handler(
 
 async fn sys_seal_status_request_handler(
     _req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     response_seal_status(core)
 }
 
-async fn sys_seal_request_handler(
-    _req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
-) -> Result<HttpResponse, RvError> {
-    let mut core = core.write()?;
+async fn sys_seal_request_handler(_req: HttpRequest, core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
     core.seal("")?;
     Ok(response_ok(None, None))
 }
@@ -132,24 +121,21 @@ async fn sys_seal_request_handler(
 async fn sys_unseal_request_handler(
     _req: HttpRequest,
     mut body: web::Bytes,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     // TODO
     let payload = serde_json::from_slice::<UnsealRequest>(&body)?;
     body.clear();
     let key = hex::decode(payload.key)?;
 
-    {
-        let mut core = core.write()?;
-        let _result = core.unseal(&key)?;
-    }
+    let _result = core.unseal(&key)?;
 
     response_seal_status(core)
 }
 
 async fn sys_list_mounts_request_handler(
     req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mut r = request_auth(&req);
     r.path = "sys/mounts".to_string();
@@ -162,7 +148,7 @@ async fn sys_mount_request_handler(
     req: HttpRequest,
     path: web::Path<String>,
     mut body: web::Bytes,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<MountRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
@@ -183,7 +169,7 @@ async fn sys_mount_request_handler(
 async fn sys_unmount_request_handler(
     req: HttpRequest,
     path: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mount_path = path.into_inner();
     if mount_path.is_empty() {
@@ -200,7 +186,7 @@ async fn sys_unmount_request_handler(
 async fn sys_remount_request_handler(
     req: HttpRequest,
     mut body: web::Bytes,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<RemountRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
@@ -216,7 +202,7 @@ async fn sys_remount_request_handler(
 
 async fn sys_list_auth_mounts_request_handler(
     req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mut r = request_auth(&req);
     r.path = "sys/auth".to_string();
@@ -229,7 +215,7 @@ async fn sys_auth_enable_request_handler(
     req: HttpRequest,
     path: web::Path<String>,
     mut body: web::Bytes,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<MountRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
@@ -250,7 +236,7 @@ async fn sys_auth_enable_request_handler(
 async fn sys_auth_disable_request_handler(
     req: HttpRequest,
     path: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mount_path = path.into_inner();
     if mount_path.is_empty() {
@@ -266,7 +252,7 @@ async fn sys_auth_disable_request_handler(
 
 async fn sys_list_policy_request_handler(
     req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mut r = request_auth(&req);
     r.path = "sys/policy".to_string();
@@ -278,7 +264,7 @@ async fn sys_list_policy_request_handler(
 async fn sys_read_policy_request_handler(
     req: HttpRequest,
     name: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let policy_name = name.into_inner();
 
@@ -297,7 +283,7 @@ async fn sys_write_policy_request_handler(
     req: HttpRequest,
     name: web::Path<String>,
     mut body: web::Bytes,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<PolicyRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
@@ -318,7 +304,7 @@ async fn sys_write_policy_request_handler(
 async fn sys_delete_policy_request_handler(
     req: HttpRequest,
     name: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let policy_name = name.into_inner();
     if policy_name.is_empty() {
@@ -334,7 +320,7 @@ async fn sys_delete_policy_request_handler(
 
 async fn sys_list_policies_request_handler(
     req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mut r = request_auth(&req);
     r.path = "sys/policies/acl".to_string();
@@ -346,7 +332,7 @@ async fn sys_list_policies_request_handler(
 async fn sys_read_policies_request_handler(
     req: HttpRequest,
     name: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let policy_name = name.into_inner();
 
@@ -365,7 +351,7 @@ async fn sys_write_policies_request_handler(
     req: HttpRequest,
     name: web::Path<String>,
     mut body: web::Bytes,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let _test = serde_json::from_slice::<PolicyRequest>(&body)?;
     let payload = serde_json::from_slice(&body)?;
@@ -386,7 +372,7 @@ async fn sys_write_policies_request_handler(
 async fn sys_delete_policies_request_handler(
     req: HttpRequest,
     name: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let policy_name = name.into_inner();
     if policy_name.is_empty() {
@@ -402,7 +388,7 @@ async fn sys_delete_policies_request_handler(
 
 async fn sys_get_internal_ui_mounts_request_handler(
     req: HttpRequest,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mut r = request_auth(&req);
     r.path = "sys/internal/ui/mounts".to_string();
@@ -414,7 +400,7 @@ async fn sys_get_internal_ui_mounts_request_handler(
 async fn sys_get_internal_ui_mount_request_handler(
     req: HttpRequest,
     name: web::Path<String>,
-    core: web::Data<Arc<RwLock<Core>>>,
+    core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
     let mut r = request_auth(&req);
     r.path = "sys/internal/ui/mounts/".to_owned() + name.into_inner().as_str();

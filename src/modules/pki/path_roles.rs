@@ -63,9 +63,9 @@ pub struct RoleEntry {
 
 impl PkiBackend {
     pub fn roles_path(&self) -> Path {
-        let pki_backend_ref1 = Arc::clone(&self.inner);
-        let pki_backend_ref2 = Arc::clone(&self.inner);
-        let pki_backend_ref3 = Arc::clone(&self.inner);
+        let pki_backend_ref1 = self.inner.clone();
+        let pki_backend_ref2 = self.inner.clone();
+        let pki_backend_ref3 = self.inner.clone();
 
         let path = new_path!({
             pattern: r"roles/(?P<name>\w[\w-]+\w)",
@@ -304,7 +304,7 @@ for "generate_lease"."#
 
 impl PkiBackendInner {
     pub fn get_role(&self, req: &mut Request, name: &str) -> Result<Option<RoleEntry>, RvError> {
-        let key = format!("role/{}", name);
+        let key = format!("role/{name}");
         let storage_entry = req.storage_get(&key)?;
         if storage_entry.is_none() {
             return Ok(None);
@@ -448,7 +448,7 @@ impl PkiBackendInner {
             ..Default::default()
         };
 
-        let entry = StorageEntry::new(format!("role/{}", name).as_str(), &role_entry)?;
+        let entry = StorageEntry::new(format!("role/{name}").as_str(), &role_entry)?;
 
         req.storage_put(&entry)?;
 
@@ -462,7 +462,7 @@ impl PkiBackendInner {
             return Err(RvError::ErrRequestNoDataField);
         }
 
-        req.storage_delete(format!("role/{}", name).as_str())?;
+        req.storage_delete(format!("role/{name}").as_str())?;
         Ok(None)
     }
 }

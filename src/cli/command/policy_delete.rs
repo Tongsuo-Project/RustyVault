@@ -44,13 +44,13 @@ impl CommandExecutor for Delete {
         match sys.delete_policy(&policy_name) {
             Ok(ret) => {
                 if ret.response_status == 200 || ret.response_status == 204 {
-                    println!("Success! Deleted policy: {}", policy_name);
+                    println!("Success! Deleted policy: {policy_name}");
                 } else {
                     ret.print_debug_info();
                     std::process::exit(2);
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
 
         Ok(())
