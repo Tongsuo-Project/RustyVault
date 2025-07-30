@@ -511,7 +511,7 @@ impl TestHttpServer {
                 Ok((code, json))
             }
             Err(e) => {
-                println!("Request failed: {}", e);
+                println!("Request failed: {e}");
                 Err(RvError::UreqError { source: e })
             }
         }
@@ -604,7 +604,7 @@ impl TestHttpServer {
                 Ok((code, json))
             }
             Err(e) => {
-                println!("Request failed: {}", e);
+                println!("Request failed: {e}");
                 Err(RvError::UreqError { source: e })
             }
         }
@@ -660,7 +660,7 @@ impl TestHttpServer {
                     Err(rv_error_string!(format!("{}{}", stdout, stderr)))
                 }
             }
-            Err(e) => Err(rv_error_string!(format!("Failed to execute command: {}", e))),
+            Err(e) => Err(rv_error_string!(format!("Failed to execute command: {e}"))),
         }
     }
 

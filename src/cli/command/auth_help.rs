@@ -53,7 +53,7 @@ impl CommandExecutor for Help {
             let path = util::ensure_trailing_slash(&util::sanitize_path(&self.auth_type));
             let auth_list: crate::api::HttpResponse = sys.list_auth()?;
             if auth_list.response_status != 200 || auth_list.response_data.is_none() {
-                println!("Error listing auth methods at: {}", path);
+                println!("Error listing auth methods at: {path}");
                 std::process::exit(2);
             }
 
@@ -61,7 +61,7 @@ impl CommandExecutor for Help {
             let auth_list_map = auth_list_value.as_object().unwrap();
             let auth = auth_list_map.get(&path);
             if auth.is_none() {
-                println!("No auth method available on the server at: {}", path);
+                println!("No auth method available on the server at: {path}");
                 std::process::exit(1);
             }
 

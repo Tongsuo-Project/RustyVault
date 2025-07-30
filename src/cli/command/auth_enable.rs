@@ -92,7 +92,7 @@ impl CommandExecutor for Enable {
                 }
                 _ => ret.print_debug_info(),
             },
-            Err(e) => eprintln!("Error: {}", e),
+            Err(e) => eprintln!("Error: {e}"),
         }
         Ok(())
     }

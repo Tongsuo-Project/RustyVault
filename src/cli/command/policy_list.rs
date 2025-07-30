@@ -42,7 +42,7 @@ impl CommandExecutor for List {
                     ret.print_debug_info();
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
 
         Ok(())

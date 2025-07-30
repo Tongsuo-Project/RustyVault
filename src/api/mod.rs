@@ -28,7 +28,7 @@ impl HttpResponse {
         }
 
         if let Some(response_data) = &self.response_data {
-            println!("{:?}", response_data);
+            println!("{response_data:?}");
         }
     }
 }

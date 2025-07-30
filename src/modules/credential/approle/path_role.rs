@@ -929,7 +929,7 @@ impl AppRoleBackendInner {
         }
 
         let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
-        let storage_entry = req.storage_get(format!("role_id/{}", salt_id).as_str())?;
+        let storage_entry = req.storage_get(format!("role_id/{salt_id}").as_str())?;
         if storage_entry.is_none() {
             return Ok(None);
         }
@@ -948,7 +948,7 @@ impl AppRoleBackendInner {
 
         let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
 
-        let entry = StorageEntry::new(format!("role_id/{}", salt_id).as_str(), role_id_entry)?;
+        let entry = StorageEntry::new(format!("role_id/{salt_id}").as_str(), role_id_entry)?;
 
         req.storage_put(&entry)
     }
@@ -965,7 +965,7 @@ impl AppRoleBackendInner {
 
         let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
 
-        req.storage_delete(format!("role_id/{}", salt_id).as_str())?;
+        req.storage_delete(format!("role_id/{salt_id}").as_str())?;
 
         Ok(())
     }
@@ -1062,7 +1062,7 @@ impl AppRoleBackendInner {
 
         if role_name.len() > HMAC_INPUT_LEN_MAX {
             return Err(RvError::ErrResponse(
-                format!("role_name is longer than maximum of {} bytes", HMAC_INPUT_LEN_MAX).to_string(),
+                format!("role_name is longer than maximum of {HMAC_INPUT_LEN_MAX} bytes").to_string(),
             ));
         }
 
@@ -1419,7 +1419,7 @@ impl AppRoleBackendInner {
             "bound_cidr_list" | "secret_id_bound_cidrs" | "token_bound_cidrs" => {
                 cidr_list = field_value.as_comma_string_slice().ok_or(RvError::ErrRequestFieldInvalid)?;
                 if cidr_list.is_empty() {
-                    return Err(RvError::ErrResponse(format!("missing {}", field).to_string()));
+                    return Err(RvError::ErrResponse(format!("missing {field}").to_string()));
                 }
 
                 let cidrs: Vec<&str> = cidr_list.iter().map(AsRef::as_ref).collect();
@@ -1834,7 +1834,7 @@ impl AppRoleBackendInner {
             return Ok(Some(Response::list_response(&list_items)));
         }
 
-        Err(RvError::ErrResponse(format!("role {} does not exist", role_name)))
+        Err(RvError::ErrResponse(format!("role {role_name} does not exist")))
     }
 
     pub fn update_role_secret_id_common(
@@ -1853,7 +1853,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -1971,7 +1971,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2029,7 +2029,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2070,7 +2070,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2097,7 +2097,7 @@ impl AppRoleBackendInner {
         } else {
             return Err(RvError::ErrResponseStatus(
                 404,
-                format!("failed to find accessor entry for secret_id_accessor: {}", secret_id_accessor),
+                format!("failed to find accessor entry for secret_id_accessor: {secret_id_accessor}"),
             ));
         }
 
@@ -2129,7 +2129,7 @@ impl AppRoleBackendInner {
 
         let role = self.get_role(req, &role_name)?;
         if role.is_none() {
-            return Err(RvError::ErrResponse(format!("role {} does not exist", role_name)));
+            return Err(RvError::ErrResponse(format!("role {role_name} does not exist")));
         }
 
         let role = role.unwrap();
@@ -2156,7 +2156,7 @@ impl AppRoleBackendInner {
             {
                 return Err(RvError::ErrResponseStatus(
                     403,
-                    format!("invalid secret_id_accessor: {}", secret_id_accessor),
+                    format!("invalid secret_id_accessor: {secret_id_accessor}"),
                 ));
             }
 
@@ -2171,7 +2171,7 @@ impl AppRoleBackendInner {
         } else {
             return Err(RvError::ErrResponseStatus(
                 404,
-                format!("failed to find accessor entry for secret_id_accessor: {}", secret_id_accessor),
+                format!("failed to find accessor entry for secret_id_accessor: {secret_id_accessor}"),
             ));
         }
 

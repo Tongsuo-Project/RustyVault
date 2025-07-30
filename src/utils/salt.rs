@@ -95,7 +95,7 @@ impl Salt {
 
         let hmac = self.get_hmac(data)?;
 
-        Ok(format!("{}:{}", hmac_type, hmac))
+        Ok(format!("{hmac_type}:{hmac}"))
     }
 
     pub fn get_hash(&self, data: &str) -> Result<String, RvError> {

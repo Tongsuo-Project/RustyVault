@@ -67,7 +67,7 @@ impl CommandExecutor for Init {
         match self.main() {
             Ok(_) => EXIT_CODE_OK,
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 // TODO
                 std::process::exit(2);
             }
@@ -94,7 +94,7 @@ impl CommandExecutor for Init {
                     ret.print_debug_info();
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
         Ok(())
     }

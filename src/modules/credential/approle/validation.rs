@@ -101,7 +101,7 @@ impl AppRoleBackendInner {
             return Err(RvError::ErrResponse("missing role name hmac".to_string()));
         }
 
-        let entry_index = format!("{}{}/{}", role_secret_id_prefix, role_name_hmac, secret_id_hmac);
+        let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
         let storage_entry = storage.get(&entry_index)?;
         if storage_entry.is_none() {
             return Ok(None);
@@ -138,7 +138,7 @@ impl AppRoleBackendInner {
             return Err(RvError::ErrResponse("missing role name hmac".to_string()));
         }
 
-        let entry_index = format!("{}{}/{}", role_secret_id_prefix, role_name_hmac, secret_id_hmac);
+        let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
         let entry = StorageEntry::new(&entry_index, secret_entry)?;
 
         storage.put(&entry)
@@ -159,7 +159,7 @@ impl AppRoleBackendInner {
             return Err(RvError::ErrResponse("missing role name hmac".to_string()));
         }
 
-        let entry_index = format!("{}{}/{}", role_secret_id_prefix, role_name_hmac, secret_id_hmac);
+        let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
         storage.delete(&entry_index)
     }
 
@@ -255,7 +255,7 @@ impl AppRoleBackendInner {
             accessor_prefix = SECRET_ID_ACCESSOR_LOCAL_PREFIX;
         }
 
-        let entry_index = format!("{}{}", accessor_prefix, salt_id);
+        let entry_index = format!("{accessor_prefix}{salt_id}");
 
         let lock_entry = self.secret_id_accessor_locks.get_lock(secret_id_accessor);
         let _locked = lock_entry.lock.read()?;
@@ -295,7 +295,7 @@ impl AppRoleBackendInner {
             accessor_prefix = SECRET_ID_ACCESSOR_LOCAL_PREFIX;
         }
 
-        let entry_index = format!("{}{}", accessor_prefix, salt_id);
+        let entry_index = format!("{accessor_prefix}{salt_id}");
 
         let lock_entry = self.secret_id_accessor_locks.get_lock(&entry.secret_id_accessor);
         let _locked = lock_entry.lock.write()?;
@@ -327,7 +327,7 @@ impl AppRoleBackendInner {
             accessor_prefix = SECRET_ID_ACCESSOR_LOCAL_PREFIX;
         }
 
-        let entry_index = format!("{}{}", accessor_prefix, salt_id);
+        let entry_index = format!("{accessor_prefix}{salt_id}");
 
         let lock_entry = self.secret_id_accessor_locks.get_lock(secret_id_accessor);
         let _locked = lock_entry.lock.write()?;
@@ -345,10 +345,10 @@ impl AppRoleBackendInner {
         role_secret_id_prefix: &str,
     ) -> Result<(), RvError> {
         let role_name_hmac = create_hmac(hmac_key, role_name)?;
-        let key = format!("{}{}/", role_secret_id_prefix, role_name_hmac);
+        let key = format!("{role_secret_id_prefix}{role_name_hmac}/");
         let secret_id_hmacs = storage.list(&key)?;
         for secret_id_hmac in secret_id_hmacs.iter() {
-            let entry_index = format!("{}{}/{}", role_secret_id_prefix, role_name_hmac, secret_id_hmac);
+            let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
             let lock_entry = self.secret_id_locks.get_lock(secret_id_hmac);
             let _locked = lock_entry.lock.write()?;
             storage.delete(&entry_index)?
@@ -364,7 +364,7 @@ pub fn create_hmac(key: &str, value: &str) -> Result<String, RvError> {
     }
 
     if value.len() > MAX_HMAC_INPUT_LENGTH {
-        return Err(RvError::ErrResponse(format!("value is longer than maximum of {} bytes", MAX_HMAC_INPUT_LENGTH)));
+        return Err(RvError::ErrResponse(format!("value is longer than maximum of {MAX_HMAC_INPUT_LENGTH} bytes")));
     }
 
     let pkey = PKey::hmac(key.as_bytes())?;
@@ -381,7 +381,7 @@ pub fn verify_cidr_role_secret_id_subset(
     if !secret_id_cidrs.is_empty() && !role_bound_cidr_list.is_empty() {
         let cidr_list: Vec<String> = role_bound_cidr_list
             .iter()
-            .map(|cidr| if cidr.contains('/') { cidr.clone() } else { format!("{}/32", cidr) })
+            .map(|cidr| if cidr.contains('/') { cidr.clone() } else { format!("{cidr}/32") })
             .collect();
 
         let cidr_list_ref: Vec<&str> = cidr_list.iter().map(String::as_str).collect();
@@ -389,9 +389,8 @@ pub fn verify_cidr_role_secret_id_subset(
 
         if !utils::cidr::subset_blocks(&cidr_list_ref, &cidrs_ref)? {
             return Err(RvError::ErrResponse(format!(
-                "failed to verify subset relationship between CIDR blocks on the role {:?} and CIDR blocks on the \
-                 secret ID {:?}",
-                cidr_list_ref, cidrs_ref
+                "failed to verify subset relationship between CIDR blocks on the role {cidr_list_ref:?} and CIDR blocks on the \
+                 secret ID {cidrs_ref:?}"
             )));
         }
     }

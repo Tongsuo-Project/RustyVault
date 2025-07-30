@@ -160,7 +160,7 @@ impl UserPassBackendInner {
     }
 
     pub fn set_user(&self, req: &mut Request, name: &str, user_entry: &UserEntry) -> Result<(), RvError> {
-        let entry = StorageEntry::new(format!("user/{}", name).as_str(), user_entry)?;
+        let entry = StorageEntry::new(format!("user/{name}").as_str(), user_entry)?;
 
         req.storage_put(&entry)
     }

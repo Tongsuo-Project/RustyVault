@@ -27,7 +27,7 @@ impl LoginHandler for CertAuthCliHandler {
             .as_str()
             .map_or(self.default_mount.as_str(), |s| if s.is_empty() { self.default_mount.as_str() } else { s })
             .trim();
-        let path = format!("auth/{}/login", mount);
+        let path = format!("auth/{mount}/login");
 
         let logical = client.logical();
 

@@ -431,7 +431,7 @@ impl PkiBackendInner {
     }
 
     pub fn fetch_key(&self, req: &Request, key_name: &str) -> Result<KeyBundle, RvError> {
-        let entry = req.storage_get(format!("{}{}", PKI_CONFIG_KEY_PREFIX, key_name).as_str())?;
+        let entry = req.storage_get(format!("{PKI_CONFIG_KEY_PREFIX}{key_name}").as_str())?;
         if entry.is_none() {
             return Err(RvError::ErrPkiCertNotFound);
         }

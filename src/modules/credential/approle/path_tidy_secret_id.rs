@@ -64,14 +64,14 @@ impl AppRoleBackendInner {
         let salt = salt.as_ref().unwrap().clone();
 
         let tidy_func = |secret_id_prefix_to_use: &str, accessor_id_prefix_to_use: &str| -> Result<(), RvError> {
-            log::info!("listing accessors, prefix: {}", accessor_id_prefix_to_use);
+            log::info!("listing accessors, prefix: {accessor_id_prefix_to_use}");
             // List all the accessors and add them all to a map
             // These hashes are the result of salting the accessor id.
             let accessor_hashes = storage.list(accessor_id_prefix_to_use)?;
             let mut skip_hashes: HashMap<String, bool> = HashMap::new();
             let mut accessor_entry_by_hash: HashMap<String, SecretIdAccessorStorageEntry> = HashMap::new();
             for accessor_hash in accessor_hashes.iter() {
-                let entry_index = format!("{}{}", accessor_id_prefix_to_use, accessor_hash);
+                let entry_index = format!("{accessor_id_prefix_to_use}{accessor_hash}");
                 let storage_entry = storage.get(&entry_index)?;
                 if storage_entry.is_none() {
                     continue;
@@ -96,8 +96,7 @@ impl AppRoleBackendInner {
                 let secret_id_storage_entry = self
                     .get_secret_id_storage_entry(s, secret_id_prefix_to_use, role_name_hmac, secret_id_hmac)?
                     .ok_or(RvError::ErrResponse(format!(
-                        "entry for secret id was nil, secret_id_hmac: {}",
-                        secret_id_hmac
+                        "entry for secret id was nil, secret_id_hmac: {secret_id_hmac}"
                     )))?;
 
                 // If a secret ID entry does not have a corresponding accessor
@@ -137,13 +136,13 @@ impl AppRoleBackendInner {
                 Ok(())
             };
 
-            log::info!("listing role HMACs, prefix: {}", secret_id_prefix_to_use);
+            log::info!("listing role HMACs, prefix: {secret_id_prefix_to_use}");
 
             let role_name_hmacs = storage.list(secret_id_prefix_to_use)?;
             for item in role_name_hmacs.iter() {
                 let role_name_hmac = item.trim_end_matches('/');
-                log::info!("listing secret id HMACs, role_hame: {}", role_name_hmac);
-                let key = format!("{}{}/", secret_id_prefix_to_use, role_name_hmac);
+                log::info!("listing secret id HMACs, role_name: {role_name_hmac}");
+                let key = format!("{secret_id_prefix_to_use}{role_name_hmac}/");
                 let secret_id_hmacs = storage.list(&key)?;
                 for secret_id_hmac in secret_id_hmacs.iter() {
                     secret_id_cleanup_func(secret_id_hmac, role_name_hmac, secret_id_prefix_to_use)?;
@@ -158,7 +157,7 @@ impl AppRoleBackendInner {
                 let mut all_secret_id_hmacs: HashMap<String, bool> = HashMap::new();
                 for item in role_name_hmacs.iter() {
                     let role_name_hmac = item.trim_end_matches('/');
-                    let key = format!("{}{}/", secret_id_prefix_to_use, role_name_hmac);
+                    let key = format!("{secret_id_prefix_to_use}{role_name_hmac}/");
                     let secret_id_hmacs = storage.list(&key)?;
                     for secret_id_hmac in secret_id_hmacs.iter() {
                         all_secret_id_hmacs.insert(secret_id_hmac.clone(), true);
@@ -180,7 +179,7 @@ impl AppRoleBackendInner {
                         continue;
                     }
 
-                    let entry_index = format!("{}{}", accessor_id_prefix_to_use, accessor_hash);
+                    let entry_index = format!("{accessor_id_prefix_to_use}{accessor_hash}");
 
                     storage.delete(&entry_index)?;
                 }
@@ -190,12 +189,12 @@ impl AppRoleBackendInner {
         };
 
         if let Err(err) = tidy_func(SECRET_ID_PREFIX, SECRET_ID_ACCESSOR_PREFIX) {
-            log::error!("error tidying global secret IDs, error: {}", err);
+            log::error!("error tidying global secret IDs, error: {err}");
             return;
         }
 
         if let Err(err) = tidy_func(SECRET_ID_LOCAL_PREFIX, SECRET_ID_ACCESSOR_LOCAL_PREFIX) {
-            log::error!("error tidying local secret IDs, error: {}", err);
+            log::error!("error tidying local secret IDs, error: {err}");
         }
     }
 

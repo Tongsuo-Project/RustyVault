@@ -408,7 +408,7 @@ impl ExpirationManager {
         let sub = self.id_view.new_sub_view(&prefix);
         let existing = sub.get_keys()?;
         for suffix in existing.iter() {
-            let lease_id = format!("{}{}", prefix, suffix);
+            let lease_id = format!("{prefix}{suffix}");
             self.revoke_lease_id(&lease_id, true)?;
         }
 
@@ -579,7 +579,7 @@ impl ExpirationManager {
         let mut ret: Vec<String> = Vec::new();
 
         for sub in sub_keys.iter() {
-            let key = format!("{}{}", prefix, sub);
+            let key = format!("{prefix}{sub}");
             let raw = self.token_view.get(&key)?;
             if raw.is_none() {
                 continue;

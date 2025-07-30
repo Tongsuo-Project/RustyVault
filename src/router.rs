@@ -46,7 +46,7 @@ impl Router {
         mount_entry: Arc<RwLock<MountEntry>>,
         view: BarrierView,
     ) -> Result<(), RvError> {
-        log::debug!("mount, prefix: {}", prefix);
+        log::debug!("mount, prefix: {prefix}");
         let mut root = self.root.write()?;
 
         // Check if this is a nested mount
@@ -71,14 +71,14 @@ impl Router {
     }
 
     pub fn unmount(&self, prefix: &str) -> Result<(), RvError> {
-        log::debug!("unmount, prefix: {}", prefix);
+        log::debug!("unmount, prefix: {prefix}");
         let mut root = self.root.write()?;
         root.remove(prefix);
         Ok(())
     }
 
     pub fn remount(&self, dst: &str, src: &str) -> Result<(), RvError> {
-        log::debug!("remount, src: {}, dst: {}", src, dst);
+        log::debug!("remount, src: {src}, dst: {dst}");
         let mut root = self.root.write()?;
         if let Some(raw) = root.remove(src) {
             root.insert(dst.to_string(), raw);

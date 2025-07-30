@@ -7,11 +7,11 @@ use crate::{
 };
 
 pub fn kv_read_request(client: &Client, path: &str, data: Option<Map<String, Value>>) -> Result<HttpResponse, RvError> {
-    client.request("GET", format!("/v1/{}", path), data)
+    client.request("GET", format!("/v1/{path}"), data)
 }
 
 pub fn kv_preflight_version_request(client: &Client, path: &str) -> Result<(String, u32), RvError> {
-    let resp = client.request_read(format!("/v1/sys/internal/ui/mounts/{}", path))?;
+    let resp = client.request_read(format!("/v1/sys/internal/ui/mounts/{path}"))?;
 
     if resp.response_status == 404 {
         // If we get a 404 we are using an older version of rusty_vault, default to version 1

@@ -163,11 +163,11 @@ impl RustyVault {
         .as_object()
         .cloned();
 
-        self.write(format!("sys/mounts/{}", path).as_str(), data).await
+        self.write(format!("sys/mounts/{path}").as_str(), data).await
     }
 
     pub async fn unmount(&self, path: &str) -> Result<Option<Response>, RvError> {
-        self.delete(format!("sys/mounts/{}", path).as_str(), None).await
+        self.delete(format!("sys/mounts/{path}").as_str(), None).await
     }
 
     pub async fn remount(&self, from: &str, to: &str) -> Result<Option<Response>, RvError> {
@@ -188,11 +188,11 @@ impl RustyVault {
         .as_object()
         .cloned();
 
-        self.write(format!("sys/auth/{}", path).as_str(), data).await
+        self.write(format!("sys/auth/{path}").as_str(), data).await
     }
 
     pub async fn disable_auth(&self, path: &str) -> Result<Option<Response>, RvError> {
-        self.delete(format!("sys/auth/{}", path).as_str(), None).await
+        self.delete(format!("sys/auth/{path}").as_str(), None).await
     }
 
     pub async fn login(

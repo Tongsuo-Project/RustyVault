@@ -225,7 +225,7 @@ pub trait CommandExecutor {
                 std::process::exit(2);
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }

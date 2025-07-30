@@ -59,7 +59,7 @@ impl BarrierView {
 
             let items = self.list(curr.as_str())?;
             for p in items {
-                let path = format!("{}{}", curr, p);
+                let path = format!("{curr}{p}");
                 if p.ends_with('/') {
                     paths.push(path);
                 } else {

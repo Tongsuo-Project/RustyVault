@@ -176,7 +176,7 @@ where
                 "tls11" => Ok(SslVersion::TLS1_1),
                 "tls12" => Ok(SslVersion::TLS1_2),
                 "tls13" => Ok(SslVersion::TLS1_3),
-                _ => Err(E::custom(format!("unexpected SSL/TLS version: {}", value))),
+                _ => Err(E::custom(format!("unexpected SSL/TLS version: {value}"))),
             }
         }
     }
@@ -264,7 +264,7 @@ pub fn load_config(path: &str) -> Result<Config, RvError> {
 }
 
 fn load_config_dir(dir: &str) -> Result<Config, RvError> {
-    log::debug!("load_config_dir: {}", dir);
+    log::debug!("load_config_dir: {dir}");
     let mut paths: Vec<String> = Vec::new();
 
     if let Ok(entries) = fs::read_dir(dir) {
@@ -286,7 +286,7 @@ fn load_config_dir(dir: &str) -> Result<Config, RvError> {
     let mut result = None;
 
     for path in paths {
-        log::debug!("load_config_dir path: {}", path);
+        log::debug!("load_config_dir path: {path}");
         let config = load_config_file(&path)?;
         if result.is_none() {
             result = Some(config.clone());
@@ -299,7 +299,7 @@ fn load_config_dir(dir: &str) -> Result<Config, RvError> {
 }
 
 fn load_config_file(path: &str) -> Result<Config, RvError> {
-    log::debug!("load_config_file: {}", path);
+    log::debug!("load_config_file: {path}");
     let file = fs::File::open(path)?;
 
     if path.ends_with(".hcl") {

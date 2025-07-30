@@ -157,7 +157,7 @@ impl PkiBackendInner {
     }
 
     pub fn fetch_cert(&self, req: &Request, serial_number: &str) -> Result<X509, RvError> {
-        let entry = req.storage_get(format!("certs/{}", serial_number).as_str())?;
+        let entry = req.storage_get(format!("certs/{serial_number}").as_str())?;
         if entry.is_none() {
             return Err(RvError::ErrPkiCertNotFound);
         }
@@ -168,13 +168,13 @@ impl PkiBackendInner {
 
     pub fn store_cert(&self, req: &Request, serial_number: &str, cert: &X509) -> Result<(), RvError> {
         let value = cert.to_der()?;
-        let entry = StorageEntry { key: format!("certs/{}", serial_number), value };
+        let entry = StorageEntry { key: format!("certs/{serial_number}"), value };
         req.storage_put(&entry)?;
         Ok(())
     }
 
     pub fn delete_cert(&self, req: &Request, serial_number: &str) -> Result<(), RvError> {
-        req.storage_delete(format!("certs/{}", serial_number).as_str())?;
+        req.storage_delete(format!("certs/{serial_number}").as_str())?;
         Ok(())
     }
 }

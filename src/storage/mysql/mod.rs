@@ -47,7 +47,7 @@ fn establish_mysql_connection(conf: &HashMap<String, Value>) -> Result<MysqlDbPo
     match r2d2::Pool::builder().build(manager) {
         Ok(pool) => Ok(pool),
         Err(e) => {
-            log::error!("Error: {:?}", e);
+            log::error!("Error: {e:?}");
             Err(RvError::ErrConnectionPoolCreate { source: (e) })
         }
     }

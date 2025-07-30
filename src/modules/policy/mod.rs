@@ -76,7 +76,7 @@ impl PolicyModule {
 
             return Ok(Some(resp));
         }
-        Err(rv_error_response_status!(404, &format!("No policy named: {}", name)))
+        Err(rv_error_response_status!(404, &format!("No policy named: {name}")))
     }
 
     pub fn handle_policy_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {

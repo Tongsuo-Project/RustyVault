@@ -21,9 +21,8 @@ impl UnixSockAddr {
             Ok(Self { path: s.to_string() })
         } else {
             Err(RvError::ErrResponse(format!(
-                "Unable to convert {} to a UNIX Socke, make sure the string begins with either a '.' or '/', or \
-                 contains a '/'",
-                s
+                "Unable to convert {s} to a UNIX Socke, make sure the string begins with either a '.' or '/', or \
+                 contains a '/'"
             )))
         }
     }

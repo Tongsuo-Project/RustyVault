@@ -196,7 +196,7 @@ impl Core {
         }
 
         log::debug!("master_key: {}", hex::encode(master_key.deref()));
-        log::debug!("seal config: {:?}", seal_config);
+        log::debug!("seal config: {seal_config:?}");
         log::debug!("secret_shares:");
         for key in init_result.secret_shares.iter() {
             log::debug!("{}", hex::encode(key));

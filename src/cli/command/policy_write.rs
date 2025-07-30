@@ -63,13 +63,13 @@ impl CommandExecutor for Write {
         match sys.write_policy(&policy_name, &buffer) {
             Ok(ret) => {
                 if ret.response_status == 200 || ret.response_status == 204 {
-                    println!("Success! Uploaded policy: {}", policy_name);
+                    println!("Success! Uploaded policy: {policy_name}");
                 } else {
                     ret.print_debug_info();
                     std::process::exit(2);
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{e}"),
         }
 
         Ok(())

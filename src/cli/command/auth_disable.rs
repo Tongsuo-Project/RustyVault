@@ -48,11 +48,11 @@ impl CommandExecutor for Disable {
         match sys.disable_auth(&path) {
             Ok(ret) => match ret.response_status {
                 200 | 204 | 404 => {
-                    println!("Success! Disabled the auth method (if it existed) at: {}", path);
+                    println!("Success! Disabled the auth method (if it existed) at: {path}");
                 }
                 _ => ret.print_debug_info(),
             },
-            Err(e) => eprintln!("Error disabling auth method at {}: {}", path, e),
+            Err(e) => eprintln!("Error disabling auth method at {path}: {e}"),
         }
         Ok(())
     }

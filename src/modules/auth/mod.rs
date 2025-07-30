@@ -109,7 +109,7 @@ impl AuthModule {
 
             let match_mount_path = mounts_router.router.matching_mount(&entry.path)?;
             if !match_mount_path.is_empty() {
-                return Err(rv_error_response_status!(409, &format!("path is already in use at {}", match_mount_path)));
+                return Err(rv_error_response_status!(409, &format!("path is already in use at {match_mount_path}")));
             }
 
             let backend_new_func = self.get_auth_backend(&entry.logical_type)?;
@@ -178,14 +178,11 @@ impl AuthModule {
         }
 
         if !src.starts_with(AUTH_ROUTER_PREFIX) {
-            return Err(rv_error_response_status!(400, &format!("cannot remount non-auth mount {}", src)));
+            return Err(rv_error_response_status!(400, &format!("cannot remount non-auth mount {src}")));
         }
 
         if !dst.starts_with(AUTH_ROUTER_PREFIX) {
-            return Err(rv_error_response_status!(
-                400,
-                &format!("cannot remount auth mount to non-auth mount {}", dst)
-            ));
+            return Err(rv_error_response_status!(400, &format!("cannot remount auth mount to non-auth mount {dst}")));
         }
 
         if is_protect_path(&PROTECTED_AUTHS, &[&src, &dst]) {

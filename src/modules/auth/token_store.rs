@@ -333,10 +333,7 @@ impl TokenStore {
             view.put(&entry)?;
         }
 
-        view.put(&StorageEntry {
-            key: format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id),
-            value: value.as_bytes().to_vec(),
-        })
+        view.put(&StorageEntry { key: format!("{TOKEN_LOOKUP_PREFIX}{salted_id}"), value: value.as_bytes().to_vec() })
     }
 
     /// Uses the token and decrements its use count.
@@ -360,7 +357,7 @@ impl TokenStore {
         let salted_id = self.salt_id(&entry.id);
         let value = serde_json::to_string(&entry)?;
 
-        let path = format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id);
+        let path = format!("{TOKEN_LOOKUP_PREFIX}{salted_id}");
         let entry = StorageEntry { key: path, value: value.as_bytes().to_vec() };
 
         view.put(&entry)
@@ -372,7 +369,7 @@ impl TokenStore {
             return Err(RvError::ErrRequestClientTokenMissing);
         }
 
-        log::debug!("check token: {}", token);
+        log::debug!("check token: {token}");
         let te = self.lookup(token)?;
         if te.is_none() {
             return Err(RvError::ErrPermissionDenied);
@@ -412,7 +409,7 @@ impl TokenStore {
 
         let view = self.view.as_ref().unwrap();
 
-        let path = format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id);
+        let path = format!("{TOKEN_LOOKUP_PREFIX}{salted_id}");
         let raw = view.get(&path)?;
         if raw.is_none() {
             return Ok(None);
@@ -440,7 +437,7 @@ impl TokenStore {
 
         let entry = self.lookup_salted(salted_id)?;
 
-        let path = format!("{}{}", TOKEN_LOOKUP_PREFIX, salted_id);
+        let path = format!("{TOKEN_LOOKUP_PREFIX}{salted_id}");
 
         view.delete(&path)?;
 
@@ -479,7 +476,7 @@ impl TokenStore {
 
         let view = self.view.as_ref().unwrap();
 
-        let path = format!("{}{}/", TOKEN_PARENT_PREFIX, salted_id);
+        let path = format!("{TOKEN_PARENT_PREFIX}{salted_id}/");
 
         let children = view.list(&path)?;
         for child in children.iter() {
@@ -546,7 +543,7 @@ impl TokenStore {
 
         for policy in te.policies.iter() {
             if NON_ASSIGNABLE_POLICIES.contains(&policy.as_str()) {
-                return Err(rv_error_response!(&format!("cannot assign policy {}", policy)));
+                return Err(rv_error_response!(&format!("cannot assign policy {policy}")));
             }
         }
 

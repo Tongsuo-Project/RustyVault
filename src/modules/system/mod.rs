@@ -405,7 +405,7 @@ impl SystemBackend {
 
             let dst_path_match = self.core.router.matching_mount(to)?;
             if !dst_path_match.is_empty() {
-                return Err(rv_error_response_status!(409, &format!("path already in use at {}", dst_path_match)));
+                return Err(rv_error_response_status!(409, &format!("path already in use at {dst_path_match}")));
             }
 
             let mount_entry_table_type = mount_entry.table.clone();
@@ -425,7 +425,7 @@ impl SystemBackend {
                 }
             }
         } else {
-            return Err(rv_error_response_status!(409, &format!("no matching mount at {}", from_path)));
+            return Err(rv_error_response_status!(409, &format!("no matching mount at {from_path}")));
         }
 
         Ok(None)

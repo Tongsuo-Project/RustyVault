@@ -63,11 +63,11 @@ impl CommandExecutor for Move {
         match sys.remount(&from, &to) {
             Ok(ret) => match ret.response_status {
                 200 | 204 => {
-                    println!("Success! Finished moving auth method {} to {}.", from, to);
+                    println!("Success! Finished moving auth method {from} to {to}.");
                 }
                 _ => ret.print_debug_info(),
             },
-            Err(e) => eprintln!("Error moving auth method {} to {}: {}", from, to, e),
+            Err(e) => eprintln!("Error moving auth method {from} to {to}: {e}"),
         }
         Ok(())
     }
