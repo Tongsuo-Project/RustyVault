@@ -387,7 +387,7 @@ impl Core {
         Ok(true)
     }
 
-    pub fn seal(&self, _token: &str) -> Result<(), RvError> {
+    pub fn seal(&self) -> Result<(), RvError> {
         let inited = self.barrier.inited()?;
         if !inited {
             return Err(RvError::ErrBarrierNotInit);

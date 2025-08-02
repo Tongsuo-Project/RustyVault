@@ -114,7 +114,7 @@ async fn sys_seal_status_request_handler(
 }
 
 async fn sys_seal_request_handler(_req: HttpRequest, core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
-    core.seal("")?;
+    core.seal()?;
     Ok(response_ok(None, None))
 }
 

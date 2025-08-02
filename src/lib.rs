@@ -152,8 +152,12 @@ impl RustyVault {
         self.core.load().unseal(key)
     }
 
-    pub fn seal(&self, token: &str) -> Result<(), RvError> {
-        self.core.load().seal(token)
+    pub fn seal(&self) -> Result<(), RvError> {
+        self.core.load().seal()
+    }
+
+    pub fn set_token<S: Into<String>>(&mut self, token: S) {
+        self.token = token.into();
     }
 
     pub async fn mount(&self, path: &str, mount_type: &str) -> Result<Option<Response>, RvError> {
