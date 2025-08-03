@@ -85,7 +85,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub struct RustyVault {
     pub core: ArcSwap<Core>,
-    pub token: String,
+    pub token: ArcSwap<String>,
 }
 
 #[maybe_async::maybe_async]
@@ -141,7 +141,7 @@ impl RustyVault {
             }
         }
 
-        Ok(Self { core: ArcSwap::new(core), token: String::new() })
+        Ok(Self { core: ArcSwap::new(core), token: ArcSwap::new(Arc::new(String::new())) })
     }
 
     pub fn init(&self, seal_config: &core::SealConfig) -> Result<core::InitResult, RvError> {
@@ -156,8 +156,8 @@ impl RustyVault {
         self.core.load().seal()
     }
 
-    pub fn set_token<S: Into<String>>(&mut self, token: S) {
-        self.token = token.into();
+    pub fn set_token<S: Into<String>>(&self, token: S) {
+        self.token.store(Arc::new(token.into()));
     }
 
     pub async fn mount(&self, path: &str, mount_type: &str) -> Result<Option<Response>, RvError> {
@@ -200,7 +200,7 @@ impl RustyVault {
     }
 
     pub async fn login(
-        &mut self,
+        &self,
         path: &str,
         data: Option<Map<String, Value>>,
     ) -> Result<(Option<Response>, bool), RvError> {
@@ -209,7 +209,7 @@ impl RustyVault {
         let resp = self.core.load().handle_request(&mut req).await?;
         if let Some(response) = resp.as_ref() {
             if let Some(auth) = response.auth.as_ref() {
-                self.token = auth.client_token.clone();
+                self.token.store(Arc::new(auth.client_token.clone()));
                 login_success = true;
             }
         }
@@ -218,7 +218,7 @@ impl RustyVault {
     }
 
     pub async fn request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
-        req.client_token = self.token.to_string();
+        req.client_token = self.token.load().as_ref().clone();
         self.core.load().handle_request(req).await
     }
 
