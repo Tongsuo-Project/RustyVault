@@ -148,8 +148,14 @@ impl RustyVault {
         self.core.load().init(seal_config)
     }
 
-    pub fn unseal(&self, key: &[u8]) -> Result<bool, RvError> {
-        self.core.load().unseal(key)
+    pub fn unseal(&self, keys: &[&[u8]]) -> Result<bool, RvError> {
+        for key in keys.iter() {
+            if self.core.load().unseal(key)? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 
     pub fn seal(&self) -> Result<(), RvError> {
@@ -160,48 +166,63 @@ impl RustyVault {
         self.token.store(Arc::new(token.into()));
     }
 
-    pub async fn mount(&self, path: &str, mount_type: &str) -> Result<Option<Response>, RvError> {
-        let data = serde_json::json!({
-            "type": mount_type,
-        })
-        .as_object()
-        .cloned();
-
-        self.write(format!("sys/mounts/{path}").as_str(), data).await
-    }
-
-    pub async fn unmount(&self, path: &str) -> Result<Option<Response>, RvError> {
-        self.delete(format!("sys/mounts/{path}").as_str(), None).await
-    }
-
-    pub async fn remount(&self, from: &str, to: &str) -> Result<Option<Response>, RvError> {
-        let data = serde_json::json!({
-            "from": from,
-            "to": to,
-        })
-        .as_object()
-        .cloned();
-
-        self.write("sys/remount", data).await
-    }
-
-    pub async fn enable_auth(&self, path: &str, auth_type: &str) -> Result<Option<Response>, RvError> {
-        let data = serde_json::json!({
-            "type": auth_type,
-        })
-        .as_object()
-        .cloned();
-
-        self.write(format!("sys/auth/{path}").as_str(), data).await
-    }
-
-    pub async fn disable_auth(&self, path: &str) -> Result<Option<Response>, RvError> {
-        self.delete(format!("sys/auth/{path}").as_str(), None).await
-    }
-
-    pub async fn login(
+    pub async fn mount<S: Into<String>>(
         &self,
-        path: &str,
+        token: Option<S>,
+        path: S,
+        mount_type: S,
+    ) -> Result<Option<Response>, RvError> {
+        let data = serde_json::json!({
+            "type": mount_type.into(),
+        })
+        .as_object()
+        .cloned();
+
+        self.write::<String>(token.map(|t| t.into()), format!("sys/mounts/{}", path.into()), data).await
+    }
+
+    pub async fn unmount<S: Into<String>>(&self, token: Option<S>, path: S) -> Result<Option<Response>, RvError> {
+        self.delete::<String>(token.map(|t| t.into()), format!("sys/mounts/{}", path.into()), None).await
+    }
+
+    pub async fn remount<S: Into<String>>(
+        &self,
+        token: Option<S>,
+        from: S,
+        to: S,
+    ) -> Result<Option<Response>, RvError> {
+        let data = serde_json::json!({
+            "from": from.into(),
+            "to": to.into(),
+        })
+        .as_object()
+        .cloned();
+
+        self.write::<String>(token.map(|t| t.into()), "sys/remount".to_string(), data).await
+    }
+
+    pub async fn enable_auth<S: Into<String>>(
+        &self,
+        token: Option<S>,
+        path: S,
+        auth_type: S,
+    ) -> Result<Option<Response>, RvError> {
+        let data = serde_json::json!({
+            "type": auth_type.into(),
+        })
+        .as_object()
+        .cloned();
+
+        self.write::<String>(token.map(|t| t.into()), format!("sys/auth/{}", path.into()), data).await
+    }
+
+    pub async fn disable_auth<S: Into<String>>(&self, token: Option<S>, path: S) -> Result<Option<Response>, RvError> {
+        self.delete::<String>(token.map(|t| t.into()), format!("sys/auth/{}", path.into()), None).await
+    }
+
+    pub async fn login<S: Into<String>>(
+        &self,
+        path: S,
         data: Option<Map<String, Value>>,
     ) -> Result<(Option<Response>, bool), RvError> {
         let mut login_success = false;
@@ -218,27 +239,40 @@ impl RustyVault {
     }
 
     pub async fn request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
-        req.client_token = self.token.load().as_ref().clone();
         self.core.load().handle_request(req).await
     }
 
-    pub async fn read(&self, path: &str) -> Result<Option<Response>, RvError> {
+    pub async fn read<S: Into<String>>(&self, token: Option<S>, path: &str) -> Result<Option<Response>, RvError> {
         let mut req = Request::new_read_request(path);
+        req.client_token = token.map(Into::into).unwrap_or_else(|| self.token.load().as_ref().clone());
         self.request(&mut req).await
     }
 
-    pub async fn write(&self, path: &str, data: Option<Map<String, Value>>) -> Result<Option<Response>, RvError> {
+    pub async fn write<S: Into<String>>(
+        &self,
+        token: Option<S>,
+        path: S,
+        data: Option<Map<String, Value>>,
+    ) -> Result<Option<Response>, RvError> {
         let mut req = Request::new_write_request(path, data);
+        req.client_token = token.map(Into::into).unwrap_or_else(|| self.token.load().as_ref().clone());
         self.request(&mut req).await
     }
 
-    pub async fn delete(&self, path: &str, data: Option<Map<String, Value>>) -> Result<Option<Response>, RvError> {
+    pub async fn delete<S: Into<String>>(
+        &self,
+        token: Option<S>,
+        path: S,
+        data: Option<Map<String, Value>>,
+    ) -> Result<Option<Response>, RvError> {
         let mut req = Request::new_delete_request(path, data);
+        req.client_token = token.map(Into::into).unwrap_or_else(|| self.token.load().as_ref().clone());
         self.request(&mut req).await
     }
 
-    pub async fn list(&self, path: &str) -> Result<Option<Response>, RvError> {
+    pub async fn list<S: Into<String>>(&self, token: Option<S>, path: S) -> Result<Option<Response>, RvError> {
         let mut req = Request::new_list_request(path);
+        req.client_token = token.map(Into::into).unwrap_or_else(|| self.token.load().as_ref().clone());
         self.request(&mut req).await
     }
 }
