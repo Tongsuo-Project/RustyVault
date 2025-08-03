@@ -4,7 +4,7 @@ use go_defer::defer;
 use rusty_vault::{
     core::{Core, SealConfig},
     logical::{Operation, Request},
-    storage,
+    storage, RustyVault,
 };
 use serde_json::{json, Map, Value};
 
@@ -296,6 +296,85 @@ async fn test_sys_raw_api_feature(core: &Core, token: &str) {
 }
 
 #[maybe_async::maybe_async]
+async fn test_rvualt_mount(rvault: &RustyVault, token: &str) {
+    let ret = rvault.mount(Some(token), "kv9/test", "kv").await;
+    assert!(ret.is_ok());
+
+    let ret = rvault
+        .write(
+            Some(token),
+            "kv9/test/foo",
+            Some(
+                json!({
+                    "foo": "bar",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+        )
+        .await;
+    assert!(ret.is_ok());
+
+    let ret = rvault.read(Some(token), "kv9/test/foo").await;
+    assert!(ret.is_ok());
+    let ret = ret.unwrap();
+    assert!(ret.is_some());
+    let data = ret.unwrap().data;
+    assert!(data.is_some());
+    assert_eq!(data.as_ref().unwrap()["foo"].as_str().unwrap(), "bar");
+
+    let ret = rvault
+        .write(
+            Some(token),
+            "kv9/test/bar/foo",
+            Some(
+                json!({
+                    "bar": "foo",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+        )
+        .await;
+    assert!(ret.is_ok());
+
+    let ret = rvault.read(Some(token), "kv9/test/bar/foo").await;
+    assert!(ret.is_ok());
+    let ret = ret.unwrap();
+    assert!(ret.is_some());
+    let data = ret.unwrap().data;
+    assert!(data.is_some());
+    assert_eq!(data.as_ref().unwrap()["bar"].as_str().unwrap(), "foo");
+
+    let ret = rvault.list(Some(token), "kv9/test/").await;
+    assert!(ret.is_ok());
+    let ret = ret.unwrap();
+    assert!(ret.is_some());
+    let data = ret.unwrap().data;
+    assert!(data.is_some());
+    assert_eq!(data.as_ref().unwrap()["keys"].as_array().unwrap().len(), 2);
+
+    let ret = rvault.delete(Some(token), "kv9/test/foo", None).await;
+    assert!(ret.is_ok());
+
+    let ret = rvault.list(Some(token), "kv9/test/").await;
+    assert!(ret.is_ok());
+    let ret = ret.unwrap();
+    assert!(ret.is_some());
+    let data = ret.unwrap().data;
+    assert!(data.is_some());
+    assert_eq!(data.as_ref().unwrap()["keys"].as_array().unwrap().len(), 1);
+
+    let ret = rvault.unmount(Some(token), "kv9/test").await;
+    assert!(ret.is_ok());
+
+    let ret = rvault.list(Some(token), "kv9/test/").await;
+    assert!(ret.is_err());
+}
+
+#[maybe_async::maybe_async]
 async fn test_sys_logical_backend(core: &Core, token: &str) {
     test_sys_mount_feature(core, token).await;
     test_sys_raw_api_feature(core, token).await;
@@ -333,7 +412,7 @@ async fn test_default_logical() {
     let mut unsealed = false;
     for i in 0..seal_config.secret_threshold {
         let key = &init_result.secret_shares[i as usize];
-        let unseal = rvault.unseal(key);
+        let unseal = rvault.unseal(&[key]);
         assert!(unseal.is_ok());
         unsealed = unseal.unwrap();
     }
@@ -347,5 +426,6 @@ async fn test_default_logical() {
         test_default_secret(&core, &root_token).await;
         test_kv_logical_backend(&core, &root_token).await;
         test_sys_logical_backend(&core, &root_token).await;
+        test_rvualt_mount(&rvault, &root_token).await;
     }
 }

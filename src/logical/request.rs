@@ -44,12 +44,12 @@ impl Request {
         Self { operation: Operation::Read, path: path.into(), ..Default::default() }
     }
 
-    pub fn new_write_request<S: Into<String>>(path: S, data: Option<Map<String, Value>>) -> Self {
-        Self { operation: Operation::Write, path: path.into(), data, ..Default::default() }
+    pub fn new_write_request<S: Into<String>>(path: S, body: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Write, path: path.into(), body, ..Default::default() }
     }
 
-    pub fn new_delete_request<S: Into<String>>(path: S, data: Option<Map<String, Value>>) -> Self {
-        Self { operation: Operation::Delete, path: path.into(), data, ..Default::default() }
+    pub fn new_delete_request<S: Into<String>>(path: S, body: Option<Map<String, Value>>) -> Self {
+        Self { operation: Operation::Delete, path: path.into(), body, ..Default::default() }
     }
 
     pub fn new_list_request<S: Into<String>>(path: S) -> Self {
