@@ -148,6 +148,10 @@ impl RustyVault {
         self.core.load().init(seal_config)
     }
 
+    pub fn inited(&self) -> Result<bool, RvError> {
+        self.core.load().inited()
+    }
+
     pub fn unseal(&self, keys: &[&[u8]]) -> Result<bool, RvError> {
         for key in keys.iter() {
             if self.core.load().unseal(key)? {
