@@ -21,6 +21,7 @@ pub mod locks;
 pub mod ocsp;
 pub mod policy;
 pub mod salt;
+pub mod seal;
 pub mod sock_addr;
 pub mod string;
 pub mod token_util;
