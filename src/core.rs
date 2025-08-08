@@ -15,7 +15,7 @@ use std::{
 use arc_swap::{ArcSwap, ArcSwapOption};
 use go_defer::defer;
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
     cli::config::MountEntryHMACLevel,
@@ -55,14 +55,17 @@ impl SealConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Zeroize)]
+#[zeroize(drop)]
 pub struct InitResult {
     pub secret_shares: Zeroizing<Vec<Vec<u8>>>,
     pub root_token: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Zeroize)]
+#[zeroize(drop)]
 pub struct CoreState {
+    #[zeroize(skip)]
     pub system_view: Option<Arc<BarrierView>>,
     pub sealed: bool,
     pub unseal_key_shares: Vec<Vec<u8>>,
