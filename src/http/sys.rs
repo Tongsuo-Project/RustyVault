@@ -3,6 +3,7 @@ use std::sync::Arc;
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
     core::{Core, SealConfig},
@@ -24,13 +25,15 @@ pub struct InitRequest {
     pub secret_threshold: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize)]
+#[zeroize(drop)]
 pub struct InitResponse {
     pub keys: Vec<String>,
     pub root_token: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize)]
+#[zeroize(drop)]
 struct UnsealRequest {
     key: String,
 }
@@ -101,7 +104,7 @@ async fn sys_init_put_request_handler(
     let result = core.init(&seal_config)?;
 
     let resp =
-        InitResponse { keys: result.secret_shares.iter().map(hex::encode).collect(), root_token: result.root_token };
+        InitResponse { keys: result.secret_shares.iter().map(hex::encode).collect(), root_token: result.root_token.clone() };
 
     Ok(response_json_ok(None, resp))
 }
@@ -126,7 +129,7 @@ async fn sys_unseal_request_handler(
     // TODO
     let payload = serde_json::from_slice::<UnsealRequest>(&body)?;
     body.clear();
-    let key = hex::decode(payload.key)?;
+    let key: Zeroizing<Vec<u8>> = Zeroizing::new(hex::decode(payload.key.clone())?);
 
     let _result = core.unseal(&key)?;
 

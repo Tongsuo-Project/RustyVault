@@ -39,6 +39,7 @@ struct BarrierInit {
 }
 
 #[derive(Debug, Clone, Default, Zeroize)]
+#[zeroize(drop)]
 struct BarrierInfo {
     #[default(true)]
     sealed: bool,

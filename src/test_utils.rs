@@ -113,7 +113,7 @@ impl TestHttpServer {
 
         assert!(unseal_test_rusty_vault_core(core.as_ref(), &k));
 
-        root_token = init_result.root_token;
+        root_token = init_result.root_token.clone();
         println!("root_token: {:?}", root_token);
 
         test_http_server.root_token = root_token;
@@ -1069,7 +1069,7 @@ pub fn new_unseal_test_rusty_vault(name: &str) -> (RustyVault, Arc<Core>, String
 
     assert!(unseal_test_rusty_vault(&rvault, &k));
 
-    root_token = init_result.root_token;
+    root_token = init_result.root_token.clone();
     println!("root_token: {:?}", root_token);
 
     let core = rvault.core.load().clone();

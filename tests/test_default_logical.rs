@@ -417,7 +417,7 @@ async fn test_default_logical() {
         unsealed = unseal.unwrap();
     }
 
-    root_token = init_result.root_token;
+    root_token = init_result.root_token.clone();
 
     assert!(unsealed);
 

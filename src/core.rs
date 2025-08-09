@@ -68,8 +68,8 @@ pub struct CoreState {
     #[zeroize(skip)]
     pub system_view: Option<Arc<BarrierView>>,
     pub sealed: bool,
-    pub unseal_key_shares: Vec<Vec<u8>>,
     pub hmac_key: Vec<u8>,
+    unseal_key_shares: Vec<Vec<u8>>,
 }
 
 pub struct Core {
