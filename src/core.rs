@@ -358,7 +358,7 @@ impl Core {
 
         let mut deprecated_key_set = self.deprecated_unseal_keys_set();
         if let Ok(deprecated_key_set) = &deprecated_key_set {
-            if deprecated_key_set.is_used(key) {
+            if deprecated_key_set.contains(key) {
                 return Err(RvError::ErrBarrierKeyDeprecated);
             }
         }
@@ -411,7 +411,7 @@ impl Core {
         if once {
             if let Ok(deprecated_key_set) = &mut deprecated_key_set {
                 for key in unseal_key_shares.iter() {
-                    deprecated_key_set.mark_as_used(key);
+                    deprecated_key_set.insert(key);
                 }
 
                 let pe = PhysicalBackendEntry {

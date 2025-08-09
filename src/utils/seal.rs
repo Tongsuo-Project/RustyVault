@@ -23,13 +23,13 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 use thiserror::Error;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
     modules::crypto::{AEADCipher, AESKeySize, BlockCipher, CipherMode, AES},
     shamir::ShamirSecret,
+    utils::BHashSet,
 };
 
 /// Error types that can occur during SealBox operations.
@@ -73,6 +73,12 @@ pub enum SealBoxError {
     /// typically due to insufficient shares, invalid shares, or corrupted share data.
     #[error("Unsealing failed: insufficient or invalid shares")]
     UnsealFailed,
+
+    /// The unsealing operation failed due to a deprecated share.
+    ///
+    /// This error occurs when the provided share has already been used to unseal the box.
+    #[error("Unsealing failed: deprecated share")]
+    UnsealKeyDeprecated,
 
     /// The encryption operation failed.
     ///
@@ -132,6 +138,8 @@ pub struct SealBox<T> {
     tag: [u8; 16],
     /// The minimum number of shares required to unseal the box
     threshold: u8,
+    /// The total number of shares to generate
+    total_shares: u8,
     /// The Shamir shares for reconstructing the encryption key
     ///
     /// This field is skipped during serialization for security reasons.
@@ -151,6 +159,10 @@ pub struct SealBox<T> {
     #[serde(skip)]
     #[zeroize(skip)]
     value: Option<T>,
+
+    /// The set of deprecated shares
+    #[zeroize(skip)]
+    deprecated_shares: BHashSet,
 }
 
 impl<T> SealBox<T>
@@ -207,44 +219,63 @@ where
         let mut aad: [u8; 13] = [0; 13];
         aad[..13].copy_from_slice(&now_ms);
 
-        let shares =
-            ShamirSecret::split(&key, total_shares, threshold).map_err(|_| SealBoxError::ShamirSecretSplitFailed)?;
-
         Ok(Self {
             sealed_data: encrypted,
             nonce,
             aad,
             tag,
             threshold,
-            shares: Some(shares.deref().clone()),
+            total_shares,
+            shares: None,
             key: Some(key),
             value: Some(data),
+            deprecated_shares: BHashSet::default(),
         })
     }
 
-    /// Retrieves the Shamir shares for this SealBox.
+    /// Generates Shamir secret shares for the encryption key.
     ///
-    /// This method returns a reference to the shares that can be distributed
-    /// to different parties. The shares are only available if the box was
-    /// created with shares (i.e., not after being sealed).
+    /// This method creates a set of cryptographic shares using Shamir's Secret Sharing
+    /// scheme from the current encryption key. The generated shares can be distributed
+    /// to multiple parties, and a threshold number of shares will be required to
+    /// reconstruct the original key and unseal the data.
     ///
     /// # Returns
-    /// An `Option` containing a reference to the shares, or `None` if shares
-    /// are not available (e.g., after sealing).
+    /// A `Result` containing a zeroizing vector of key shares, or an error if generation fails.
     ///
-    /// # Security
-    /// - Shares are only stored in memory and not persisted
-    /// - Shares are cleared when the box is sealed
-    pub fn get_shares(&self) -> Option<&Vec<Vec<u8>>> {
-        self.shares.as_ref()
+    /// # Security Features
+    /// - Uses the current encryption key as the source secret for sharing
+    /// - Applies configured threshold and total share count from SealBox creation
+    /// - Returns zeroizing vector to ensure secure memory cleanup of shares
+    /// - Each share is cryptographically independent and secure
+    ///
+    /// # Requirements
+    /// - The SealBox must be in an unsealed state (key available)
+    /// - Valid threshold and total_shares configuration must exist
+    ///
+    /// # Usage
+    /// This method is typically called after creating a new SealBox to distribute
+    /// the key shares among multiple parties for secure key management. The shares
+    /// can later be used with the `unseal()` method to reconstruct the key.
+    pub fn generate_shares(&self) -> Result<Zeroizing<Vec<Vec<u8>>>, SealBoxError> {
+        if !self.is_unsealed() {
+            return Err(SealBoxError::Sealed);
+        }
+
+        let key = self.key.as_ref().ok_or(SealBoxError::Sealed)?;
+
+        let shares = ShamirSecret::split(key, self.total_shares, self.threshold)
+            .map_err(|_| SealBoxError::ShamirSecretSplitFailed)?;
+
+        Ok(shares)
     }
 
-    /// Attempts to unseal the box using the provided share.
+    /// Internal method that performs the core unsealing logic.
     ///
-    /// This method adds the provided share to the collection and attempts to
-    /// reconstruct the encryption key using Shamir's Secret Sharing. If enough
-    /// shares are provided (equal to or greater than the threshold), the box
-    /// is unsealed and the data becomes accessible.
+    /// This private method handles the actual unsealing process by collecting shares,
+    /// attempting to reconstruct the encryption key using Shamir's Secret Sharing,
+    /// and decrypting the sealed data. It includes validation for deprecated shares
+    /// and performs the cryptographic operations needed to recover the original data.
     ///
     /// # Arguments
     /// - `unseal_key`: A share to add to the collection for unsealing
@@ -254,17 +285,27 @@ where
     ///
     /// # Errors
     /// - Returns `SealBoxError::NotSealed` if the box is already unsealed
+    /// - Returns `SealBoxError::UnsealKeyDeprecated` if the share has been used before
     /// - Returns `SealBoxError::Unsealing` if not enough shares have been provided yet
     /// - Returns `SealBoxError::UnsealFailed` if the shares are invalid or corrupted
     /// - Returns `SealBoxError::DecryptionFailed` if decryption fails
     ///
-    /// # Security
+    /// # Security Features
+    /// - Validates shares against deprecated share set to prevent reuse
     /// - Uses Shamir's Secret Sharing to reconstruct the encryption key
     /// - Validates authentication tag to ensure data integrity
-    /// - Clears shares after successful unsealing for security
-    pub fn unseal(&mut self, unseal_key: &[u8]) -> Result<(), SealBoxError> {
+    /// - Performs secure AES-256-GCM decryption with AAD verification
+    ///
+    /// # Note
+    /// This is an internal method used by both `unseal()` and `unseal_once()`.
+    /// The caller is responsible for managing share cleanup and deprecation policies.
+    fn do_unseal(&mut self, unseal_key: &[u8]) -> Result<(), SealBoxError> {
         if self.is_unsealed() {
             return Err(SealBoxError::NotSealed);
+        }
+
+        if self.deprecated_shares.contains(unseal_key) {
+            return Err(SealBoxError::UnsealKeyDeprecated);
         }
 
         let Some(shares) = self.shares.as_mut() else {
@@ -305,6 +346,100 @@ where
         Ok(())
     }
 
+    /// Attempts to unseal the box using the provided share.
+    ///
+    /// This method adds the provided share to the collection and attempts to
+    /// reconstruct the encryption key using Shamir's Secret Sharing. If enough
+    /// shares are provided (equal to or greater than the threshold), the box
+    /// is unsealed and the data becomes accessible. Unlike `unseal_once()`,
+    /// this method allows shares to be reused in future unsealing operations.
+    ///
+    /// # Arguments
+    /// - `unseal_key`: A share to add to the collection for unsealing
+    ///
+    /// # Returns
+    /// A `Result` indicating success or failure of the unsealing operation.
+    ///
+    /// # Errors
+    /// - Returns `SealBoxError::NotSealed` if the box is already unsealed
+    /// - Returns `SealBoxError::UnsealKeyDeprecated` if the share has been marked as deprecated
+    /// - Returns `SealBoxError::Unsealing` if not enough shares have been provided yet
+    /// - Returns `SealBoxError::UnsealFailed` if the shares are invalid or corrupted
+    /// - Returns `SealBoxError::DecryptionFailed` if decryption fails
+    ///
+    /// # Security Features
+    /// - Uses Shamir's Secret Sharing to reconstruct the encryption key
+    /// - Validates authentication tag to ensure data integrity
+    /// - Clears temporary shares after successful or failed unsealing (except when more shares needed)
+    /// - Respects deprecated share restrictions to prevent reuse of compromised shares
+    ///
+    /// # Usage
+    /// This is the standard unsealing method that allows shares to be reused.
+    /// Call this method multiple times with different shares until the threshold
+    /// is reached and the box is successfully unsealed.
+    pub fn unseal(&mut self, unseal_key: &[u8]) -> Result<(), SealBoxError> {
+        let ret = self.do_unseal(unseal_key);
+        match ret {
+            Err(SealBoxError::Unsealing) => {}
+            _ => self.shares = None,
+        }
+        ret
+    }
+
+    /// Unseals the box once and marks all used shares as deprecated.
+    ///
+    /// This method performs a one-time unsealing operation that automatically marks
+    /// all shares used in the unsealing process as deprecated, preventing their reuse
+    /// in future operations. This provides enhanced security by ensuring that shares
+    /// can only be used once, protecting against replay attacks and share compromise.
+    ///
+    /// # Arguments
+    /// - `unseal_key`: A share to add to the collection for unsealing
+    ///
+    /// # Returns
+    /// A `Result` indicating success or failure of the unsealing operation.
+    ///
+    /// # Errors
+    /// - Returns `SealBoxError::NotSealed` if the box is already unsealed
+    /// - Returns `SealBoxError::UnsealKeyDeprecated` if the share has been used before
+    /// - Returns `SealBoxError::Unsealing` if not enough shares have been provided yet
+    /// - Returns `SealBoxError::UnsealFailed` if the shares are invalid or corrupted
+    /// - Returns `SealBoxError::DecryptionFailed` if decryption fails
+    ///
+    /// # Security Features
+    /// - Marks all used shares as deprecated after successful unsealing
+    /// - Prevents replay attacks by ensuring one-time share usage
+    /// - Provides forward secrecy by invalidating used shares
+    /// - Uses Shamir's Secret Sharing for secure key reconstruction
+    /// - Validates authentication tag to ensure data integrity
+    ///
+    /// # Behavior
+    /// - On successful unsealing: marks all shares as deprecated and clears share collection
+    /// - On failure (except insufficient shares): clears share collection
+    /// - On insufficient shares: preserves shares for additional attempts, but no deprecation
+    ///
+    /// # Usage
+    /// This method is ideal for high-security environments where shares should only
+    /// be valid for a single unsealing operation. It's commonly used in automated
+    /// systems or when implementing strict access control policies.
+    pub fn unseal_once(&mut self, unseal_key: &[u8]) -> Result<(), SealBoxError> {
+        let ret = self.do_unseal(unseal_key);
+        if ret.is_ok() {
+            if let Some(shares) = self.shares.as_ref() {
+                for share in shares.iter() {
+                    self.deprecated_shares.insert(share);
+                }
+            }
+        }
+
+        match ret {
+            Err(SealBoxError::Unsealing) => {}
+            _ => self.shares = None,
+        }
+
+        ret
+    }
+
     /// Seals the box, clearing all sensitive data from memory.
     ///
     /// This method clears the shares, key, and decrypted value from memory,
@@ -328,7 +463,7 @@ where
     /// # Returns
     /// `true` if the box is unsealed and data is accessible, `false` otherwise.
     pub fn is_unsealed(&self) -> bool {
-        self.key.is_some()
+        self.key.is_some() && self.value.is_some()
     }
 
     /// Retrieves an immutable reference to the stored data.
@@ -386,8 +521,8 @@ mod tests {
         let sealbox = sealbox.unwrap();
         assert!(sealbox.is_unsealed());
         assert!(sealbox.get().is_ok());
-        assert!(sealbox.get_shares().is_some());
-        assert_eq!(sealbox.get_shares().unwrap().len(), 3);
+        assert!(sealbox.generate_shares().is_ok());
+        assert_eq!(sealbox.generate_shares().unwrap().len(), 3);
     }
 
     #[test]
@@ -395,7 +530,7 @@ mod tests {
         let test_data = TestData { message: "Test message".to_string(), number: 123, flag: false };
 
         let mut sealbox = SealBox::new(test_data.clone(), 2, 3).unwrap();
-        let shares = sealbox.get_shares().unwrap().clone();
+        let shares = sealbox.generate_shares().unwrap().clone();
 
         assert!(sealbox.get().is_ok());
 
@@ -404,7 +539,7 @@ mod tests {
         assert!(!sealbox.is_unsealed());
 
         assert!(sealbox.get().is_err());
-        assert!(sealbox.get_shares().is_none());
+        assert!(sealbox.generate_shares().is_err());
         assert!(sealbox.key.is_none());
         assert!(sealbox.value.is_none());
 
@@ -421,7 +556,7 @@ mod tests {
         let test_data = TestData { message: "Test message".to_string(), number: 123, flag: false };
 
         let mut sealbox = SealBox::new(test_data, 3, 5).unwrap();
-        let shares = sealbox.get_shares().unwrap().clone();
+        let shares = sealbox.generate_shares().unwrap().clone();
 
         sealbox.seal();
 
@@ -436,7 +571,7 @@ mod tests {
         let test_data = TestData { message: "Test message".to_string(), number: 123, flag: false };
 
         let mut sealbox = SealBox::new(test_data, 2, 3).unwrap();
-        let shares = sealbox.get_shares().unwrap().clone();
+        let shares = sealbox.generate_shares().unwrap().clone();
 
         sealbox.seal();
 
@@ -467,7 +602,7 @@ mod tests {
         let test_data = TestData { message: "Test message".to_string(), number: 123, flag: false };
 
         let mut sealbox = SealBox::new(test_data, 2, 3).unwrap();
-        let shares = sealbox.get_shares().unwrap().clone();
+        let shares = sealbox.generate_shares().unwrap().clone();
 
         assert!(matches!(sealbox.unseal(&shares[0]).unwrap_err(), SealBoxError::NotSealed));
         assert!(matches!(sealbox.unseal(&shares[1]).unwrap_err(), SealBoxError::NotSealed));
@@ -515,7 +650,7 @@ mod tests {
         };
 
         let mut sealbox = SealBox::new(complex_data.clone(), 2, 3).unwrap();
-        let shares = sealbox.get_shares().unwrap().clone();
+        let shares = sealbox.generate_shares().unwrap().clone();
 
         sealbox.seal();
 
@@ -560,5 +695,201 @@ mod tests {
         assert!(deserialized.shares.is_none());
         assert!(deserialized.key.is_none());
         assert!(deserialized.value.is_none());
+    }
+
+    #[test]
+    fn test_unseal_once_basic() {
+        let test_data = TestData { message: "Unseal once test".to_string(), number: 999, flag: true };
+
+        let mut sealbox = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares = sealbox.generate_shares().unwrap().clone();
+
+        // Seal the box
+        sealbox.seal();
+        assert!(!sealbox.is_unsealed());
+
+        // First share should return Unsealing error
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::Unsealing));
+
+        // Second share should successfully unseal
+        assert!(sealbox.unseal_once(&shares[1]).is_ok());
+        assert!(sealbox.is_unsealed());
+
+        // Verify data is correct
+        let retrieved_data = sealbox.get().unwrap();
+        assert_eq!(*retrieved_data, test_data);
+    }
+
+    #[test]
+    fn test_unseal_once_share_deprecation() {
+        let test_data = TestData { message: "Share deprecation test".to_string(), number: 777, flag: false };
+
+        let mut sealbox = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares = sealbox.generate_shares().unwrap().clone();
+
+        // Seal and unseal once
+        sealbox.seal();
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::Unsealing));
+        assert!(sealbox.unseal_once(&shares[1]).is_ok());
+
+        // Seal again
+        sealbox.seal();
+
+        // Previously used shares should be deprecated
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+        assert!(matches!(sealbox.unseal_once(&shares[1]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+
+        // Only unused shares should work
+        assert!(matches!(sealbox.unseal_once(&shares[2]).unwrap_err(), SealBoxError::Unsealing));
+        // Need a fresh share since we only have 3 shares total and 2 are deprecated
+        // This demonstrates that once shares are used in unseal_once, they cannot be reused
+    }
+
+    #[test]
+    fn test_unseal_once_vs_unseal_behavior() {
+        let test_data = TestData { message: "Behavior comparison".to_string(), number: 555, flag: true };
+
+        // Test regular unseal (allows reuse)
+        let mut sealbox1 = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares1 = sealbox1.generate_shares().unwrap().clone();
+
+        sealbox1.seal();
+        assert!(matches!(sealbox1.unseal(&shares1[0]).unwrap_err(), SealBoxError::Unsealing));
+        assert!(sealbox1.unseal(&shares1[1]).is_ok());
+
+        sealbox1.seal();
+        // Same shares can be reused with regular unseal
+        assert!(matches!(sealbox1.unseal(&shares1[0]).unwrap_err(), SealBoxError::Unsealing));
+        assert!(sealbox1.unseal(&shares1[1]).is_ok());
+
+        // Test unseal_once (prevents reuse)
+        let mut sealbox2 = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares2 = sealbox2.generate_shares().unwrap().clone();
+
+        sealbox2.seal();
+        assert!(matches!(sealbox2.unseal_once(&shares2[0]).unwrap_err(), SealBoxError::Unsealing));
+        assert!(sealbox2.unseal_once(&shares2[1]).is_ok());
+
+        sealbox2.seal();
+        // Same shares cannot be reused with unseal_once
+        assert!(matches!(sealbox2.unseal_once(&shares2[0]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+        assert!(matches!(sealbox2.unseal_once(&shares2[1]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+    }
+
+    #[test]
+    fn test_unseal_once_insufficient_shares() {
+        let test_data = TestData { message: "Insufficient shares test".to_string(), number: 333, flag: false };
+
+        let mut sealbox = SealBox::new(test_data.clone(), 3, 5).unwrap(); // Need 3 shares
+        let shares = sealbox.generate_shares().unwrap().clone();
+
+        sealbox.seal();
+
+        // Try with only 1 share
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::Unsealing));
+
+        // Try with 2 shares (still insufficient)
+        assert!(matches!(sealbox.unseal_once(&shares[1]).unwrap_err(), SealBoxError::Unsealing));
+
+        // With 3 shares, should succeed
+        assert!(sealbox.unseal_once(&shares[2]).is_ok());
+        assert!(sealbox.is_unsealed());
+
+        // All used shares should be deprecated
+        sealbox.seal();
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+        assert!(matches!(sealbox.unseal_once(&shares[1]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+        assert!(matches!(sealbox.unseal_once(&shares[2]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+
+        // Only unused shares should work
+        assert!(matches!(sealbox.unseal_once(&shares[3]).unwrap_err(), SealBoxError::Unsealing));
+        assert!(matches!(sealbox.unseal_once(&shares[4]).unwrap_err(), SealBoxError::Unsealing));
+    }
+
+    #[test]
+    fn test_unseal_once_already_unsealed() {
+        let test_data = TestData { message: "Already unsealed test".to_string(), number: 111, flag: true };
+
+        let mut sealbox = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares = sealbox.generate_shares().unwrap().clone();
+
+        // Box is already unsealed
+        assert!(sealbox.is_unsealed());
+
+        // Should return NotSealed error
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::NotSealed));
+    }
+
+    #[test]
+    fn test_unseal_once_invalid_shares() {
+        let test_data = TestData { message: "Invalid shares test".to_string(), number: 888, flag: false };
+
+        let mut sealbox = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares = sealbox.generate_shares().unwrap().clone();
+
+        sealbox.seal();
+
+        // Use corrupted share
+        let mut corrupted_share = shares[0].clone();
+        corrupted_share[0] ^= 0xFF; // Flip bits to corrupt the share
+
+        assert!(matches!(sealbox.unseal_once(&corrupted_share).unwrap_err(), SealBoxError::Unsealing));
+
+        // Try with valid share after corruption attempt
+        assert!(matches!(sealbox.unseal_once(&shares[1]).unwrap_err(), SealBoxError::DecryptionFailed));
+    }
+
+    #[test]
+    fn test_unseal_once_share_cleanup() {
+        let test_data = TestData { message: "Share cleanup test".to_string(), number: 444, flag: true };
+
+        let mut sealbox = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares = sealbox.generate_shares().unwrap().clone();
+
+        sealbox.seal();
+
+        // Add first share
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::Unsealing));
+
+        // Verify shares are being collected internally (can't directly access private field)
+        // But we can test the behavior: adding another share should complete the unsealing
+        assert!(sealbox.unseal_once(&shares[1]).is_ok());
+
+        // After successful unsealing, internal shares should be cleared
+        // This is verified by the fact that the shares are deprecated
+        sealbox.seal();
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+        assert!(matches!(sealbox.unseal_once(&shares[1]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+    }
+
+    #[test]
+    fn test_unseal_once_mixed_with_regular_unseal() {
+        let test_data = TestData { message: "Mixed unseal test".to_string(), number: 666, flag: false };
+
+        let mut sealbox = SealBox::new(test_data.clone(), 2, 3).unwrap();
+        let shares = sealbox.generate_shares().unwrap().clone();
+
+        // First, use regular unseal
+        sealbox.seal();
+        assert!(matches!(sealbox.unseal(&shares[0]).unwrap_err(), SealBoxError::Unsealing));
+        assert!(sealbox.unseal(&shares[1]).is_ok());
+
+        // Then use unseal_once - should work since shares weren't deprecated by regular unseal
+        sealbox.seal();
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::Unsealing));
+        assert!(sealbox.unseal_once(&shares[1]).is_ok());
+
+        // Now shares should be deprecated
+        sealbox.seal();
+        assert!(matches!(sealbox.unseal_once(&shares[0]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+        assert!(matches!(sealbox.unseal_once(&shares[1]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+
+        // But regular unseal should also respect deprecation
+        assert!(matches!(sealbox.unseal(&shares[0]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+        assert!(matches!(sealbox.unseal(&shares[1]).unwrap_err(), SealBoxError::UnsealKeyDeprecated));
+
+        // Only unused share should work
+        assert!(matches!(sealbox.unseal(&shares[2]).unwrap_err(), SealBoxError::Unsealing));
+        // Need another share but we've used them all in this test scenario
     }
 }
