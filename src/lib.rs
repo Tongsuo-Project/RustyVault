@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use serde_json::{Map, Value};
+use zeroize::Zeroizing;
 
 use crate::{
     cli::config::Config,
@@ -160,6 +161,45 @@ impl RustyVault {
         }
 
         Ok(false)
+    }
+
+    /// Unseals the vault once and immediately generates new unseal keys.
+    ///
+    /// This is a high-level wrapper around the core's unseal_once method that provides
+    /// one-time unseal functionality with automatic key rotation for enhanced security.
+    ///
+    /// # Arguments
+    /// - `key`: The unseal key to use for the unseal operation
+    ///
+    /// # Returns
+    /// A `Result` containing new unseal keys if successful, or an error if the operation fails.
+    ///
+    /// # Security
+    /// - Prevents replay attacks by invalidating used keys
+    /// - Automatically generates fresh keys for future use
+    /// - Provides forward secrecy through key rotation
+    pub fn unseal_once(&self, key: &[u8]) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
+        self.core.load().unseal_once(key)
+    }
+
+    /// Generates new unseal keys using the current Key Encryption Key (KEK).
+    ///
+    /// This is a high-level wrapper around the core's generate_unseal_keys method
+    /// that creates a fresh set of unseal keys for future vault operations.
+    ///
+    /// # Returns
+    /// A `Result` containing new unseal key shares, or an error if generation fails.
+    ///
+    /// # Requirements
+    /// - The vault must be currently unsealed
+    /// - A valid KEK must exist in the current state
+    ///
+    /// # Security
+    /// - Uses Shamir's Secret Sharing for key distribution
+    /// - Generated keys are cryptographically independent
+    /// - Returns zeroizing vector for secure memory cleanup
+    pub fn generate_unseal_keys(&self) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
+        self.core.load().generate_unseal_keys()
     }
 
     pub fn seal(&self) -> Result<(), RvError> {

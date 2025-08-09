@@ -161,7 +161,7 @@ impl ShamirSecret {
     }
 
     pub fn split(secret: &[u8], part: u8, threshold: u8) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
-        if part < threshold || threshold < 2 || part >=255 {
+        if part < threshold || threshold < 2 || part == 255 {
             return Err(RvError::ErrShamirShareCountInvalid);
         }
 

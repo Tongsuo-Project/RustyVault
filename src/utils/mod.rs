@@ -3,11 +3,13 @@
 
 use std::time::{Duration, SystemTime};
 
+use blake3;
 use chrono::prelude::*;
 use humantime::{format_rfc3339, parse_duration, parse_rfc3339};
 use openssl::hash::{Hasher, MessageDigest};
 use rand::{thread_rng, Rng};
-use serde::{Deserialize, Deserializer, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashSet;
 
 use crate::errors::RvError;
 
@@ -26,6 +28,92 @@ pub mod sock_addr;
 pub mod string;
 pub mod token_util;
 pub mod unix_sock_addr;
+
+/// A hash set that stores Blake3 hashes of arbitrary byte data.
+///
+/// BHashSet (Blake Hash Set) provides a space-efficient way to track whether
+/// specific byte sequences have been "used" or seen before. Instead of storing
+/// the actual data, it stores 32-byte Blake3 hashes, providing excellent
+/// collision resistance while using constant space per item.
+///
+/// # Use Cases
+/// - Tracking used unseal keys to prevent replay attacks
+/// - Deduplication of data based on content
+/// - Efficient membership testing for large byte sequences
+/// - Preventing reuse of tokens, nonces, or other security-sensitive data
+///
+/// # Security Features
+/// - Uses Blake3 cryptographic hash function for collision resistance
+/// - Provides deterministic membership testing
+/// - Space-efficient storage (32 bytes per unique item regardless of original size)
+/// - Serializable for persistence across restarts
+///
+/// # Performance
+/// - O(1) average case for membership testing and insertion
+/// - Memory usage scales with number of unique items, not their size
+/// - Blake3 hashing is extremely fast
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct BHashSet(pub HashSet<[u8; 32]>);
+
+impl BHashSet {
+    /// Checks if a key has been marked as used.
+    ///
+    /// This method computes the Blake3 hash of the provided key and checks
+    /// if that hash exists in the internal hash set.
+    ///
+    /// # Arguments
+    /// - `key`: The byte sequence to check for membership
+    ///
+    /// # Returns
+    /// `true` if the key has been previously marked as used, `false` otherwise.
+    ///
+    /// # Performance
+    /// - Time complexity: O(1) average case
+    /// - Space complexity: O(1)
+    ///
+    /// # Security
+    /// - Uses Blake3 hash function which is cryptographically secure
+    /// - Collision resistance ensures false positives are extremely unlikely
+    /// - Deterministic: same input always produces same result
+    pub fn is_used(&self, key: &[u8]) -> bool {
+        let hash: [u8; 32] = blake3::hash(key).into();
+        self.0.contains(&hash)
+    }
+
+    /// Marks a key as used by storing its Blake3 hash.
+    ///
+    /// This method computes the Blake3 hash of the provided key and adds
+    /// it to the internal hash set. Subsequent calls to `is_used()` with
+    /// the same key will return `true`.
+    ///
+    /// # Arguments
+    /// - `key`: The byte sequence to mark as used
+    ///
+    /// # Performance
+    /// - Time complexity: O(1) average case
+    /// - Space complexity: O(1) per unique key
+    ///
+    /// # Security
+    /// - Uses Blake3 hash function for consistent and secure hashing
+    /// - Each unique key consumes exactly 32 bytes regardless of original size
+    /// - Hash collisions are cryptographically infeasible
+    ///
+    /// # Example Usage
+    /// ```rust
+    /// use rusty_vault::utils::BHashSet;
+    ///
+    /// let mut set = BHashSet::default();
+    /// let key = b"sensitive_data";
+    ///
+    /// assert!(!set.is_used(key));
+    /// set.mark_as_used(key);
+    /// assert!(set.is_used(key));
+    /// ```
+    pub fn mark_as_used(&mut self, key: &[u8]) {
+        let hash: [u8; 32] = blake3::hash(key).into();
+        self.0.insert(hash);
+    }
+}
 
 pub fn generate_uuid() -> String {
     let mut buf = [0u8; 16];
@@ -58,6 +146,13 @@ pub fn is_str_subset<T: PartialEq>(sub: &Vec<T>, superset: &Vec<T>) -> bool {
 
 pub fn sha1(data: &[u8]) -> String {
     let mut hasher = Hasher::new(MessageDigest::sha1()).unwrap();
+    hasher.update(data).unwrap();
+    let result = hasher.finish().unwrap();
+    hex::encode(result)
+}
+
+pub fn sha256(data: &[u8]) -> String {
+    let mut hasher = Hasher::new(MessageDigest::sha256()).unwrap();
     hasher.update(data).unwrap();
     let result = hasher.finish().unwrap();
     hex::encode(result)

@@ -1051,7 +1051,7 @@ pub fn unseal_test_rusty_vault_core(core: &Core, keys: &[&[u8]]) -> bool {
 }
 
 pub fn new_unseal_test_rusty_vault(name: &str) -> (RustyVault, Arc<Core>, String) {
-    let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
+    let seal_config = SealConfig { secret_shares: 9, secret_threshold: 5 };
     let root_token;
 
     let rvault = new_test_rusty_vault(name);

@@ -49,6 +49,8 @@ pub enum RvError {
     ErrCoreSealConfigInvalid,
     #[error("Core seal config not found.")]
     ErrCoreSealConfigNotFound,
+    #[error("Core unseal key set not found.")]
+    ErrCoreDeprecatedUnsealKeySetNotFound,
     #[error("Physical configuration item is missing.")]
     ErrPhysicalConfigItemMissing,
     #[error("Physical type is invalid.")]
@@ -63,10 +65,14 @@ pub enum RvError {
     ErrBarrierAlreadyInit,
     #[error("RustyVault unseal key is invalid.")]
     ErrBarrierKeyInvalid,
+    #[error("RustyVault unseal key is deprecated.")]
+    ErrBarrierKeyDeprecated,
     #[error("RustyVault is not initialized.")]
     ErrBarrierNotInit,
     #[error("RustyVault is sealed.")]
     ErrBarrierSealed,
+    #[error("RustyVault is unsealing.")]
+    ErrBarrierUnsealing,
     #[error("RustyVault is unsealed.")]
     ErrBarrierUnsealed,
     #[error("RustyVault unseal failed.")]
