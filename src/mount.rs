@@ -15,6 +15,7 @@ use std::{
 };
 
 use crossbeam_channel::{select, tick};
+use dashmap::DashMap;
 use derive_more::Deref;
 use lazy_static::lazy_static;
 use openssl::{
@@ -78,7 +79,7 @@ pub struct MountsRouter {
     pub barrier: Arc<dyn SecurityBarrier>,
     pub barrier_prefix: String,
     pub router_prefix: String,
-    pub backends: Mutex<HashMap<String, Arc<LogicalBackendNewFunc>>>,
+    pub backends: DashMap<String, Arc<LogicalBackendNewFunc>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -118,7 +119,7 @@ impl MountsRouter {
             barrier,
             barrier_prefix: barrier_prefix.to_string(),
             router_prefix: router_prefix.to_string(),
-            backends: Mutex::new(HashMap::new()),
+            backends: DashMap::new(),
         }
     }
 
@@ -150,8 +151,7 @@ impl MountsRouter {
     }
 
     pub fn get_backend(&self, logical_type: &str) -> Result<Arc<LogicalBackendNewFunc>, RvError> {
-        let backends = self.backends.lock().unwrap();
-        if let Some(backend) = backends.get(logical_type) {
+        if let Some(backend) = self.backends.get(logical_type) {
             Ok(backend.clone())
         } else {
             Err(RvError::ErrCoreLogicalBackendNoExist)
@@ -159,17 +159,17 @@ impl MountsRouter {
     }
 
     pub fn add_backend(&self, logical_type: &str, backend: Arc<LogicalBackendNewFunc>) -> Result<(), RvError> {
-        let mut backends = self.backends.lock().unwrap();
-        if backends.contains_key(logical_type) {
+        let result = self.backends.entry(logical_type.to_string()).or_try_insert_with(|| Ok::<_, ()>(backend));
+
+        if result.is_err() {
             return Err(RvError::ErrCoreLogicalBackendExist);
         }
-        backends.insert(logical_type.to_string(), backend);
+
         Ok(())
     }
 
     pub fn delete_backend(&self, logical_type: &str) -> Result<(), RvError> {
-        let mut backends = self.backends.lock().unwrap();
-        backends.remove(logical_type);
+        self.backends.remove(logical_type);
         Ok(())
     }
 }
