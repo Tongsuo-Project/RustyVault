@@ -196,12 +196,11 @@ impl AuthModule {
             return Err(RvError::ErrMountPathExist);
         }
 
-        let src_match = mounts_router.router.matching_mount_entry(&src)?;
-        if src_match.is_none() {
+        let Some(src_match) = mounts_router.router.matching_mount_entry(&src)? else {
             return Err(RvError::ErrMountNotMatch);
-        }
+        };
 
-        let mut src_entry = src_match.as_ref().unwrap().write()?;
+        let mut src_entry = src_match.write()?;
         src_entry.tainted = true;
 
         mounts_router.router.taint(&src)?;
@@ -217,7 +216,7 @@ impl AuthModule {
         std::mem::drop(src_entry);
 
         if let Err(e) = mounts_router.mounts.persist(self.barrier.as_storage()) {
-            let mut src_entry = src_match.as_ref().unwrap().write()?;
+            let mut src_entry = src_match.write()?;
             src_entry.path = src_path;
             src_entry.tainted = true;
             return Err(e);
@@ -336,7 +335,9 @@ impl Module for AuthModule {
         self.load_auth(Some(&core.state.load().hmac_key), core.mount_entry_hmac_level)?;
         self.setup_auth()?;
 
-        core.mounts_monitor.load().as_ref().unwrap().add_mounts_router(self.mounts_router.clone());
+        if let Some(mounts_monitor) = core.mounts_monitor.load().as_ref() {
+            mounts_monitor.add_mounts_router(self.mounts_router.clone());
+        }
 
         expiration.restore()?;
         expiration.start_check_expired_lease_entries();
@@ -347,7 +348,9 @@ impl Module for AuthModule {
     }
 
     fn cleanup(&self, core: &Core) -> Result<(), RvError> {
-        core.mounts_monitor.load().as_ref().unwrap().remove_mounts_router(self.mounts_router.clone());
+        if let Some(mounts_monitor) = core.mounts_monitor.load().as_ref() {
+            mounts_monitor.remove_mounts_router(self.mounts_router.clone());
+        }
         core.delete_handler(self.token_store.load().as_ref().unwrap().clone() as Arc<dyn Handler>)?;
         self.delete_auth_backend("token")?;
         self.teardown_auth()?;

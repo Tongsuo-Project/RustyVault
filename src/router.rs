@@ -146,23 +146,20 @@ impl Router {
     pub fn is_unauth_path(&self, path: &str) -> Result<bool, RvError> {
         let root = self.root.read()?;
 
-        let entry = root.get_ancestor(path);
-        if entry.is_none() {
+        let Some(entry) = root.get_ancestor(path) else {
             return Ok(false);
-        }
+        };
 
-        let entry = entry.as_ref().unwrap();
         let mount = entry.key().unwrap().as_str();
         let me = entry.value().unwrap();
         let remain = path.replacen(mount, "", 1);
 
-        let unauth_entry = me.unauth_paths.get_ancestor(remain.as_str());
-        if unauth_entry.is_none() {
+        let Some(unauth_entry) = me.unauth_paths.get_ancestor(remain.as_str()) else {
             return Ok(false);
-        }
+        };
 
-        let unauth_path_match = unauth_entry.as_ref().unwrap().key().unwrap();
-        if *unauth_entry.as_ref().unwrap().value().unwrap() {
+        let unauth_path_match = unauth_entry.key().unwrap();
+        if *unauth_entry.value().unwrap() {
             return Ok(remain.starts_with(unauth_path_match));
         }
 
@@ -172,23 +169,20 @@ impl Router {
     pub fn is_root_path(&self, path: &str) -> Result<bool, RvError> {
         let root = self.root.read()?;
 
-        let entry = root.get_ancestor(path);
-        if entry.is_none() {
+        let Some(entry) = root.get_ancestor(path) else {
             return Ok(false);
-        }
+        };
 
-        let entry = entry.as_ref().unwrap();
         let mount = entry.key().unwrap().as_str();
         let me = entry.value().unwrap();
         let remain = path.replacen(mount, "", 1);
 
-        let root_entry = me.root_paths.get_ancestor(remain.as_str());
-        if root_entry.is_none() {
+        let Some(root_entry) = me.root_paths.get_ancestor(remain.as_str()) else {
             return Ok(false);
-        }
+        };
 
-        let root_path_match = root_entry.as_ref().unwrap().key().unwrap();
-        if *root_entry.as_ref().unwrap().value().unwrap() {
+        let root_path_match = root_entry.key().unwrap();
+        if *root_entry.value().unwrap() {
             return Ok(remain.starts_with(root_path_match));
         }
 
@@ -214,12 +208,10 @@ impl Router {
 
         let backend = {
             let root = self.root.read()?;
-            let entry = root.get_ancestor(req.path.as_str());
-            if entry.is_none() {
+            let Some(entry) = root.get_ancestor(req.path.as_str()) else {
                 return Err(RvError::ErrRouterMountNotFound);
-            }
+            };
 
-            let entry = entry.as_ref().unwrap();
             let mount = entry.key().unwrap().as_str();
             let me = entry.value().unwrap();
             if me.tainted {

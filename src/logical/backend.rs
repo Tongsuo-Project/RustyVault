@@ -126,12 +126,12 @@ impl LogicalBackend {
     }
 
     pub fn handle_auth_renew(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
-        if self.auth_renew_handler.is_none() {
+        let Some(auth_renew_handler) = self.auth_renew_handler.as_ref() else {
             log::error!("this auth type doesn't support renew");
             return Err(RvError::ErrLogicalOperationUnsupported);
-        }
+        };
 
-        (self.auth_renew_handler.as_ref().unwrap())(self, req)
+        auth_renew_handler(self, req)
     }
 
     pub fn handle_revoke_renew(&self, req: &mut Request) -> Result<Option<Response>, RvError> {

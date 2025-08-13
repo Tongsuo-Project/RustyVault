@@ -42,13 +42,15 @@ async fn logical_request_handler(
     path: web::Path<String>,
     core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
-    let conn = req.conn_data::<Connection>().unwrap();
+    let Some(conn) = req.conn_data::<Connection>() else {
+        return Err(RvError::ErrRequestInvalid);
+    };
     log::debug!("logical request, connection info: {conn:?}, method: {method:?}, path: {path:?}");
 
     let mut req_conn = ReqConnection::default();
     req_conn.peer_addr = conn.peer.to_string();
-    if conn.tls.is_some() {
-        req_conn.peer_tls_cert.clone_from(&conn.tls.as_ref().unwrap().client_cert_chain);
+    if let Some(tls) = &conn.tls {
+        req_conn.peer_tls_cert.clone_from(&tls.client_cert_chain);
     }
 
     let mut r = request_auth(&req);

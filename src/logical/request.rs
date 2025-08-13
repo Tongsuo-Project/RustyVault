@@ -89,27 +89,28 @@ impl Request {
     }
 
     fn get_data_raw(&self, key: &str, default: bool) -> Result<Value, RvError> {
-        let field = self.match_path.as_ref().unwrap().get_field(key);
-        if field.is_none() {
+        let Some(match_path) = self.match_path.as_ref() else {
+            return Err(RvError::ErrRequestNotReady);
+        };
+        let Some(field) = match_path.get_field(key) else {
             return Err(RvError::ErrRequestNoDataField);
-        }
-        let field = field.unwrap();
+        };
 
-        if self.data.is_some() {
-            if let Some(data) = self.data.as_ref().unwrap().get(key) {
-                if !field.check_data_type(data) {
+        if let Some(data) = self.data.as_ref() {
+            if let Some(value) = data.get(key) {
+                if !field.check_data_type(value) {
                     return Err(RvError::ErrRequestFieldInvalid);
                 }
-                return Ok(data.clone());
+                return Ok(value.clone());
             }
         }
 
-        if self.body.is_some() {
-            if let Some(data) = self.body.as_ref().unwrap().get(key) {
-                if !field.check_data_type(data) {
+        if let Some(body) = self.body.as_ref() {
+            if let Some(value) = body.get(key) {
+                if !field.check_data_type(value) {
                     return Err(RvError::ErrRequestFieldInvalid);
                 }
-                return Ok(data.clone());
+                return Ok(value.clone());
             }
         }
 
@@ -184,10 +185,12 @@ impl Request {
     }
 
     pub fn get_field_default_or_zero(&self, key: &str) -> Result<Value, RvError> {
-        if self.match_path.is_none() {
+        let Some(match_path) = self.match_path.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
-        }
-        let field = self.match_path.as_ref().unwrap().get_field(key).ok_or(RvError::ErrRequestNoDataField)?;
+        };
+        let Some(field) = match_path.get_field(key) else {
+            return Err(RvError::ErrRequestNoDataField);
+        };
         field.get_default()
     }
 
@@ -199,16 +202,16 @@ impl Request {
 
     //TODO: the sensitive data is still in the memory. Need to totally resolve this in `serde_json` someday.
     pub fn clear_data(&mut self, key: &str) {
-        if self.data.is_some() {
-            if let Some(secret_str) = self.data.as_mut().unwrap().get_mut(key) {
+        if let Some(data) = self.data.as_mut() {
+            if let Some(secret_str) = data.get_mut(key) {
                 if let Value::String(ref mut s) = *secret_str {
                     "".clone_into(s);
                 }
             }
         }
 
-        if self.body.is_some() {
-            if let Some(secret_str) = self.body.as_mut().unwrap().get_mut(key) {
+        if let Some(body) = self.body.as_mut() {
+            if let Some(secret_str) = body.get_mut(key) {
                 if let Value::String(ref mut s) = *secret_str {
                     "".clone_into(s);
                 }
@@ -217,34 +220,34 @@ impl Request {
     }
 
     pub fn storage_list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
-        if self.storage.is_none() {
+        let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
-        }
+        };
 
-        self.storage.as_ref().unwrap().list(prefix)
+        storage.list(prefix)
     }
 
     pub fn storage_get(&self, key: &str) -> Result<Option<StorageEntry>, RvError> {
-        if self.storage.is_none() {
+        let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
-        }
+        };
 
-        self.storage.as_ref().unwrap().get(key)
+        storage.get(key)
     }
 
     pub fn storage_put(&self, entry: &StorageEntry) -> Result<(), RvError> {
-        if self.storage.is_none() {
+        let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
-        }
+        };
 
-        self.storage.as_ref().unwrap().put(entry)
+        storage.put(entry)
     }
 
     pub fn storage_delete(&self, key: &str) -> Result<(), RvError> {
-        if self.storage.is_none() {
+        let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
-        }
+        };
 
-        self.storage.as_ref().unwrap().delete(key)
+        storage.delete(key)
     }
 }

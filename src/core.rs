@@ -119,7 +119,7 @@ impl Default for Core {
             module_manager: ModuleManager::new(),
             mount_entry_hmac_level: MountEntryHMACLevel::None,
             mounts_monitor: ArcSwapOption::empty(),
-            mounts_monitor_interval: 5,
+            mounts_monitor_interval: 0,
             state: ArcSwap::from_pointee(CoreState::default()),
         }
     }

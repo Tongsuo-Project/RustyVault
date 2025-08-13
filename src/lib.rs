@@ -100,7 +100,9 @@ impl RustyVault {
 
         let core = core.wrap();
 
-        core.mounts_monitor.store(Some(Arc::new(MountsMonitor::new(core.clone(), core.mounts_monitor_interval))));
+        if core.mounts_monitor_interval > 0 {
+            core.mounts_monitor.store(Some(Arc::new(MountsMonitor::new(core.clone(), core.mounts_monitor_interval))));
+        }
 
         core.module_manager.set_default_modules(core.clone())?;
 

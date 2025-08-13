@@ -941,12 +941,11 @@ impl AppRoleBackendInner {
     }
 
     pub fn set_role_id(&self, req: &mut Request, role_id: &str, role_id_entry: &RoleIdEntry) -> Result<(), RvError> {
-        let salt = self.salt.load();
-        if salt.is_none() {
+        let Some(salt) = self.salt.load_full() else {
             return Err(RvError::ErrResponse("salt not found".to_string()));
-        }
+        };
 
-        let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
+        let salt_id = salt.salt_id(role_id)?;
 
         let entry = StorageEntry::new(format!("role_id/{salt_id}").as_str(), role_id_entry)?;
 
@@ -958,12 +957,11 @@ impl AppRoleBackendInner {
             return Err(RvError::ErrResponse("missing role_id".to_string()));
         }
 
-        let salt = self.salt.load();
-        if salt.is_none() {
+        let Some(salt) = self.salt.load_full() else {
             return Err(RvError::ErrResponse("salt not found".to_string()));
-        }
+        };
 
-        let salt_id = salt.as_ref().unwrap().salt_id(role_id)?;
+        let salt_id = salt.salt_id(role_id)?;
 
         req.storage_delete(format!("role_id/{salt_id}").as_str())?;
 

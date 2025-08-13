@@ -597,18 +597,16 @@ impl SystemBackend {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
         let auth_module = self.get_module::<AuthModule>("auth")?;
 
-        if auth_module.token_store.load().is_none() {
+        let Some(token_store) = auth_module.token_store.load_full() else {
             return Err(RvError::ErrPermissionDenied);
-        }
+        };
 
         let mut secret_mounts = Map::new();
         let mut auth_mounts = Map::new();
 
         let mut is_authed = false;
 
-        let acl: Option<ACL> = if let Some(auth) =
-            auth_module.token_store.load().as_ref().unwrap().check_token(&req.path, &req.client_token)?
-        {
+        let acl: Option<ACL> = if let Some(auth) = token_store.check_token(&req.path, &req.client_token)? {
             if auth.policies.is_empty() {
                 None
             } else {
@@ -624,10 +622,14 @@ impl SystemBackend {
                 return false;
             }
 
+            let Some(acl) = acl.as_ref() else {
+                return false;
+            };
+
             if me.table == AUTH_TABLE_TYPE {
-                acl.as_ref().unwrap().has_mount_access(&format!("{}/{}", AUTH_TABLE_TYPE, me.path))
+                acl.has_mount_access(&format!("{}/{}", AUTH_TABLE_TYPE, me.path))
             } else {
-                acl.as_ref().unwrap().has_mount_access(me.path.as_str())
+                acl.has_mount_access(me.path.as_str())
             }
         };
 

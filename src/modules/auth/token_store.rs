@@ -307,11 +307,9 @@ impl TokenStore {
 
     /// Creates a token entry in the storage.
     pub fn create(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
-        if self.view.is_none() {
+        let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
-        }
-
-        let view = self.view.as_ref().unwrap();
+        };
 
         if entry.id.is_empty() {
             entry.id = generate_uuid();
@@ -338,11 +336,9 @@ impl TokenStore {
 
     /// Uses the token and decrements its use count.
     pub fn use_token(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
-        if self.view.is_none() {
+        let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
-        }
-
-        let view = self.view.as_ref().unwrap();
+        };
 
         if entry.num_uses == 0 {
             return Ok(());
@@ -403,11 +399,9 @@ impl TokenStore {
     }
 
     pub fn lookup_salted(&self, salted_id: &str) -> Result<Option<TokenEntry>, RvError> {
-        if self.view.is_none() {
+        let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
-        }
-
-        let view = self.view.as_ref().unwrap();
+        };
 
         let path = format!("{TOKEN_LOOKUP_PREFIX}{salted_id}");
         let raw = view.get(&path)?;
@@ -429,11 +423,9 @@ impl TokenStore {
     }
 
     pub fn revoke_salted(&self, salted_id: &str) -> Result<(), RvError> {
-        if self.view.is_none() {
+        let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
-        }
-
-        let view = self.view.as_ref().unwrap();
+        };
 
         let entry = self.lookup_salted(salted_id)?;
 
@@ -470,11 +462,9 @@ impl TokenStore {
     }
 
     pub fn revoke_tree_salted(&self, salted_id: &str) -> Result<(), RvError> {
-        if self.view.is_none() {
+        let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
-        }
-
-        let view = self.view.as_ref().unwrap();
+        };
 
         let path = format!("{TOKEN_PARENT_PREFIX}{salted_id}/");
 
