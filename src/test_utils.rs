@@ -45,6 +45,7 @@ use ureq::AgentBuilder;
 
 use crate::{
     api::{client::TLSConfigBuilder, Client},
+    cli::config::Config,
     core::{Core, InitResult, SealConfig},
     errors::RvError,
     http,
@@ -201,9 +202,10 @@ impl TestHttpServer {
     }
 
     pub fn new_with_backend(backend: Arc<dyn Backend>, tls_enable: bool) -> Self {
+        let config = Config::default();
         let barrier = Arc::new(Barrier::new(2));
         let (stop_tx, stop_rx) = oneshot::channel();
-        let rvault = RustyVault::new(backend, None).unwrap();
+        let rvault = RustyVault::new(backend, Some(&config)).unwrap();
         let core = rvault.core.load().clone();
 
         let mut scheme = "http";

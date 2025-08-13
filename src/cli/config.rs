@@ -4,6 +4,7 @@
 
 use std::{collections::HashMap, fmt, fs, path::Path};
 
+use better_default::Default;
 use openssl::ssl::SslVersion;
 use serde::{
     de::{self, Visitor},
@@ -14,7 +15,7 @@ use serde_json::Value;
 use crate::errors::RvError;
 
 /// A struct that contains several configurable options of RustyVault server
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(deserialize_with = "validate_listener")]
     pub listener: HashMap<String, Listener>,
@@ -41,12 +42,14 @@ pub struct Config {
     #[serde(default = "default_hmac_level")]
     pub mount_entry_hmac_level: MountEntryHMACLevel,
     #[serde(default = "default_mounts_monitor_interval")]
+    #[default(5)]
     pub mounts_monitor_interval: u64,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum MountEntryHMACLevel {
+    #[default]
     None,
     Compat,
     High,
