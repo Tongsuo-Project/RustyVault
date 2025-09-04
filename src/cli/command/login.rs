@@ -165,9 +165,9 @@ mod test {
 
     use crate::test_utils::TestHttpServer;
 
-    #[test]
-    fn test_cli_login() {
-        let mut test_http_server = TestHttpServer::new("test_cli_login", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_login() {
+        let mut test_http_server = TestHttpServer::new("test_cli_login", true).await;
 
         // set token
         test_http_server.token = test_http_server.root_token.clone();

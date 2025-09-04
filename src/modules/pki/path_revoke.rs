@@ -48,12 +48,13 @@ Force a rebuild of the CRL. This can be used to remove expired certificates from
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn revoke_cert(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn revoke_cert(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
-    pub fn read_rotate_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_rotate_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 }

@@ -82,9 +82,9 @@ mod test {
 
     use crate::test_utils::TestHttpServer;
 
-    #[test]
-    fn test_cli_policy_write() {
-        let mut test_http_server = TestHttpServer::new("test_cli_policy_write", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_policy_write() {
+        let mut test_http_server = TestHttpServer::new("test_cli_policy_write", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         let test_policy = r#"path "secret/" {

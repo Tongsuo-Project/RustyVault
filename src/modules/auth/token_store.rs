@@ -3,6 +3,11 @@
 //! logical backend interface through the `TokenStore` struct. Additionally, it implements
 //! the `Handler` trait to provide authentication and authorization functionality at
 //! different stages of request handling, such as pre-routing and post-routing.
+#[cfg(not(feature = "sync_handler"))]
+use std::future::Future;
+#[cfg(not(feature = "sync_handler"))]
+use std::pin::Pin;
+
 use std::{
     collections::HashMap,
     sync::{Arc, Weak},
@@ -117,6 +122,7 @@ pub struct TokenStore {
     pub auth_handlers: ArcSwap<Vec<Arc<dyn AuthHandler>>>,
 }
 
+#[maybe_async::maybe_async]
 impl TokenStore {
     /// Wraps the `TokenStore` instance in an `Arc` and sets its weak pointer reference.
     pub fn wrap(self) -> Arc<Self> {
@@ -132,13 +138,13 @@ impl TokenStore {
     }
 
     /// Creates a new `TokenStore` and initializes it with the necessary components.
-    pub fn new(core: &Core, expiration: Arc<ExpirationManager>) -> Result<TokenStore, RvError> {
+    pub async fn new(core: &Core, expiration: Arc<ExpirationManager>) -> Result<TokenStore, RvError> {
         let Some(system_view) = core.state.load().system_view.as_ref().cloned() else {
             return Err(RvError::ErrBarrierSealed);
         };
 
         let view = system_view.new_sub_view(TOKEN_SUB_PATH);
-        let salt = view.get(TOKEN_SALT_LOCATION)?;
+        let salt = view.get(TOKEN_SALT_LOCATION).await?;
 
         let mut token_store = TokenStore {
             self_ptr: Weak::new(),
@@ -157,7 +163,7 @@ impl TokenStore {
             token_store.salt = generate_uuid();
             let raw =
                 StorageEntry { key: TOKEN_SALT_LOCATION.to_string(), value: token_store.salt.as_bytes().to_vec() };
-            view.put(&raw)?;
+            view.put(&raw).await?;
         }
 
         token_store.view = Some(Arc::new(view));
@@ -292,7 +298,7 @@ impl TokenStore {
     }
 
     /// Generates a root token with 'root' policy.
-    pub fn root_token(&self) -> Result<TokenEntry, RvError> {
+    pub async fn root_token(&self) -> Result<TokenEntry, RvError> {
         let mut te = TokenEntry {
             policies: vec!["root".to_string()],
             path: "auth/token/root".to_string(),
@@ -300,13 +306,13 @@ impl TokenStore {
             ..TokenEntry::default()
         };
 
-        self.create(&mut te)?;
+        self.create(&mut te).await?;
 
         Ok(te)
     }
 
     /// Creates a token entry in the storage.
-    pub fn create(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
+    pub async fn create(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
         let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
         };
@@ -320,7 +326,7 @@ impl TokenStore {
         let value = serde_json::to_string(&entry)?;
 
         if !entry.parent.is_empty() {
-            let parent = self.lookup(&entry.parent)?;
+            let parent = self.lookup(&entry.parent).await?;
             if parent.is_none() {
                 return Err(RvError::ErrAuthTokenNotFound);
             }
@@ -328,14 +334,15 @@ impl TokenStore {
             let path = format!("{}{}/{}", TOKEN_PARENT_PREFIX, self.salt_id(&entry.parent), salted_id);
             let entry = StorageEntry { key: path, ..StorageEntry::default() };
 
-            view.put(&entry)?;
+            view.put(&entry).await?;
         }
 
         view.put(&StorageEntry { key: format!("{TOKEN_LOOKUP_PREFIX}{salted_id}"), value: value.as_bytes().to_vec() })
+            .await
     }
 
     /// Uses the token and decrements its use count.
-    pub fn use_token(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
+    pub async fn use_token(&self, entry: &mut TokenEntry) -> Result<(), RvError> {
         let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
         };
@@ -347,7 +354,7 @@ impl TokenStore {
         entry.num_uses -= 1;
 
         if entry.num_uses == 0 {
-            return self.revoke(&entry.id);
+            return self.revoke(&entry.id).await;
         }
 
         let salted_id = self.salt_id(&entry.id);
@@ -356,24 +363,24 @@ impl TokenStore {
         let path = format!("{TOKEN_LOOKUP_PREFIX}{salted_id}");
         let entry = StorageEntry { key: path, value: value.as_bytes().to_vec() };
 
-        view.put(&entry)
+        view.put(&entry).await
     }
 
     /// Checks the validity of a token and returns the associated authentication data.
-    pub fn check_token(&self, _path: &str, token: &str) -> Result<Option<Auth>, RvError> {
+    pub async fn check_token(&self, _path: &str, token: &str) -> Result<Option<Auth>, RvError> {
         if token.is_empty() {
             return Err(RvError::ErrRequestClientTokenMissing);
         }
 
         log::debug!("check token: {token}");
-        let te = self.lookup(token)?;
+        let te = self.lookup(token).await?;
         if te.is_none() {
             return Err(RvError::ErrPermissionDenied);
         }
 
         let mut entry = te.unwrap();
 
-        self.use_token(&mut entry)?;
+        self.use_token(&mut entry).await?;
 
         let mut auth = Auth {
             client_token: token.to_string(),
@@ -390,21 +397,21 @@ impl TokenStore {
     }
 
     /// Looks up the token entry with the given ID.
-    pub fn lookup(&self, id: &str) -> Result<Option<TokenEntry>, RvError> {
+    pub async fn lookup(&self, id: &str) -> Result<Option<TokenEntry>, RvError> {
         if id.is_empty() {
             return Err(RvError::ErrAuthTokenIdInvalid);
         }
 
-        self.lookup_salted(self.salt_id(id).as_str())
+        self.lookup_salted(self.salt_id(id).as_str()).await
     }
 
-    pub fn lookup_salted(&self, salted_id: &str) -> Result<Option<TokenEntry>, RvError> {
+    pub async fn lookup_salted(&self, salted_id: &str) -> Result<Option<TokenEntry>, RvError> {
         let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
         };
 
         let path = format!("{TOKEN_LOOKUP_PREFIX}{salted_id}");
-        let raw = view.get(&path)?;
+        let raw = view.get(&path).await?;
         if raw.is_none() {
             return Ok(None);
         }
@@ -414,33 +421,33 @@ impl TokenStore {
         Ok(Some(entry))
     }
 
-    pub fn revoke(&self, id: &str) -> Result<(), RvError> {
+    pub async fn revoke(&self, id: &str) -> Result<(), RvError> {
         if id.is_empty() {
             return Err(RvError::ErrAuthTokenIdInvalid);
         }
 
-        self.revoke_salted(self.salt_id(id).as_str())
+        self.revoke_salted(self.salt_id(id).as_str()).await
     }
 
-    pub fn revoke_salted(&self, salted_id: &str) -> Result<(), RvError> {
+    pub async fn revoke_salted(&self, salted_id: &str) -> Result<(), RvError> {
         let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
         };
 
-        let entry = self.lookup_salted(salted_id)?;
+        let entry = self.lookup_salted(salted_id).await?;
 
         let path = format!("{TOKEN_LOOKUP_PREFIX}{salted_id}");
 
-        view.delete(&path)?;
+        view.delete(&path).await?;
 
         if entry.is_some() {
             let entry = entry.unwrap();
             if entry.parent.as_str() != "" {
                 let path = format!("{}{}/{}", TOKEN_PARENT_PREFIX, self.salt_id(&entry.parent), salted_id);
-                view.delete(&path)?;
+                view.delete(&path).await?;
             }
             //Revoke all secrets under this token
-            self.expiration.revoke_by_token(&entry)?;
+            self.expiration.revoke_by_token(&entry).await?;
         }
 
         Ok(())
@@ -453,14 +460,38 @@ impl TokenStore {
     ///
     /// # Returns
     /// - Result<(), RvError>: Ok(()) if successful, or an error if not.
-    pub fn revoke_tree(&self, id: &str) -> Result<(), RvError> {
+    pub async fn revoke_tree(&self, id: &str) -> Result<(), RvError> {
         if id.is_empty() {
             return Err(RvError::ErrAuthTokenIdInvalid);
         }
 
-        self.revoke_tree_salted(self.salt_id(id).as_str())
+        self.revoke_tree_salted(self.salt_id(id).as_str()).await
     }
 
+    #[cfg(not(feature = "sync_handler"))]
+    pub fn revoke_tree_salted(
+        &self,
+        salted_id: &str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), RvError>> + Send + '_>> {
+        let self_ref = self;
+        let salted_id = salted_id.to_owned();
+
+        Box::pin(async move {
+            let view = self_ref.view.as_ref().ok_or(RvError::ErrModuleNotInit)?;
+            let path = format!("{TOKEN_PARENT_PREFIX}{}", &salted_id);
+            let children = view.list(&path).await?;
+
+            for child in children {
+                self_ref.revoke_tree_salted(&child).await?;
+            }
+
+            self_ref.revoke_salted(&salted_id).await?;
+
+            Ok(())
+        })
+    }
+
+    #[cfg(feature = "sync_handler")]
     pub fn revoke_tree_salted(&self, salted_id: &str) -> Result<(), RvError> {
         let Some(view) = self.view.as_ref() else {
             return Err(RvError::ErrModuleNotInit);
@@ -476,12 +507,12 @@ impl TokenStore {
         self.revoke_salted(salted_id)
     }
 
-    pub fn handle_create(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_create(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         if req.body.is_none() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let parent = self.lookup(&req.client_token)?;
+        let parent = self.lookup(&req.client_token).await?;
         if parent.is_none() {
             return Err(RvError::ErrRequestInvalid);
         }
@@ -589,7 +620,7 @@ impl TokenStore {
             renewable = false;
         }
 
-        self.create(&mut te)?;
+        self.create(&mut te).await?;
 
         let auth = Auth {
             lease: Lease { ttl: Duration::from_secs(te.ttl), renewable, ..Lease::default() },
@@ -606,29 +637,41 @@ impl TokenStore {
         Ok(Some(resp))
     }
 
-    pub fn handle_revoke_tree(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_revoke_tree(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let id = req.get_data_as_str("token")?;
         if id.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        self.revoke_tree(&id)?;
+        self.revoke_tree(&id).await?;
 
         Ok(None)
     }
 
-    pub fn handle_revoke_orphan(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_revoke_orphan(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let id = req.get_data_as_str("token")?;
         if id.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        self.revoke(&id)?;
+        self.revoke(&id).await?;
 
         Ok(None)
     }
 
-    pub fn handle_lookup_self(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_lookup_self(
+        &self,
+        backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         if let Some(data) = req.data.as_mut() {
             data.insert("token".to_string(), Value::String(req.client_token.clone()));
         } else {
@@ -639,10 +682,10 @@ impl TokenStore {
             .cloned();
         }
 
-        self.handle_lookup(backend, req)
+        self.handle_lookup(backend, req).await
     }
 
-    pub fn handle_lookup(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_lookup(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         log::debug!("lookup token");
         let mut id = req.get_data_as_str("token")?;
         if id.is_empty() {
@@ -653,7 +696,7 @@ impl TokenStore {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let te = self.lookup(&id)?;
+        let te = self.lookup(&id).await?;
         if te.is_none() {
             return Ok(None);
         }
@@ -685,27 +728,27 @@ impl TokenStore {
         Ok(Some(Response::data_response(Some(data))))
     }
 
-    pub fn handle_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let id = req.get_data_as_str("token")?;
         if id.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        let te = self.lookup(&id)?.ok_or(RvError::ErrRequestInvalid)?;
+        let te = self.lookup(&id).await?.ok_or(RvError::ErrRequestInvalid)?;
 
         let increment_raw: i32 = serde_json::from_value(req.get_data("increment")?)?;
         let increment = Duration::from_secs(increment_raw as u64);
 
-        self.expiration.renew_token(req, &te, increment)
+        self.expiration.renew_token(req, &te, increment).await
     }
 
-    pub fn auth_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn auth_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         if req.auth.is_none() {
             return Err(rv_error_string!("request auth is nil"));
         }
 
         let id = &req.auth.as_ref().unwrap().client_token;
-        let te = self.lookup(id)?.ok_or(rv_error_string!("no token entry found during lookup"))?;
+        let te = self.lookup(id).await?.ok_or(rv_error_string!("no token entry found during lookup"))?;
 
         let auth = req.auth.as_mut().unwrap();
         auth.period = te.period;
@@ -750,7 +793,7 @@ impl Handler for TokenStore {
         }
 
         if auth.is_none() {
-            auth = self.check_token(&req.path, &req.client_token)?;
+            auth = self.check_token(&req.path, &req.client_token).await?;
         }
 
         if auth.is_none() {
@@ -790,22 +833,24 @@ impl Handler for TokenStore {
                 register_lease = false;
             }
 
-            let mount_entry = me.as_ref().unwrap().read()?;
+            {
+                let mount_entry = me.as_ref().unwrap().read()?;
 
-            if let Some(ref options) = mount_entry.options {
-                if let Some(leased_passthrough) = options.get("leased_passthrough") {
-                    if leased_passthrough != "true" {
+                if let Some(ref options) = mount_entry.options {
+                    if let Some(leased_passthrough) = options.get("leased_passthrough") {
+                        if leased_passthrough != "true" {
+                            register_lease = false;
+                        }
+                    } else {
                         register_lease = false;
                     }
                 } else {
                     register_lease = false;
                 }
-            } else {
-                register_lease = false;
             }
 
             if register_lease {
-                self.expiration.register_secret(req, resp)?;
+                self.expiration.register_secret(req, resp).await?;
             }
         }
 
@@ -860,12 +905,12 @@ impl Handler for TokenStore {
                 ..Default::default()
             };
 
-            self.create(&mut te)?;
+            self.create(&mut te).await?;
 
             auth.client_token.clone_from(&te.id);
             auth.ttl = Duration::from_secs(te.ttl);
 
-            self.expiration.register_auth(&te, auth)?;
+            self.expiration.register_auth(&te, auth).await?;
 
             auth.policies = all_policies;
         }
@@ -887,9 +932,16 @@ mod mod_token_store_tests {
         () => {{
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
             println!("init_test_rusty_vault, name: {}", name);
+            #[cfg(not(feature = "sync_handler"))]
+
+            let (_, core, _) = new_unseal_test_rusty_vault(&name).await;
+            #[cfg(feature = "sync_handler")]
             let (_, core, _) = new_unseal_test_rusty_vault(&name);
 
             let expiration = ExpirationManager::new(&core).unwrap().wrap();
+            #[cfg(not(feature = "sync_handler"))]
+            let token_store = TokenStore::new(&core, expiration.clone()).await.unwrap().wrap();
+            #[cfg(feature = "sync_handler")]
             let token_store = TokenStore::new(&core, expiration.clone()).unwrap().wrap();
 
             expiration.set_token_store(&token_store).unwrap();
@@ -900,6 +952,7 @@ mod mod_token_store_tests {
 
     pub struct MockBackend(());
 
+    #[maybe_async::maybe_async]
     impl Backend for MockBackend {
         fn init(&mut self) -> Result<(), RvError> {
             Ok(())
@@ -919,7 +972,7 @@ mod mod_token_store_tests {
         fn get_ctx(&self) -> Option<Arc<Context>> {
             None
         }
-        fn handle_request(&self, _req: &mut Request) -> Result<Option<Response>, RvError> {
+        async fn handle_request(&self, _req: &mut Request) -> Result<Option<Response>, RvError> {
             Ok(None)
         }
         fn secret(&self, _key: &str) -> Option<&Arc<Secret>> {
@@ -927,8 +980,8 @@ mod mod_token_store_tests {
         }
     }
 
-    #[test]
-    fn test_token_create_and_lookup() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_token_create_and_lookup() {
         let token_store = mock_token_store!();
 
         let mut entry = TokenEntry {
@@ -938,17 +991,17 @@ mod mod_token_store_tests {
             ..TokenEntry::default()
         };
 
-        token_store.create(&mut entry).unwrap();
+        token_store.create(&mut entry).await.unwrap();
 
-        let result = token_store.lookup(&entry.id).unwrap();
+        let result = token_store.lookup(&entry.id).await.unwrap();
         assert!(result.is_some());
         let looked_up_entry = result.unwrap();
         assert_eq!(looked_up_entry.id, entry.id);
         assert_eq!(looked_up_entry.policies, entry.policies);
     }
 
-    #[test]
-    fn test_token_revoke() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_token_revoke() {
         let token_store = mock_token_store!();
 
         let mut entry = TokenEntry {
@@ -958,16 +1011,16 @@ mod mod_token_store_tests {
             ..TokenEntry::default()
         };
 
-        token_store.create(&mut entry).unwrap();
+        token_store.create(&mut entry).await.unwrap();
 
-        token_store.revoke(&entry.id).unwrap();
+        token_store.revoke(&entry.id).await.unwrap();
 
-        let result = token_store.lookup(&entry.id).unwrap();
+        let result = token_store.lookup(&entry.id).await.unwrap();
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_token_revoke_tree() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_token_revoke_tree() {
         let token_store = mock_token_store!();
 
         let mut parent_entry = TokenEntry {
@@ -976,7 +1029,7 @@ mod mod_token_store_tests {
             display_name: "parent-token".to_string(),
             ..TokenEntry::default()
         };
-        token_store.create(&mut parent_entry).unwrap();
+        token_store.create(&mut parent_entry).await.unwrap();
 
         let mut child_entry = TokenEntry {
             parent: parent_entry.id.clone(),
@@ -985,18 +1038,19 @@ mod mod_token_store_tests {
             display_name: "child-token".to_string(),
             ..TokenEntry::default()
         };
-        token_store.create(&mut child_entry).unwrap();
+        token_store.create(&mut child_entry).await.unwrap();
 
-        assert!(token_store.revoke_tree(&parent_entry.id).is_ok());
+        let result = token_store.revoke_tree(&parent_entry.id).await;
+        assert!(result.is_ok());
 
-        let parent_result = token_store.lookup(&parent_entry.id).unwrap();
-        let child_result = token_store.lookup(&child_entry.id).unwrap();
+        let parent_result = token_store.lookup(&parent_entry.id).await.unwrap();
+        let child_result = token_store.lookup(&child_entry.id).await.unwrap();
         assert!(parent_result.is_none());
         assert!(child_result.is_none());
     }
 
-    #[test]
-    fn test_token_handle_create_request() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_token_handle_create_request() {
         let token_store = mock_token_store!();
         let mock_backend = MockBackend(());
 
@@ -1007,9 +1061,9 @@ mod mod_token_store_tests {
             ..TokenEntry::default()
         };
 
-        token_store.create(&mut entry).unwrap();
+        token_store.create(&mut entry).await.unwrap();
 
-        let result = token_store.lookup(&entry.id).unwrap();
+        let result = token_store.lookup(&entry.id).await.unwrap();
         assert!(result.is_some());
 
         let mut req = Request {
@@ -1023,7 +1077,7 @@ mod mod_token_store_tests {
             ..Request::default()
         };
 
-        let response = token_store.handle_create(&mock_backend, &mut req).unwrap();
+        let response = token_store.handle_create(&mock_backend, &mut req).await.unwrap();
         assert!(response.is_some());
         let resp = response.unwrap();
         assert!(resp.auth.is_some());

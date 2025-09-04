@@ -31,17 +31,18 @@ pub struct PolicyModule {
     pub policy_store: ArcSwap<PolicyStore>,
 }
 
+#[maybe_async::maybe_async]
 impl PolicyModule {
     pub fn new(core: Arc<Core>) -> Self {
         Self { name: "policy".into(), core, policy_store: ArcSwap::new(Arc::new(PolicyStore::default())) }
     }
 
-    pub fn setup_policy(&self) -> Result<(), RvError> {
-        self.policy_store.load().load_default_acl_policy()
+    pub async fn setup_policy(&self) -> Result<(), RvError> {
+        self.policy_store.load().load_default_acl_policy().await
     }
 
-    pub fn handle_policy_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let mut policies = self.policy_store.load().list_policy(PolicyType::Acl)?;
+    pub async fn handle_policy_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let mut policies = self.policy_store.load().list_policy(PolicyType::Acl).await?;
 
         // TODO: After the "namespace" feature is added here, it is necessary to determine whether it is the root
         // namespace before the root can be added.
@@ -56,9 +57,9 @@ impl PolicyModule {
         Ok(Some(resp))
     }
 
-    pub fn handle_policy_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
-        if let Some(policy) = self.policy_store.load().get_policy(&name, PolicyType::Acl)? {
+        if let Some(policy) = self.policy_store.load().get_policy(&name, PolicyType::Acl).await? {
             let mut resp_data = Map::new();
             resp_data.insert("name".into(), Value::String(name));
 
@@ -79,7 +80,7 @@ impl PolicyModule {
         Err(rv_error_response_status!(404, &format!("No policy named: {name}")))
     }
 
-    pub fn handle_policy_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
         let policy_str = req.get_data("policy")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
         let policy_raw = if let Ok(policy_bytes) = STANDARD.decode(&policy_str) {
@@ -95,18 +96,19 @@ impl PolicyModule {
             policy.input_sentinel_policy_data(req)?;
         }
 
-        self.policy_store.load().set_policy(policy)?;
+        self.policy_store.load().set_policy(policy).await?;
 
         Ok(None)
     }
 
-    pub fn handle_policy_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
-        self.policy_store.load().delete_policy(&name, PolicyType::Acl)?;
+        self.policy_store.load().delete_policy(&name, PolicyType::Acl).await?;
         Ok(None)
     }
 }
 
+#[maybe_async::maybe_async]
 impl Module for PolicyModule {
     fn name(&self) -> String {
         self.name.clone()
@@ -120,11 +122,11 @@ impl Module for PolicyModule {
         Ok(())
     }
 
-    fn init(&self, core: &Core) -> Result<(), RvError> {
-        let policy_store = PolicyStore::new(core)?;
+    async fn init(&self, core: &Core) -> Result<(), RvError> {
+        let policy_store = PolicyStore::new(core).await?;
         self.policy_store.store(policy_store.clone());
 
-        self.setup_policy()?;
+        self.setup_policy().await?;
 
         core.add_auth_handler(policy_store as Arc<dyn AuthHandler>)?;
 
@@ -230,7 +232,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_curd_api() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_curd_api");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_curd_api").await;
 
         let policy1_name = "policy1";
         let policy1_hcl = r#"
@@ -283,7 +285,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_http_api() {
-        let mut test_http_server = TestHttpServer::new("test_policy_http_api", true);
+        let mut test_http_server = TestHttpServer::new("test_policy_http_api", true).await;
 
         // set token
         test_http_server.token = test_http_server.root_token.clone();
@@ -337,7 +339,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_acl_check");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_acl_check").await;
 
         let policy1_name = "policy1";
         let policy1_hcl = r#"
@@ -429,7 +431,7 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check_with_policy_parameters() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_acl_check_with_policy_parameters");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_acl_check_with_policy_parameters").await;
 
         let policy1_name = "policy1";
         let policy1_hcl = r#"

@@ -51,11 +51,12 @@ endpoint."#
     }
 }
 
+#[maybe_async::maybe_async]
 impl AppRoleBackendInner {
-    pub fn login(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn login(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let role_id = req.get_data_as_str("role_id")?;
 
-        let role_id_entry = self.get_role_id(req, &role_id)?;
+        let role_id_entry = self.get_role_id(req, &role_id).await?;
         if role_id_entry.is_none() {
             return Err(RvError::ErrResponse("invalid role_id".to_string()));
         }
@@ -66,10 +67,10 @@ impl AppRoleBackendInner {
         let role_entry: RoleEntry;
         {
             let lock_entry = self.role_locks.get_lock(&role_name);
-            let _locked = lock_entry.lock.read()?;
+            let _locked = lock_entry.lock.read().await;
 
             role_entry = self
-                .get_role(req, &role_id_entry.name)?
+                .get_role(req, &role_id_entry.name).await?
                 .ok_or_else(|| RvError::ErrResponse("invalid role_id".to_string()))?;
         }
 
@@ -86,10 +87,11 @@ impl AppRoleBackendInner {
             let entry_index = format!("{}{}/{}", &role_entry.secret_id_prefix, &role_name_hmac, &secret_id_hmac);
 
             let lock_entry = self.secret_id_locks.get_lock(&secret_id_hmac);
-            let locked = lock_entry.lock.read()?;
+            let lock = lock_entry.lock.clone();
+            let locked = lock.read_owned().await;
 
             let secret_id_entry = self
-                .get_secret_id_storage_entry(storage, &role_entry.secret_id_prefix, &role_name_hmac, &secret_id_hmac)?
+                .get_secret_id_storage_entry(storage, &role_entry.secret_id_prefix, &role_name_hmac, &secret_id_hmac).await?
                 .ok_or(RvError::ErrResponse("invalid secret id".to_string()))?;
 
             // If a secret ID entry does not have a corresponding accessor entry, revoke the secret ID immediately
@@ -97,9 +99,9 @@ impl AppRoleBackendInner {
                 storage,
                 &secret_id_entry.secret_id_accessor,
                 &role_entry.secret_id_prefix,
-            )?;
+            ).await?;
             if accessor_entry.is_none() {
-                if let Err(err) = storage.delete(&entry_index) {
+                if let Err(err) = storage.delete(&entry_index).await {
                     return Err(RvError::ErrResponse(format!(
                         "error deleting secret_id {} from storage: {}",
                         &secret_id_hmac, err
@@ -137,7 +139,7 @@ impl AppRoleBackendInner {
                 // If the secret_id_num_uses is non-zero, it means that its use-count should be updated in the storage.
                 // Switch the lock from a `read` to a `write` and update the storage entry.
                 mem::drop(locked);
-                let _locked = lock_entry.lock.write()?;
+                let _locked = lock_entry.lock.write().await;
 
                 // Lock switching may change the data. Refresh the contents.
                 let mut secret_id_entry = self
@@ -146,7 +148,7 @@ impl AppRoleBackendInner {
                         &role_entry.secret_id_prefix,
                         &role_name_hmac,
                         &secret_id_hmac,
-                    )?
+                    ).await?
                     .ok_or(RvError::ErrResponse("invalid secret id".to_string()))?;
 
                 // If there exists a single use left, delete the secret_id entry from the storage but do not fail the
@@ -157,14 +159,14 @@ impl AppRoleBackendInner {
                         storage,
                         &secret_id_entry.secret_id_accessor,
                         &role_entry.secret_id_prefix,
-                    )?;
+                    ).await?;
 
-                    storage.delete(&entry_index)?;
+                    storage.delete(&entry_index).await?;
                 } else {
                     secret_id_entry.secret_id_num_uses -= 1;
                     secret_id_entry.last_updated_time = SystemTime::now();
                     let entry = StorageEntry::new(&entry_index, &secret_id_entry)?;
-                    storage.put(&entry)?;
+                    storage.put(&entry).await?;
                 }
 
                 // Ensure that the CIDRs on the secret ID are still a subset of that of role's
@@ -222,7 +224,7 @@ impl AppRoleBackendInner {
         Ok(Some(resp))
     }
 
-    pub fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         if req.auth.is_none() {
             return Err(rv_error_string!("invalid request"));
         }
@@ -233,13 +235,13 @@ impl AppRoleBackendInner {
         }
         let role_name = role_name.unwrap();
 
-        let role = self.get_role(req, role_name.as_str())?;
+        let role = self.get_role(req, role_name.as_str()).await?;
         if role.is_none() {
             return Ok(None);
         }
 
         let role = self
-            .get_role(req, role_name)?
+            .get_role(req, role_name).await?
             .ok_or(rv_error_response!(format!("role {} does not exist during renewal", role_name)))?;
 
         auth.period = role.token_period;

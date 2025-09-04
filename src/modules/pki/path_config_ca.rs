@@ -44,8 +44,9 @@ For security reasons, you can only view the certificate when reading this endpoi
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn write_path_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_path_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let pem_bundle_value = req.get_data("pem_bundle")?;
         let pem_bundle = pem_bundle_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
@@ -99,17 +100,17 @@ impl PkiBackendInner {
 
         cert_bundle.verify()?;
 
-        self.store_ca_bundle(req, &cert_bundle)?;
+        self.store_ca_bundle(req, &cert_bundle).await?;
 
         let entry = StorageEntry { key: "crl".to_string(), value: Vec::new() };
 
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
 
         Ok(None)
     }
 
-    pub fn fetch_ca_bundle(&self, req: &Request) -> Result<CertBundle, RvError> {
-        let entry = req.storage_get("config/ca_bundle")?;
+    pub async fn fetch_ca_bundle(&self, req: &Request) -> Result<CertBundle, RvError> {
+        let entry = req.storage_get("config/ca_bundle").await?;
         if entry.is_none() {
             return Err(RvError::ErrPkiCaNotConfig);
         }
@@ -118,28 +119,28 @@ impl PkiBackendInner {
         Ok(ca_bundle)
     }
 
-    pub fn store_ca_bundle(&self, req: &mut Request, ca_bundle: &CertBundle) -> Result<(), RvError> {
+    pub async fn store_ca_bundle(&self, req: &mut Request, ca_bundle: &CertBundle) -> Result<(), RvError> {
         let mut entry = StorageEntry::new("config/ca_bundle", ca_bundle)?;
 
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
 
         entry.key = "ca".to_string();
         entry.value = ca_bundle.certificate.to_pem().unwrap();
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
 
         let serial_number_hex = ca_bundle.serial_number.replace(':', "-").to_lowercase();
-        self.store_cert(req, &serial_number_hex, &ca_bundle.certificate)?;
+        self.store_cert(req, &serial_number_hex, &ca_bundle.certificate).await?;
 
         Ok(())
     }
 
-    pub fn delete_ca_bundle(&self, req: &Request) -> Result<(), RvError> {
-        let ca_bundle = self.fetch_ca_bundle(req)?;
+    pub async fn delete_ca_bundle(&self, req: &Request) -> Result<(), RvError> {
+        let ca_bundle = self.fetch_ca_bundle(req).await?;
         let serial_number_hex = ca_bundle.serial_number.replace(':', "-").to_lowercase();
 
-        self.delete_cert(req, &serial_number_hex)?;
+        self.delete_cert(req, &serial_number_hex).await?;
 
-        req.storage_delete("config/ca_bundle")?;
+        req.storage_delete("config/ca_bundle").await?;
 
         Ok(())
     }

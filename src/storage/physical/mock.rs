@@ -8,20 +8,21 @@ use crate::{
 #[derive(Default)]
 pub struct MockBackend(());
 
+#[maybe_async::maybe_async]
 impl Backend for MockBackend {
-    fn list(&self, _prefix: &str) -> Result<Vec<String>, RvError> {
+    async fn list(&self, _prefix: &str) -> Result<Vec<String>, RvError> {
         Ok(Vec::new())
     }
 
-    fn get(&self, _k: &str) -> Result<Option<BackendEntry>, RvError> {
+    async fn get(&self, _k: &str) -> Result<Option<BackendEntry>, RvError> {
         Ok(None)
     }
 
-    fn put(&self, _entry: &BackendEntry) -> Result<(), RvError> {
+    async fn put(&self, _entry: &BackendEntry) -> Result<(), RvError> {
         Ok(())
     }
 
-    fn delete(&self, _k: &str) -> Result<(), RvError> {
+    async fn delete(&self, _k: &str) -> Result<(), RvError> {
         Ok(())
     }
 }

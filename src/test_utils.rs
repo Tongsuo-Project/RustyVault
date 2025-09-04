@@ -93,14 +93,15 @@ pub struct TestHttpServer {
     pub thread: Option<thread::JoinHandle<()>>,
 }
 
+#[maybe_async::maybe_async]
 impl TestHttpServer {
-    pub fn new(name: &str, tls_enable: bool) -> Self {
+    pub async fn new(name: &str, tls_enable: bool) -> Self {
         let root_token;
         let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
         let mut test_http_server = TestHttpServer::new_without_init(name, tls_enable);
 
         let core = test_http_server.core.clone();
-        let init_result = core.init(&seal_config);
+        let init_result = core.init(&seal_config).await;
         println!("init_result: {:?}", init_result);
         let init_result = init_result.unwrap();
 
@@ -112,7 +113,8 @@ impl TestHttpServer {
 
         let k: Vec<&[u8]> = keys.iter().map(|v| v.as_slice()).collect();
 
-        assert!(unseal_test_rusty_vault_core(core.as_ref(), &k));
+        let result = unseal_test_rusty_vault_core(core.as_ref(), &k).await;
+        assert!(result);
 
         root_token = init_result.root_token.clone();
         println!("root_token: {:?}", root_token);
@@ -281,10 +283,10 @@ impl TestHttpServer {
         }
     }
 
-    pub fn new_with_prometheus(name: &str, tls_enable: bool) -> Self {
+    pub async fn new_with_prometheus(name: &str, tls_enable: bool) -> Self {
         let barrier = Arc::new(Barrier::new(2));
         let (stop_tx, stop_rx) = oneshot::channel();
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault(name);
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault(name).await;
 
         let mut scheme = "http";
         let mut ca_cert_pem = "".into();
@@ -1030,21 +1032,24 @@ pub fn new_test_rusty_vault(name: &str) -> RustyVault {
     RustyVault::new(new_test_backend(name), None).unwrap()
 }
 
-pub fn init_test_rusty_vault(rvault: &RustyVault, seal_config: &SealConfig) -> InitResult {
-    let result = rvault.init(seal_config);
+#[maybe_async::maybe_async]
+pub async fn init_test_rusty_vault(rvault: &RustyVault, seal_config: &SealConfig) -> InitResult {
+    let result = rvault.init(seal_config).await;
     assert!(result.is_ok());
 
     result.unwrap()
 }
 
-pub fn unseal_test_rusty_vault(rvault: &RustyVault, keys: &[&[u8]]) -> bool {
-    unseal_test_rusty_vault_core(rvault.core.load().as_ref(), keys)
+#[maybe_async::maybe_async]
+pub async fn unseal_test_rusty_vault(rvault: &RustyVault, keys: &[&[u8]]) -> bool {
+    unseal_test_rusty_vault_core(rvault.core.load().as_ref(), keys).await
 }
 
-pub fn unseal_test_rusty_vault_core(core: &Core, keys: &[&[u8]]) -> bool {
+#[maybe_async::maybe_async]
+pub async fn unseal_test_rusty_vault_core(core: &Core, keys: &[&[u8]]) -> bool {
     let mut unsealed = false;
     for key in keys.iter() {
-        let unseal = core.unseal(key);
+        let unseal = core.unseal(key).await;
         assert!(unseal.is_ok());
         unsealed = unseal.unwrap();
     }
@@ -1052,12 +1057,13 @@ pub fn unseal_test_rusty_vault_core(core: &Core, keys: &[&[u8]]) -> bool {
     unsealed
 }
 
-pub fn new_unseal_test_rusty_vault(name: &str) -> (RustyVault, Arc<Core>, String) {
+#[maybe_async::maybe_async]
+pub async fn new_unseal_test_rusty_vault(name: &str) -> (RustyVault, Arc<Core>, String) {
     let seal_config = SealConfig { secret_shares: 9, secret_threshold: 5 };
     let root_token;
 
     let rvault = new_test_rusty_vault(name);
-    let init_result = init_test_rusty_vault(&rvault, &seal_config);
+    let init_result = init_test_rusty_vault(&rvault, &seal_config).await;
 
     println!("init_result: {:?}", init_result);
 
@@ -1069,7 +1075,8 @@ pub fn new_unseal_test_rusty_vault(name: &str) -> (RustyVault, Arc<Core>, String
 
     let k: Vec<&[u8]> = keys.iter().map(|v| v.as_slice()).collect();
 
-    assert!(unseal_test_rusty_vault(&rvault, &k));
+    let result = unseal_test_rusty_vault(&rvault, &k).await;
+    assert!(result);
 
     root_token = init_result.root_token.clone();
     println!("root_token: {:?}", root_token);
@@ -1459,8 +1466,9 @@ impl Clone for NoopBackend {
     }
 }
 
+#[maybe_async::maybe_async]
 impl logical::Backend for NoopBackend {
-    fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+    async fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         if self.rollback_errs && req.operation == Operation::Rollback {
             return Err(rv_error_string!("no-op backend rollback has erred out"));
         }

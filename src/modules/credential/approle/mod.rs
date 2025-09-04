@@ -52,7 +52,7 @@ use derive_more::Deref;
 use crate::{
     core::Core,
     errors::RvError,
-    logical::{Backend, LogicalBackend, Request, Response},
+    logical::{Backend, LogicalBackend},
     modules::{auth::AuthModule, Module},
     new_logical_backend, new_logical_backend_internal,
     utils::{locks::Locks, salt::Salt},
@@ -149,6 +149,7 @@ impl AppRoleModule {
     }
 }
 
+#[maybe_async::maybe_async]
 impl Module for AppRoleModule {
     fn name(&self) -> String {
         self.name.clone()
@@ -174,13 +175,13 @@ impl Module for AppRoleModule {
         Ok(())
     }
 
-    fn init(&self, core: &Core) -> Result<(), RvError> {
+    async fn init(&self, core: &Core) -> Result<(), RvError> {
         if core.get_system_view().is_none() {
             return Err(RvError::ErrBarrierSealed);
         }
 
         let system_view = core.get_system_view().unwrap();
-        let salt = Salt::new(Some(system_view.as_storage()), None)?;
+        let salt = Salt::new(Some(system_view.as_storage()), None).await?;
 
         self.backend.inner.salt.store(Some(Arc::new(salt)));
 
@@ -205,7 +206,7 @@ mod test {
     use super::*;
     use crate::{
         core::Core,
-        logical::{field::FieldTrait, Operation, Request},
+        logical::{field::FieldTrait, Operation, Request, Response},
         test_utils::{
             new_unseal_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api,
         },
@@ -546,7 +547,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_credential_approle_module() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_credential_approle_module");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_credential_approle_module").await;
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle/").await;

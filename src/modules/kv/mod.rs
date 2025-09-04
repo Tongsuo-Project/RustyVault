@@ -92,9 +92,10 @@ impl KvBackend {
     }
 }
 
+#[maybe_async::maybe_async]
 impl KvBackendInner {
-    pub fn handle_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let entry = req.storage_get(&req.path)?;
+    pub async fn handle_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let entry = req.storage_get(&req.path).await?;
         if entry.is_none() {
             return Ok(None);
         }
@@ -132,7 +133,7 @@ impl KvBackendInner {
         Ok(Some(resp))
     }
 
-    pub fn handle_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         if req.body.is_none() {
             return Err(RvError::ErrModuleKvDataFieldMissing);
         }
@@ -140,22 +141,22 @@ impl KvBackendInner {
         let data = serde_json::to_string(req.body.as_ref().unwrap())?;
         let entry = StorageEntry { key: req.path.clone(), value: data.into_bytes() };
 
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
         Ok(None)
     }
 
-    pub fn handle_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        req.storage_delete(&req.path)?;
+    pub async fn handle_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        req.storage_delete(&req.path).await?;
         Ok(None)
     }
 
-    pub fn handle_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let keys = req.storage_list(&req.path)?;
+    pub async fn handle_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let keys = req.storage_list(&req.path).await?;
         let resp = Response::list_response(&keys);
         Ok(Some(resp))
     }
 
-    pub fn handle_noop(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_noop(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 }

@@ -34,6 +34,7 @@ impl RouterEntry {
     }
 }
 
+#[maybe_async::maybe_async]
 impl Router {
     pub fn new() -> Self {
         Router::default()
@@ -193,7 +194,7 @@ impl Router {
         self
     }
 
-    pub fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
         if !req.path.contains('/') {
             req.path.push('/');
         }
@@ -235,7 +236,7 @@ impl Router {
             me.backend.clone()
         };
 
-        let response = backend.handle_request(req)?;
+        let response = backend.handle_request(req).await?;
 
         req.path = original;
         req.connection = original_conn;
@@ -253,7 +254,7 @@ impl Handler for Router {
     }
 
     async fn route(&self, req: &mut Request) -> Result<Option<Response>, RvError> {
-        self.handle_request(req)
+        self.handle_request(req).await
     }
 }
 

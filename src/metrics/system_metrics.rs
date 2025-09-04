@@ -166,9 +166,9 @@ mod tests {
         gauge_map
     }
 
-    #[test]
-    fn test_sys_metrics() {
-        let server = TestHttpServer::new_with_prometheus("test_sys_metrics", false);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_sys_metrics() {
+        let server = TestHttpServer::new_with_prometheus("test_sys_metrics", false).await;
         let root_token = &server.root_token;
         thread::sleep(Duration::from_secs(20));
 

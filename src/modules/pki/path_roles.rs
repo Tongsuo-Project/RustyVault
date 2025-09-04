@@ -302,10 +302,11 @@ for "generate_lease"."#
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn get_role(&self, req: &mut Request, name: &str) -> Result<Option<RoleEntry>, RvError> {
+    pub async fn get_role(&self, req: &mut Request, name: &str) -> Result<Option<RoleEntry>, RvError> {
         let key = format!("role/{name}");
-        let storage_entry = req.storage_get(&key)?;
+        let storage_entry = req.storage_get(&key).await?;
         if storage_entry.is_none() {
             return Ok(None);
         }
@@ -315,13 +316,13 @@ impl PkiBackendInner {
         Ok(Some(role_entry))
     }
 
-    pub fn read_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let role_entry = self.get_role(req, req.get_data("name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+    pub async fn read_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let role_entry = self.get_role(req, req.get_data("name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?).await?;
         let data = serde_json::to_value(role_entry)?;
         Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))))
     }
 
-    pub fn create_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn create_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name_value = req.get_data("name")?;
         let name = name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let mut ttl = DEFAULT_MAX_TTL;
@@ -450,19 +451,19 @@ impl PkiBackendInner {
 
         let entry = StorageEntry::new(format!("role/{name}").as_str(), &role_entry)?;
 
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
 
         Ok(None)
     }
 
-    pub fn delete_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn delete_path_role(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name_value = req.get_data("name")?;
         let name = name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 
-        req.storage_delete(format!("role/{name}").as_str())?;
+        req.storage_delete(format!("role/{name}").as_str()).await?;
         Ok(None)
     }
 }

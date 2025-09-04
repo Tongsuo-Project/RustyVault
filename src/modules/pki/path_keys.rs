@@ -211,8 +211,9 @@ used for sign,verify,encrypt,decrypt.
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn generate_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn generate_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let key_name_value = req.get_data("key_name")?;
         let key_name = key_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let key_type_value = req.get_data_or_default("key_type")?;
@@ -225,7 +226,7 @@ impl PkiBackendInner {
             export_private_key = true;
         }
 
-        let key_info = self.fetch_key(req, key_name);
+        let key_info = self.fetch_key(req, key_name).await;
         if key_info.is_ok() {
             return Err(RvError::ErrPkiKeyNameAlreadyExist);
         }
@@ -233,7 +234,7 @@ impl PkiBackendInner {
         let mut key_bundle = KeyBundle::new(key_name, key_type.to_lowercase().as_str(), key_bits as u32);
         key_bundle.generate()?;
 
-        self.write_key(req, &key_bundle)?;
+        self.write_key(req, &key_bundle).await?;
 
         let mut resp_data = json!({
             "key_id": key_bundle.id.clone(),
@@ -266,7 +267,7 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(Some(resp_data))))
     }
 
-    pub fn import_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn import_key(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let key_name_value = req.get_data("key_name")?;
         let key_name = key_name_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let key_type_value = req.get_data_or_default("key_type")?;
@@ -280,7 +281,7 @@ impl PkiBackendInner {
             return Err(RvError::ErrRequestFieldNotFound);
         }
 
-        let key_info = self.fetch_key(req, key_name);
+        let key_info = self.fetch_key(req, key_name).await;
         if key_info.is_ok() {
             return Err(RvError::ErrPkiKeyNameAlreadyExist);
         }
@@ -333,7 +334,7 @@ impl PkiBackendInner {
             }
         }
 
-        self.write_key(req, &key_bundle)?;
+        self.write_key(req, &key_bundle).await?;
 
         let resp_data = json!({
             "key_id": key_bundle.id.clone(),
@@ -347,12 +348,12 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub fn key_sign(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn key_sign(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let data_value = req.get_data("data")?;
         let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let key_bundle =
-            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?).await?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.sign(&decoded_data)?;
@@ -366,14 +367,14 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub fn key_verify(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn key_verify(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let data_value = req.get_data("data")?;
         let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let signature_value = req.get_data("signature")?;
         let signature = signature_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let key_bundle =
-            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?).await?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let decoded_signature = hex::decode(signature.as_bytes())?;
@@ -388,14 +389,14 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub fn key_encrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn key_encrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let data_value = req.get_data("data")?;
         let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let aad_value = req.get_data_or_default("aad")?;
         let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let key_bundle =
-            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?).await?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.encrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
@@ -409,14 +410,14 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub fn key_decrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn key_decrypt(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let data_value = req.get_data("data")?;
         let data = data_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let aad_value = req.get_data_or_default("aad")?;
         let aad = aad_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let key_bundle =
-            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+            self.fetch_key(req, req.get_data("key_name")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?).await?;
 
         let decoded_data = hex::decode(data.as_bytes())?;
         let result = key_bundle.decrypt(&decoded_data, Some(EncryptExtraData::Aad(aad.as_bytes())))?;
@@ -430,8 +431,8 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub fn fetch_key(&self, req: &Request, key_name: &str) -> Result<KeyBundle, RvError> {
-        let entry = req.storage_get(format!("{PKI_CONFIG_KEY_PREFIX}{key_name}").as_str())?;
+    pub async fn fetch_key(&self, req: &Request, key_name: &str) -> Result<KeyBundle, RvError> {
+        let entry = req.storage_get(format!("{PKI_CONFIG_KEY_PREFIX}{key_name}").as_str()).await?;
         if entry.is_none() {
             return Err(RvError::ErrPkiCertNotFound);
         }
@@ -440,10 +441,10 @@ impl PkiBackendInner {
         Ok(key_bundle)
     }
 
-    pub fn write_key(&self, req: &Request, key_bundle: &KeyBundle) -> Result<(), RvError> {
+    pub async fn write_key(&self, req: &Request, key_bundle: &KeyBundle) -> Result<(), RvError> {
         let key_name = format!("{}{}", PKI_CONFIG_KEY_PREFIX, key_bundle.name);
         let entry = StorageEntry::new(key_name.as_str(), key_bundle)?;
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
         Ok(())
     }
 }

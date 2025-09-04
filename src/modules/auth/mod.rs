@@ -56,6 +56,7 @@ pub struct AuthModule {
     pub expiration: ArcSwapOption<ExpirationManager>,
 }
 
+#[maybe_async::maybe_async]
 impl AuthModule {
     pub fn new(core: Arc<Core>) -> Result<Self, RvError> {
         Ok(Self {
@@ -78,7 +79,7 @@ impl AuthModule {
         self.token_store.load().as_ref().unwrap().auth_handlers.store(handlers);
     }
 
-    pub fn enable_auth(&self, me: &MountEntry) -> Result<(), RvError> {
+    pub async fn enable_auth(&self, me: &MountEntry) -> Result<(), RvError> {
         let mounts_router = &self.mounts_router;
         {
             let mut auth_table = mounts_router.mounts.entries.write()?;
@@ -130,12 +131,12 @@ impl AuthModule {
             auth_table.insert(key, mount_entry);
         }
 
-        mounts_router.persist(self.barrier.as_storage())?;
+        mounts_router.persist(self.barrier.as_storage()).await?;
 
         Ok(())
     }
 
-    pub fn disable_auth(&self, path: &str) -> Result<(), RvError> {
+    pub async fn disable_auth(&self, path: &str) -> Result<(), RvError> {
         let mounts_router = &self.mounts_router;
 
         let mut path = path.to_string();
@@ -150,22 +151,22 @@ impl AuthModule {
         let full_path = format!("{}{}", AUTH_ROUTER_PREFIX, &path);
         let view = mounts_router.router.matching_view(&full_path)?;
 
-        self.taint_auth_entry(&path)?;
+        self.taint_auth_entry(&path).await?;
 
         mounts_router.router.taint(&full_path)?;
 
         mounts_router.router.unmount(&full_path)?;
 
         if view.is_some() {
-            view.unwrap().clear()?;
+            view.unwrap().clear().await?;
         }
 
-        self.remove_auth_entry(&path)?;
+        self.remove_auth_entry(&path).await?;
 
         Ok(())
     }
 
-    pub fn remount_auth(&self, src: &str, dst: &str) -> Result<(), RvError> {
+    pub async fn remount_auth(&self, src: &str, dst: &str) -> Result<(), RvError> {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
@@ -200,22 +201,25 @@ impl AuthModule {
             return Err(RvError::ErrMountNotMatch);
         };
 
-        let mut src_entry = src_match.write()?;
-        src_entry.tainted = true;
+        let src_path;
+        {
+            let mut src_entry = src_match.write()?;
+            src_entry.tainted = true;
 
-        mounts_router.router.taint(&src)?;
+            mounts_router.router.taint(&src)?;
 
-        if !(mounts_router.router.matching_mount(&dst)?).is_empty() {
-            return Err(RvError::ErrMountPathExist);
+            if !(mounts_router.router.matching_mount(&dst)?).is_empty() {
+                return Err(RvError::ErrMountPathExist);
+            }
+
+            src_path = src_entry.path.clone();
+            src_entry.path = dst.as_str().trim_start_matches(AUTH_ROUTER_PREFIX).to_string();
+            src_entry.tainted = false;
+
+            std::mem::drop(src_entry);
         }
 
-        let src_path = src_entry.path.clone();
-        src_entry.path = dst.as_str().trim_start_matches(AUTH_ROUTER_PREFIX).to_string();
-        src_entry.tainted = false;
-
-        std::mem::drop(src_entry);
-
-        if let Err(e) = mounts_router.mounts.persist(self.barrier.as_storage()) {
+        if let Err(e) = mounts_router.mounts.persist(self.barrier.as_storage()).await {
             let mut src_entry = src_match.write()?;
             src_entry.path = src_path;
             src_entry.tainted = true;
@@ -229,16 +233,16 @@ impl AuthModule {
         Ok(())
     }
 
-    pub fn remove_auth_entry(&self, path: &str) -> Result<(), RvError> {
+    pub async fn remove_auth_entry(&self, path: &str) -> Result<(), RvError> {
         if self.mounts_router.delete(path) {
-            self.mounts_router.persist(self.barrier.as_storage())?;
+            self.mounts_router.persist(self.barrier.as_storage()).await?;
         }
         Ok(())
     }
 
-    pub fn taint_auth_entry(&self, path: &str) -> Result<(), RvError> {
+    pub async fn taint_auth_entry(&self, path: &str) -> Result<(), RvError> {
         if self.mounts_router.set_taint(path, true) {
-            self.mounts_router.persist(self.barrier.as_storage())?;
+            self.mounts_router.persist(self.barrier.as_storage()).await?;
         }
         Ok(())
     }
@@ -250,18 +254,18 @@ impl AuthModule {
         Ok(())
     }
 
-    pub fn load_auth(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
+    pub async fn load_auth(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
         let mounts_router = &self.mounts_router;
-        if mounts_router.mounts.load(self.barrier.as_storage(), hmac_key, hmac_level).is_err() {
+        if mounts_router.mounts.load(self.barrier.as_storage(), hmac_key, hmac_level).await.is_err() {
             mounts_router.mounts.set_default(DEFAULT_AUTH_MOUNTS.to_vec(), hmac_key)?;
-            mounts_router.mounts.persist(self.barrier.as_storage())?;
+            mounts_router.mounts.persist(self.barrier.as_storage()).await?;
         }
 
-        self.update_auth_mount(hmac_key, hmac_level)
+        self.update_auth_mount(hmac_key, hmac_level).await
     }
 
-    pub fn persist_auth(&self) -> Result<(), RvError> {
-        self.mounts_router.persist(self.barrier.as_storage())
+    pub async fn persist_auth(&self) -> Result<(), RvError> {
+        self.mounts_router.persist(self.barrier.as_storage()).await
     }
 
     pub fn setup_auth(&self) -> Result<(), RvError> {
@@ -280,31 +284,34 @@ impl AuthModule {
         self.mounts_router.delete_backend(logical_type)
     }
 
-    fn update_auth_mount(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
+    async fn update_auth_mount(&self, hmac_key: Option<&[u8]>, hmac_level: MountEntryHMACLevel) -> Result<(), RvError> {
         let mut need_persist = false;
-        let mounts = self.mounts_router.mounts.entries.read()?;
+        {
+            let mounts = self.mounts_router.mounts.entries.read()?;
 
-        for mount_entry in mounts.values() {
-            let mut entry = mount_entry.write()?;
-            if entry.table.is_empty() {
-                entry.table = AUTH_TABLE_TYPE.to_string();
-                need_persist = true;
-            }
+            for mount_entry in mounts.values() {
+                let mut entry = mount_entry.write()?;
+                if entry.table.is_empty() {
+                    entry.table = AUTH_TABLE_TYPE.to_string();
+                    need_persist = true;
+                }
 
-            if entry.hmac.is_empty() && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
-                entry.calc_hmac(hmac_key.unwrap())?;
-                need_persist = true;
+                if entry.hmac.is_empty() && hmac_key.is_some() && hmac_level == MountEntryHMACLevel::Compat {
+                    entry.calc_hmac(hmac_key.unwrap())?;
+                    need_persist = true;
+                }
             }
         }
 
         if need_persist {
-            self.persist_auth()?;
+            self.persist_auth().await?;
         }
 
         Ok(())
     }
 }
 
+#[maybe_async::maybe_async]
 impl Module for AuthModule {
     fn name(&self) -> String {
         self.name.clone()
@@ -314,9 +321,9 @@ impl Module for AuthModule {
         self
     }
 
-    fn init(&self, core: &Core) -> Result<(), RvError> {
+    async fn init(&self, core: &Core) -> Result<(), RvError> {
         let expiration = ExpirationManager::new(core)?.wrap();
-        let token_store = TokenStore::new(core, expiration.clone())?.wrap();
+        let token_store = TokenStore::new(core, expiration.clone()).await?.wrap();
 
         expiration.set_token_store(&token_store)?;
 
@@ -332,14 +339,14 @@ impl Module for AuthModule {
         };
 
         self.add_auth_backend("token", Arc::new(token_backend_new_func))?;
-        self.load_auth(Some(&core.state.load().hmac_key), core.mount_entry_hmac_level)?;
+        self.load_auth(Some(&core.state.load().hmac_key), core.mount_entry_hmac_level).await?;
         self.setup_auth()?;
 
         if let Some(mounts_monitor) = core.mounts_monitor.load().as_ref() {
             mounts_monitor.add_mounts_router(self.mounts_router.clone());
         }
 
-        expiration.restore()?;
+        expiration.restore().await?;
         expiration.start_check_expired_lease_entries();
 
         core.add_handler(ts as Arc<dyn Handler>)?;

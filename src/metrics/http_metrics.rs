@@ -135,9 +135,9 @@ mod tests {
         counter_map
     }
 
-    #[test]
-    fn test_http_request() {
-        let server = TestHttpServer::new_with_prometheus("test_http_request", false);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_http_request() {
+        let server = TestHttpServer::new_with_prometheus("test_http_request", false).await;
         let root_token = &server.root_token;
 
         let path = ["v1/secret/password-0", "v1/secret/password-1", "v1/secret/password-2", "v1/secret"];

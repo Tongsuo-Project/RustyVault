@@ -59,6 +59,7 @@ pub enum Operation {
     Rollback,
 }
 
+#[maybe_async::maybe_async]
 pub trait Backend: Send + Sync {
     fn init(&mut self) -> Result<(), RvError>;
     fn setup(&self, key: &str) -> Result<(), RvError>;
@@ -66,6 +67,6 @@ pub trait Backend: Send + Sync {
     fn get_unauth_paths(&self) -> Option<Arc<Vec<String>>>;
     fn get_root_paths(&self) -> Option<Arc<Vec<String>>>;
     fn get_ctx(&self) -> Option<Arc<Context>>;
-    fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError>;
+    async fn handle_request(&self, req: &mut Request) -> Result<Option<Response>, RvError>;
     fn secret(&self, key: &str) -> Option<&Arc<secret::Secret>>;
 }

@@ -1,8 +1,20 @@
+#[cfg(not(feature = "sync_handler"))]
+use std::future::Future;
+#[cfg(not(feature = "sync_handler"))]
+use std::pin::Pin;
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use super::{request::Request, response::Response, Backend, Field, Operation};
 use crate::{context::Context, errors::RvError};
 
+#[cfg(not(feature = "sync_handler"))]
+type PathOperationHandler = dyn for<'a> Fn(
+        &'a dyn Backend,
+        &'a mut Request,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<Response>, RvError>> + Send + 'a>>
+    + Send
+    + Sync;
+#[cfg(feature = "sync_handler")]
 type PathOperationHandler = dyn Fn(&dyn Backend, &mut Request) -> Result<Option<Response>, RvError> + Send + Sync;
 
 #[derive(Debug, Clone)]
@@ -42,18 +54,19 @@ impl Path {
     }
 }
 
+#[maybe_async::maybe_async]
 impl PathOperation {
+    #[cfg(not(feature = "sync_handler"))]
     pub fn new() -> Self {
-        Self {
-            op: Operation::Read,
-            handler: Arc::new(|_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> {
-                Ok(None)
-            }),
-        }
+        Self { op: Operation::Read, handler: Arc::new(|_backend, _req| Box::pin(async move { Ok(None) })) }
+    }
+    #[cfg(feature = "sync_handler")]
+    pub fn new() -> Self {
+        Self { op: Operation::Read, handler: Arc::new(|_backend, _req| Ok(None)) }
     }
 
-    pub fn handle_request(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        (self.handler)(backend, req)
+    pub async fn handle_request(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        (self.handler)(backend, req).await
     }
 }
 
@@ -139,8 +152,16 @@ macro_rules! new_path_internal {
         let mut path_op = PathOperation::new();
 
         path_op.op = $op;
-        path_op.handler = Arc::new(move |backend: &dyn Backend, req: &mut Request| -> Result<Option<Response>, RvError> {
-            $handler_obj$(.$handler_method)*(backend, req)
+        path_op.handler = Arc::new(move |backend, req| {
+            let self_ = $handler_obj.clone();
+            #[cfg(not(feature = "sync_handler"))]
+            {
+                Box::pin(async move {
+                    self_$(.$handler_method)*(backend, req).await
+                })
+            }
+            #[cfg(feature = "sync_handler")]
+            self_$(.$handler_method)*(backend, req)
         });
 
         $object.operations.push(path_op);
@@ -151,7 +172,16 @@ macro_rules! new_path_internal {
         let mut path_op = PathOperation::new();
 
         path_op.op = $op;
-        path_op.handler = Arc::new($handler);
+        path_op.handler = Arc::new(|backend, req| {
+            #[cfg(not(feature = "sync_handler"))]
+            {
+                Box::pin(async move {
+                    $handler(backend, req).await
+                })
+            }
+            #[cfg(feature = "sync_handler")]
+            $handler(backend, req)
+        });
 
         $object.operations.push(path_op);
 
@@ -188,11 +218,52 @@ macro_rules! new_path_internal {
 mod test {
     use super::{super::FieldType, *};
 
-    pub fn my_test_read_handler(_backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    #[maybe_async::maybe_async]
+    pub async fn my_test_read_handler(_backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
     #[test]
+    #[cfg(not(feature = "sync_handler"))]
+    fn test_logical_path() {
+        let path: Path = new_path!({
+            pattern: "/aa",
+            fields: {
+                "mytype": {
+                    field_type: FieldType::Int,
+                    description: "haha"
+                },
+                "mypath": {
+                    field_type: FieldType::Str,
+                    description: "hehe"
+                }
+            },
+            operations: [
+                {op: Operation::Read, handler: my_test_read_handler},
+                {op: Operation::Write, raw_handler: async move |_backend: &dyn Backend, _req: &mut Request| -> Result<Option<Response>, RvError> {
+                        Err(RvError::ErrUnknown)
+                    }
+                }
+            ],
+            help: "testhelp"
+        });
+
+        assert_eq!(&path.pattern, "/aa");
+        assert_eq!(&path.help, "testhelp");
+        assert!(path.fields.get("mytype").is_some());
+        assert_eq!(path.fields["mytype"].field_type, FieldType::Int);
+        assert_eq!(path.fields["mytype"].description, "haha");
+        assert!(path.fields.get("mypath").is_some());
+        assert_eq!(path.fields["mypath"].field_type, FieldType::Str);
+        assert_eq!(path.fields["mypath"].description, "hehe");
+        assert!(path.fields.get("xxfield").is_none());
+        assert_eq!(path.operations[0].op, Operation::Read);
+        assert_eq!(path.operations[1].op, Operation::Write);
+        assert_eq!(path.operations.len(), 2);
+    }
+
+    #[test]
+    #[cfg(feature = "sync_handler")]
     fn test_logical_path() {
         let path: Path = new_path!({
             pattern: "/aa",

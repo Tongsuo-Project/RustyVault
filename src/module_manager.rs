@@ -22,6 +22,7 @@ pub struct ModuleManager {
     pub modules: ArcSwap<Vec<Arc<dyn Module>>>,
 }
 
+#[maybe_async::maybe_async]
 impl ModuleManager {
     pub fn new() -> Self {
         Self { modules: ArcSwap::from_pointee(Vec::new()) }
@@ -96,10 +97,10 @@ impl ModuleManager {
         Ok(())
     }
 
-    pub fn init(&self, core: &Core) -> Result<(), RvError> {
+    pub async fn init(&self, core: &Core) -> Result<(), RvError> {
         let modules = self.modules.load().clone();
         for module in modules.iter() {
-            module.init(core)?;
+            module.init(core).await?;
         }
 
         Ok(())

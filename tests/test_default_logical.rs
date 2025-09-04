@@ -404,7 +404,7 @@ async fn test_default_logical() {
 
     let seal_config = SealConfig { secret_shares: 10, secret_threshold: 5 };
 
-    let result = rvault.init(&seal_config);
+    let result = rvault.init(&seal_config).await;
     assert!(result.is_ok());
     let init_result = result.unwrap();
     println!("init_result: {:?}", init_result);
@@ -412,7 +412,7 @@ async fn test_default_logical() {
     let mut unsealed = false;
     for i in 0..seal_config.secret_threshold {
         let key = &init_result.secret_shares[i as usize];
-        let unseal = rvault.unseal(&[key]);
+        let unseal = rvault.unseal(&[key]).await;
         assert!(unseal.is_ok());
         unsealed = unseal.unwrap();
     }

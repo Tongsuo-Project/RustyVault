@@ -17,13 +17,14 @@ pub mod pki;
 pub mod policy;
 pub mod system;
 
+#[maybe_async::maybe_async]
 pub trait Module: Any + Send + Sync {
     //! Description for a trait itself.
     fn name(&self) -> String;
 
     fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 
-    fn init(&self, _core: &Core) -> Result<(), RvError> {
+    async fn init(&self, _core: &Core) -> Result<(), RvError> {
         Ok(())
     }
 

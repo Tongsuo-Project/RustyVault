@@ -87,8 +87,9 @@ impl Drop for MysqlBackendLock {
     }
 }
 
+#[maybe_async::maybe_async]
 impl Backend for MysqlBackend {
-    fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
+    async fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
         if prefix.starts_with("/") {
             return Err(RvError::ErrPhysicalBackendPrefixInvalid);
         }
@@ -122,7 +123,7 @@ impl Backend for MysqlBackend {
         }
     }
 
-    fn get(&self, key: &str) -> Result<Option<BackendEntry>, RvError> {
+    async fn get(&self, key: &str) -> Result<Option<BackendEntry>, RvError> {
         if key.starts_with("/") {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
@@ -143,7 +144,7 @@ impl Backend for MysqlBackend {
         }
     }
 
-    fn put(&self, entry: &BackendEntry) -> Result<(), RvError> {
+    async fn put(&self, entry: &BackendEntry) -> Result<(), RvError> {
         if entry.key.as_str().starts_with("/") {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
@@ -160,7 +161,7 @@ impl Backend for MysqlBackend {
         }
     }
 
-    fn delete(&self, key: &str) -> Result<(), RvError> {
+    async fn delete(&self, key: &str) -> Result<(), RvError> {
         if key.starts_with("/") {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
@@ -175,7 +176,7 @@ impl Backend for MysqlBackend {
         }
     }
 
-    fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+    async fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
         Ok(Box::new(MysqlBackendLock::new(&self.pool, lock_name, 1)?))
     }
 }

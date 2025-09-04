@@ -5,7 +5,7 @@ use derive_more::Deref;
 use crate::{
     core::Core,
     errors::RvError,
-    logical::{Backend, LogicalBackend, Request, Response},
+    logical::{Backend, LogicalBackend},
     modules::{auth::AuthModule, Module},
     new_logical_backend, new_logical_backend_internal,
 };
@@ -113,7 +113,7 @@ mod test {
     use super::*;
     use crate::{
         core::Core,
-        logical::{Operation, Request},
+        logical::{Operation, Request, Response},
         test_utils::{
             new_unseal_test_rusty_vault, test_delete_api, test_mount_auth_api, test_read_api, test_write_api,
         },
@@ -175,7 +175,7 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_userpass_module() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_userpass_module");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_userpass_module").await;
 
         // mount userpass auth to path: auth/pass
         test_mount_auth_api(&core, &root_token, "userpass", "pass").await;

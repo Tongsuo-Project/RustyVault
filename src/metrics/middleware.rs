@@ -99,12 +99,12 @@ mod tests {
         metrics_map
     }
 
-    #[test]
-    fn test_metrics_name_and_help_info() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_metrics_name_and_help_info() {
         let sys_metrics_map: HashMap<&str, &str> = SYS_METRICS_MAP.iter().cloned().collect();
         let http_metrics_map: HashMap<&str, &str> = HTTP_METRICS_MAP.iter().cloned().collect();
 
-        let server = TestHttpServer::new_with_prometheus("test_metrics_name_and_help_info", false);
+        let server = TestHttpServer::new_with_prometheus("test_metrics_name_and_help_info", false).await;
         let root_token = &server.root_token;
         let (status, resp) = server.request_prometheus("GET", "metrics", None, Some(root_token), None).unwrap();
         assert_eq!(status, 200);

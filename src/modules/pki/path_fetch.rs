@@ -13,6 +13,7 @@ use crate::{
     utils::cert::CertBundle,
 };
 
+#[maybe_async::maybe_async]
 impl PkiBackend {
     pub fn fetch_ca_path(&self) -> Path {
         let pki_backend_ref = self.inner.clone();
@@ -89,8 +90,9 @@ Using "ca" or "crl" as the value fetches the appropriate information in DER enco
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn handle_fetch_cert_bundle(&self, cert_bundle: &CertBundle) -> Result<Option<Response>, RvError> {
+    pub async fn handle_fetch_cert_bundle(&self, cert_bundle: &CertBundle) -> Result<Option<Response>, RvError> {
         let ca_chain_pem: String = cert_bundle
             .ca_chain
             .iter()
@@ -110,21 +112,21 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub fn read_path_fetch_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let ca_bundle = self.fetch_ca_bundle(req)?;
-        self.handle_fetch_cert_bundle(&ca_bundle)
+    pub async fn read_path_fetch_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let ca_bundle = self.fetch_ca_bundle(req).await?;
+        self.handle_fetch_cert_bundle(&ca_bundle).await
     }
 
-    pub fn read_path_fetch_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_path_fetch_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
-    pub fn read_path_fetch_cert(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_path_fetch_cert(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let serial_number_value = req.get_data("serial")?;
         let serial_number = serial_number_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let serial_number_hex = serial_number.replace(':', "-").to_lowercase();
-        let cert = self.fetch_cert(req, &serial_number_hex)?;
-        let ca_bundle = self.fetch_ca_bundle(req)?;
+        let cert = self.fetch_cert(req, &serial_number_hex).await?;
+        let ca_bundle = self.fetch_ca_bundle(req).await?;
 
         let mut ca_chain_pem: String = ca_bundle
             .ca_chain
@@ -148,7 +150,7 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub fn read_path_fetch_cert_crl(
+    pub async fn read_path_fetch_cert_crl(
         &self,
         _backend: &dyn Backend,
         _req: &mut Request,
@@ -156,8 +158,8 @@ impl PkiBackendInner {
         Ok(None)
     }
 
-    pub fn fetch_cert(&self, req: &Request, serial_number: &str) -> Result<X509, RvError> {
-        let entry = req.storage_get(format!("certs/{serial_number}").as_str())?;
+    pub async fn fetch_cert(&self, req: &Request, serial_number: &str) -> Result<X509, RvError> {
+        let entry = req.storage_get(format!("certs/{serial_number}").as_str()).await?;
         if entry.is_none() {
             return Err(RvError::ErrPkiCertNotFound);
         }
@@ -166,15 +168,15 @@ impl PkiBackendInner {
         Ok(cert)
     }
 
-    pub fn store_cert(&self, req: &Request, serial_number: &str, cert: &X509) -> Result<(), RvError> {
+    pub async fn store_cert(&self, req: &Request, serial_number: &str, cert: &X509) -> Result<(), RvError> {
         let value = cert.to_der()?;
         let entry = StorageEntry { key: format!("certs/{serial_number}"), value };
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
         Ok(())
     }
 
-    pub fn delete_cert(&self, req: &Request, serial_number: &str) -> Result<(), RvError> {
-        req.storage_delete(format!("certs/{serial_number}").as_str())?;
+    pub async fn delete_cert(&self, req: &Request, serial_number: &str) -> Result<(), RvError> {
+        req.storage_delete(format!("certs/{serial_number}").as_str()).await?;
         Ok(())
     }
 }

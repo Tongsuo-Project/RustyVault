@@ -73,9 +73,10 @@ impl CertBackend {
     }
 }
 
+#[maybe_async::maybe_async]
 impl CertBackendInner {
-    pub fn login(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let config = self.get_config(req)?;
+    pub async fn login(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let config = self.get_config(req).await?;
         if config.is_none() {
             return Err(RvError::ErrCredentailNotConfig);
         }
@@ -112,7 +113,7 @@ impl CertBackendInner {
         let skid_hex = utils::hex_encode_with_colon(subject_key_id);
         let akid_hex = utils::hex_encode_with_colon(authority_key_id);
 
-        let matched = self.verify_credentials(req)?;
+        let matched = self.verify_credentials(req).await?;
 
         if !matched.entry.token_bound_cidrs.is_empty() {
             let token_bound_cidrs: Vec<Box<dyn SockAddr>> =
@@ -142,8 +143,8 @@ impl CertBackendInner {
         Ok(Some(resp))
     }
 
-    pub fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let config = self.get_config(req)?.ok_or(RvError::ErrCredentailNotConfig)?;
+    pub async fn login_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let config = self.get_config(req).await?.ok_or(RvError::ErrCredentailNotConfig)?;
 
         if req.connection.is_none() {
             return Err(rv_error_response!("tls connection required"));
@@ -164,7 +165,7 @@ impl CertBackendInner {
                 .get("authority_key_id")
                 .ok_or(rv_error_response!("invalid request, not found authority_key_id"))?;
 
-            let _matched = self.verify_credentials(req)?;
+            let _matched = self.verify_credentials(req).await?;
 
             let conn = req.connection.as_ref().ok_or(RvError::ErrRequestNotReady)?;
 
@@ -194,7 +195,7 @@ impl CertBackendInner {
         let cert_name =
             auth.metadata.get("cert_name").ok_or(rv_error_response!("invalid request, not found cert_name"))?;
 
-        let cert = self.get_cert(req, cert_name.as_str())?;
+        let cert = self.get_cert(req, cert_name.as_str()).await?;
         if cert.is_none() {
             return Ok(None);
         }
@@ -212,7 +213,7 @@ impl CertBackendInner {
         Ok(Some(Response { auth: Some(auth), ..Response::default() }))
     }
 
-    fn verify_credentials(&self, req: &Request) -> Result<ParsedCert, RvError> {
+    async fn verify_credentials(&self, req: &Request) -> Result<ParsedCert, RvError> {
         let peer_tls_cert = req
             .connection
             .as_ref()
@@ -229,7 +230,7 @@ impl CertBackendInner {
             .or_else(|| req.get_data("name").ok().and_then(|name| name.as_str().map(|s| s.to_string())))
             .unwrap_or_default();
 
-        let (roots, trusted, trusted_non_ca, ocsp_config) = self.load_trusted_certs(req, &cert_name)?;
+        let (roots, trusted, trusted_non_ca, ocsp_config) = self.load_trusted_certs(req, &cert_name).await?;
 
         let trusted_chains = self.validate_cert(&roots, peer_tls_cert)?;
 
@@ -284,13 +285,13 @@ impl CertBackendInner {
         Err(rv_error_response!("no chain matching all constraints could be found for this login certificate"))
     }
 
-    fn load_trusted_certs(
+    async fn load_trusted_certs(
         &self,
         req: &Request,
         cert_name: &str,
     ) -> Result<(X509Store, Vec<ParsedCert>, Vec<ParsedCert>, OcspConfig), RvError> {
         let names: Vec<String> =
-            if !cert_name.is_empty() { vec![cert_name.to_string()] } else { req.storage_list("cert/")? };
+            if !cert_name.is_empty() { vec![cert_name.to_string()] } else { req.storage_list("cert/").await? };
 
         let mut trusted: Vec<ParsedCert> = Vec::new();
         let mut trusted_non_ca: Vec<ParsedCert> = Vec::new();
@@ -300,7 +301,7 @@ impl CertBackendInner {
         root_store_builder.set_flags(X509VerifyFlags::PARTIAL_CHAIN)?;
 
         for name in names.iter() {
-            if let Some(entry) = self.get_cert(req, name.trim_start_matches("cert/"))? {
+            if let Some(entry) = self.get_cert(req, name.trim_start_matches("cert/")).await? {
                 if entry.certificate.is_empty() {
                     log::error!("failed to parse certificate, name: {name}");
                     continue;

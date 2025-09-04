@@ -43,6 +43,7 @@ pub struct SystemBackend {
     pub self_ptr: Weak<SystemBackend>,
 }
 
+#[maybe_async::maybe_async]
 impl SystemBackend {
     pub fn new(core: Arc<Core>) -> Arc<Self> {
         let system_backend = SystemBackend { core, self_ptr: Weak::default() };
@@ -339,7 +340,7 @@ impl SystemBackend {
         backend
     }
 
-    pub fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut data: Map<String, Value> = Map::new();
 
         let mounts = self.core.mounts_router.entries.read()?;
@@ -356,7 +357,7 @@ impl SystemBackend {
         Ok(Some(Response::data_response(Some(data))))
     }
 
-    pub fn handle_mount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_mount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let logical_type = req.get_data("type")?;
         let description = req.get_data_or_default("description")?;
@@ -373,21 +374,21 @@ impl SystemBackend {
         let mut me = MountEntry::new(MOUNT_TABLE_TYPE, path, logical_type, description);
         me.options = options.as_map();
 
-        self.core.mount(&me)?;
+        self.core.mount(&me).await?;
         Ok(None)
     }
 
-    pub fn handle_unmount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_unmount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let suffix = req.path.trim_start_matches("mounts/");
         if suffix.is_empty() {
             return Err(RvError::ErrRequestInvalid);
         }
 
-        self.core.unmount(suffix)?;
+        self.core.unmount(suffix).await?;
         Ok(None)
     }
 
-    pub fn handle_remount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_remount(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let from = req.get_data("from")?;
         let to = req.get_data("to")?;
 
@@ -401,24 +402,27 @@ impl SystemBackend {
         let to_path = sanitize_path(to);
 
         if let Some(me) = self.core.router.matching_mount_entry(&from_path)? {
-            let mount_entry = me.read()?;
+            let mount_entry_table_type;
+            {
+                let mount_entry = me.read()?;
 
-            let dst_path_match = self.core.router.matching_mount(to)?;
-            if !dst_path_match.is_empty() {
-                return Err(rv_error_response_status!(409, &format!("path already in use at {dst_path_match}")));
+                let dst_path_match = self.core.router.matching_mount(to)?;
+                if !dst_path_match.is_empty() {
+                    return Err(rv_error_response_status!(409, &format!("path already in use at {dst_path_match}")));
+                }
+
+                mount_entry_table_type = mount_entry.table.clone();
+
+                std::mem::drop(mount_entry);
             }
-
-            let mount_entry_table_type = mount_entry.table.clone();
-
-            std::mem::drop(mount_entry);
 
             match mount_entry_table_type.as_str() {
                 AUTH_TABLE_TYPE => {
                     let auth_module = self.get_module::<AuthModule>("auth")?;
-                    auth_module.remount_auth(&from_path, &to_path)?;
+                    auth_module.remount_auth(&from_path, &to_path).await?;
                 }
                 MOUNT_TABLE_TYPE => {
-                    self.core.remount(&from_path, &to_path)?;
+                    self.core.remount(&from_path, &to_path).await?;
                 }
                 _ => {
                     return Err(rv_error_response_status!(409, "Unknown mount table type."));
@@ -431,25 +435,25 @@ impl SystemBackend {
         Ok(None)
     }
 
-    pub fn handle_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_renew(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let _lease_id = req.get_data("lease_id")?;
         let _increment: i32 = from_value(req.get_data("increment")?)?;
         //TODO
         Ok(None)
     }
 
-    pub fn handle_revoke(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_revoke(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let _lease_id = req.get_data("lease_id")?;
         //TODO
         Ok(None)
     }
 
-    pub fn handle_revoke_prefix(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_revoke_prefix(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let _prefix = req.get_data("prefix")?;
         Ok(None)
     }
 
-    pub fn handle_auth_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_auth_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut data: Map<String, Value> = Map::new();
 
         let auth_module = self.get_module::<AuthModule>("auth")?;
@@ -468,7 +472,7 @@ impl SystemBackend {
         Ok(Some(Response::data_response(Some(data))))
     }
 
-    pub fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let logical_type = req.get_data("type")?;
         let description = req.get_data_or_default("description")?;
@@ -488,12 +492,12 @@ impl SystemBackend {
 
         let auth_module = self.get_module::<AuthModule>("auth")?;
 
-        auth_module.enable_auth(&me)?;
+        auth_module.enable_auth(&me).await?;
 
         Ok(None)
     }
 
-    pub fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = sanitize_path(req.path.trim_start_matches("auth/"));
         if path.is_empty() {
             return Err(RvError::ErrRequestInvalid);
@@ -501,44 +505,44 @@ impl SystemBackend {
 
         let auth_module = self.get_module::<AuthModule>("auth")?;
 
-        auth_module.disable_auth(&path)?;
+        auth_module.disable_auth(&path).await?;
 
         Ok(None)
     }
 
-    pub fn handle_policy_list(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_list(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
-        policy_module.handle_policy_list(backend, req)
+        policy_module.handle_policy_list(backend, req).await
     }
 
-    pub fn handle_policy_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
-        policy_module.handle_policy_read(backend, req)
+        policy_module.handle_policy_read(backend, req).await
     }
 
-    pub fn handle_policy_write(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_write(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
-        policy_module.handle_policy_write(backend, req)
+        policy_module.handle_policy_write(backend, req).await
     }
 
-    pub fn handle_policy_delete(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_delete(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
-        policy_module.handle_policy_delete(backend, req)
+        policy_module.handle_policy_delete(backend, req).await
     }
 
-    pub fn handle_audit_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_audit_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
-    pub fn handle_audit_enable(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_audit_enable(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
-    pub fn handle_audit_disable(
+    pub async fn handle_audit_disable(
         &self,
         _backend: &dyn Backend,
         _req: &mut Request,
@@ -546,12 +550,12 @@ impl SystemBackend {
         Ok(None)
     }
 
-    pub fn handle_raw_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_raw_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
 
         let path = path.as_str().unwrap();
 
-        let entry = self.core.barrier.get(path)?;
+        let entry = self.core.barrier.get(path).await?;
         if entry.is_none() {
             return Ok(None);
         }
@@ -565,7 +569,7 @@ impl SystemBackend {
         Ok(Some(Response::data_response(data)))
     }
 
-    pub fn handle_raw_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_raw_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let value = req.get_data("value")?;
 
@@ -574,22 +578,22 @@ impl SystemBackend {
 
         let entry = StorageEntry { key: path.to_string(), value: value.as_bytes().to_vec() };
 
-        self.core.barrier.put(&entry)?;
+        self.core.barrier.put(&entry).await?;
 
         Ok(None)
     }
 
-    pub fn handle_raw_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_raw_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
 
         let path = path.as_str().unwrap();
 
-        self.core.barrier.delete(path)?;
+        self.core.barrier.delete(path).await?;
 
         Ok(None)
     }
 
-    pub fn handle_internal_ui_mounts_read(
+    pub async fn handle_internal_ui_mounts_read(
         &self,
         _backend: &dyn Backend,
         req: &mut Request,
@@ -606,12 +610,12 @@ impl SystemBackend {
 
         let mut is_authed = false;
 
-        let acl: Option<ACL> = if let Some(auth) = token_store.check_token(&req.path, &req.client_token)? {
+        let acl: Option<ACL> = if let Some(auth) = token_store.check_token(&req.path, &req.client_token).await? {
             if auth.policies.is_empty() {
                 None
             } else {
                 is_authed = true;
-                Some(policy_module.policy_store.load().new_acl(&auth.policies, None)?)
+                Some(policy_module.policy_store.load().new_acl(&auth.policies, None).await?)
             }
         } else {
             None
@@ -700,7 +704,7 @@ impl SystemBackend {
         Ok(Some(Response::data_response(data)))
     }
 
-    pub fn handle_internal_ui_mount_read(
+    pub async fn handle_internal_ui_mount_read(
         &self,
         _backend: &dyn Backend,
         req: &mut Request,
@@ -715,12 +719,12 @@ impl SystemBackend {
         }
 
         let acl = if let Some(auth) =
-            auth_module.token_store.load().as_ref().unwrap().check_token(&req.path, &req.client_token)?
+            auth_module.token_store.load().as_ref().unwrap().check_token(&req.path, &req.client_token).await?
         {
             if auth.policies.is_empty() {
                 return Err(RvError::ErrPermissionDenied);
             } else {
-                policy_module.policy_store.load().new_acl(&auth.policies, None)?
+                policy_module.policy_store.load().new_acl(&auth.policies, None).await?
             }
         } else {
             return Err(RvError::ErrPermissionDenied);
@@ -814,7 +818,7 @@ mod mod_system_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_system_internal_ui_mounts() {
-        let mut test_http_server = TestHttpServer::new("test_system_internal_ui_mounts", true);
+        let mut test_http_server = TestHttpServer::new("test_system_internal_ui_mounts", true).await;
 
         // set token
         test_http_server.token = test_http_server.root_token.clone();
@@ -836,7 +840,7 @@ mod mod_system_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_system_internal_ui_mounts_path() {
-        let mut test_http_server = TestHttpServer::new("test_system_internal_ui_mounts_path", true);
+        let mut test_http_server = TestHttpServer::new("test_system_internal_ui_mounts_path", true).await;
 
         // set token
         test_http_server.token = test_http_server.root_token.clone();

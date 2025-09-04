@@ -21,8 +21,9 @@ pub struct FileBackend {
     path: PathBuf,
 }
 
+#[maybe_async::maybe_async]
 impl Backend for FileBackend {
-    fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
+    async fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
         if prefix.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendPrefixInvalid);
         }
@@ -50,7 +51,7 @@ impl Backend for FileBackend {
         Ok(names)
     }
 
-    fn get(&self, k: &str) -> Result<Option<BackendEntry>, RvError> {
+    async fn get(&self, k: &str) -> Result<Option<BackendEntry>, RvError> {
         if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
@@ -75,7 +76,7 @@ impl Backend for FileBackend {
         }
     }
 
-    fn put(&self, entry: &BackendEntry) -> Result<(), RvError> {
+    async fn put(&self, entry: &BackendEntry) -> Result<(), RvError> {
         let k = entry.key.as_str();
         if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
@@ -85,7 +86,7 @@ impl Backend for FileBackend {
         let (path, key) = self.path_key(k);
         fs::create_dir_all(&path)?;
 
-        let _lock = self.lock(k)?;
+        let _lock = self.lock(k).await?;
 
         let file_path = path.join(key);
         let mut file = File::create(file_path)?;
@@ -93,12 +94,12 @@ impl Backend for FileBackend {
         Ok(())
     }
 
-    fn delete(&self, k: &str) -> Result<(), RvError> {
+    async fn delete(&self, k: &str) -> Result<(), RvError> {
         if k.starts_with('/') {
             return Err(RvError::ErrPhysicalBackendKeyInvalid);
         }
 
-        let _lock = self.lock(k)?;
+        let _lock = self.lock(k).await?;
 
         let (path, key) = self.path_key(k);
         let file_path = path.join(key);
@@ -112,7 +113,7 @@ impl Backend for FileBackend {
         Ok(())
     }
 
-    fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+    async fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
         let (path, key) = self.path_key(lock_name);
         let file_path = path.join(format!("{key}.lock"));
         loop {
@@ -155,16 +156,16 @@ mod test {
     use super::super::super::test::{test_backend_curd, test_backend_list_prefix};
     use crate::test_utils::{new_test_backend, new_test_file_backend, new_test_temp_dir, test_multi_routine};
 
-    #[test]
-    fn test_file_backend() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_file_backend() {
         let backend = new_test_backend("test_file_backend");
 
-        test_backend_curd(backend.as_ref());
-        test_backend_list_prefix(backend.as_ref());
+        test_backend_curd(backend.as_ref()).await;
+        test_backend_list_prefix(backend.as_ref()).await;
     }
 
-    #[test]
-    fn test_file_backend_multi_routine() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_file_backend_multi_routine() {
         let dir = new_test_temp_dir("test_file_backend_multi_routine");
         let backend = new_test_file_backend(&dir);
         test_multi_routine(backend);

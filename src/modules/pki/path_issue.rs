@@ -64,8 +64,9 @@ requested common name is allowed by the role policy.
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn issue_cert(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn issue_cert(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut common_names = Vec::new();
 
         let common_name_value = req.get_data_or_default("common_name")?;
@@ -83,7 +84,7 @@ impl PkiBackendInner {
             }
         }
 
-        let role = self.get_role(req, req.get_data("role")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?)?;
+        let role = self.get_role(req, req.get_data("role")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?).await?;
         if role.is_none() {
             return Err(RvError::ErrPkiRoleNotFound);
         }
@@ -100,7 +101,7 @@ impl PkiBackendInner {
             }
         }
 
-        let ca_bundle = self.fetch_ca_bundle(req)?;
+        let ca_bundle = self.fetch_ca_bundle(req).await?;
         let not_before = SystemTime::now() - Duration::from_secs(10);
         let mut not_after = not_before + parse_duration("30d").unwrap();
 
@@ -160,7 +161,7 @@ impl PkiBackendInner {
 
         if !role_entry.no_store {
             let serial_number_hex = cert_bundle.serial_number.replace(':', "-").to_lowercase();
-            self.store_cert(req, &serial_number_hex, &cert_bundle.certificate)?;
+            self.store_cert(req, &serial_number_hex, &cert_bundle.certificate).await?;
         }
 
         let cert_expiration = utils::asn1time_to_timestamp(cert_bundle.certificate.not_after().to_string().as_str())?;

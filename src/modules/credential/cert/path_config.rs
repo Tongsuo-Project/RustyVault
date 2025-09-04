@@ -60,9 +60,10 @@ then the next renew will cause the lease to expire.
     }
 }
 
+#[maybe_async::maybe_async]
 impl CertBackendInner {
-    pub fn get_config(&self, req: &Request) -> Result<Option<Config>, RvError> {
-        let storage_entry = req.storage_get("config")?;
+    pub async fn get_config(&self, req: &Request) -> Result<Option<Config>, RvError> {
+        let storage_entry = req.storage_get("config").await?;
         if storage_entry.is_none() {
             return Ok(Some(Config::default()));
         }
@@ -72,14 +73,14 @@ impl CertBackendInner {
         Ok(Some(config))
     }
 
-    pub fn set_config(&self, req: &mut Request, config: &Config) -> Result<(), RvError> {
+    pub async fn set_config(&self, req: &mut Request, config: &Config) -> Result<(), RvError> {
         let entry = StorageEntry::new("config", config)?;
 
-        req.storage_put(&entry)
+        req.storage_put(&entry).await
     }
 
-    pub fn read_config(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let config = self.get_config(req)?;
+    pub async fn read_config(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let config = self.get_config(req).await?;
         if config.is_none() {
             return Ok(None);
         }
@@ -89,8 +90,8 @@ impl CertBackendInner {
         Ok(Some(Response::data_response(Some(cfg_data.as_object().unwrap().clone()))))
     }
 
-    pub fn write_config(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let config = self.get_config(req)?;
+    pub async fn write_config(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let config = self.get_config(req).await?;
         if config.is_none() {
             return Ok(None);
         }
@@ -114,7 +115,7 @@ impl CertBackendInner {
             cfg.ocsp_cache_size = ocsp_cache_size;
         }
 
-        self.set_config(req, &cfg)?;
+        self.set_config(req, &cfg).await?;
 
         Ok(None)
     }

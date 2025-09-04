@@ -238,9 +238,9 @@ pub trait CommandExecutor {
 mod test {
     use crate::{errors::RvError, rv_error_string, test_utils::TestHttpServer};
 
-    #[test]
-    fn test_cli_logical() {
-        let mut test_http_server = TestHttpServer::new("test_cli_read", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_logical() {
+        let mut test_http_server = TestHttpServer::new("test_cli_read", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         // There is no data by default, and reading should fail.

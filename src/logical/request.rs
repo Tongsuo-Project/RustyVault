@@ -35,6 +35,7 @@ pub struct Request {
     pub ctx: Arc<Context>,
 }
 
+#[maybe_async::maybe_async]
 impl Request {
     pub fn new<S: Into<String>>(path: S) -> Self {
         Self { path: path.into(), ..Default::default() }
@@ -219,35 +220,35 @@ impl Request {
         }
     }
 
-    pub fn storage_list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
+    pub async fn storage_list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
         let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
         };
 
-        storage.list(prefix)
+        storage.list(prefix).await
     }
 
-    pub fn storage_get(&self, key: &str) -> Result<Option<StorageEntry>, RvError> {
+    pub async fn storage_get(&self, key: &str) -> Result<Option<StorageEntry>, RvError> {
         let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
         };
 
-        storage.get(key)
+        storage.get(key).await
     }
 
-    pub fn storage_put(&self, entry: &StorageEntry) -> Result<(), RvError> {
+    pub async fn storage_put(&self, entry: &StorageEntry) -> Result<(), RvError> {
         let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
         };
 
-        storage.put(entry)
+        storage.put(entry).await
     }
 
-    pub fn storage_delete(&self, key: &str) -> Result<(), RvError> {
+    pub async fn storage_delete(&self, key: &str) -> Result<(), RvError> {
         let Some(storage) = self.storage.as_ref() else {
             return Err(RvError::ErrRequestNotReady);
         };
 
-        storage.delete(key)
+        storage.delete(key).await
     }
 }

@@ -35,6 +35,7 @@ pub struct UserEntry {
     pub bound_cidrs: Vec<SockAddrMarshaler>,
 }
 
+#[maybe_async::maybe_async]
 impl UserPassBackend {
     pub fn users_path(&self) -> Path {
         let userpass_backend_ref1 = self.inner.clone();
@@ -132,10 +133,11 @@ then the next renew will cause the lease to expire.
 }
 
 #[allow(clippy::assigning_clones)]
+#[maybe_async::maybe_async]
 impl UserPassBackendInner {
-    pub fn get_user(&self, req: &mut Request, name: &str) -> Result<Option<UserEntry>, RvError> {
+    pub async fn get_user(&self, req: &mut Request, name: &str) -> Result<Option<UserEntry>, RvError> {
         let key = format!("user/{}", name.to_lowercase());
-        let storage_entry = req.storage_get(&key)?;
+        let storage_entry = req.storage_get(&key).await?;
         if storage_entry.is_none() {
             return Ok(None);
         }
@@ -159,17 +161,17 @@ impl UserPassBackendInner {
         Ok(Some(user_entry))
     }
 
-    pub fn set_user(&self, req: &mut Request, name: &str, user_entry: &UserEntry) -> Result<(), RvError> {
+    pub async fn set_user(&self, req: &mut Request, name: &str, user_entry: &UserEntry) -> Result<(), RvError> {
         let entry = StorageEntry::new(format!("user/{name}").as_str(), user_entry)?;
 
-        req.storage_put(&entry)
+        req.storage_put(&entry).await
     }
 
-    pub fn read_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
         let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_lowercase();
 
-        let entry = self.get_user(req, &username)?;
+        let entry = self.get_user(req, &username).await?;
         if entry.is_none() {
             return Ok(None);
         }
@@ -200,13 +202,13 @@ impl UserPassBackendInner {
         Ok(Some(Response::data_response(Some(data.clone()))))
     }
 
-    pub fn write_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
         let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_lowercase();
 
         let mut user_entry = UserEntry::default();
 
-        if let Some(entry) = self.get_user(req, &username)? {
+        if let Some(entry) = self.get_user(req, &username).await? {
             user_entry = entry;
         }
 
@@ -271,35 +273,35 @@ impl UserPassBackendInner {
             user_entry.token_bound_cidrs = user_entry.bound_cidrs.clone();
         }
 
-        self.set_user(req, &username, &user_entry)?;
+        self.set_user(req, &username, &user_entry).await?;
 
         Ok(None)
     }
 
-    pub fn delete_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn delete_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
         let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         if username.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 
-        req.storage_delete(format!("user/{}", username.to_lowercase()).as_str())?;
+        req.storage_delete(format!("user/{}", username.to_lowercase()).as_str()).await?;
         Ok(None)
     }
 
-    pub fn list_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let users = req.storage_list("user/")?;
+    pub async fn list_user(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let users = req.storage_list("user/").await?;
         let resp = Response::list_response(&users);
         Ok(Some(resp))
     }
 
-    pub fn write_user_password(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_user_password(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
         let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
         let mut user_entry = UserEntry::default();
 
-        let entry = self.get_user(req, username)?;
+        let entry = self.get_user(req, username).await?;
         if entry.is_some() {
             user_entry = entry.unwrap();
         }
@@ -311,7 +313,7 @@ impl UserPassBackendInner {
 
         user_entry.password_hash = password_hash;
 
-        self.set_user(req, username, &user_entry)?;
+        self.set_user(req, username, &user_entry).await?;
 
         Ok(None)
     }

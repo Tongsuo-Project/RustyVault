@@ -67,10 +67,11 @@ struct PolicyRequest {
     policy: String,
 }
 
-fn response_seal_status(core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
+#[maybe_async::maybe_async]
+async fn response_seal_status(core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
     let progress = core.unseal_progress();
     let sealed = core.sealed();
-    let seal_config = core.seal_config()?;
+    let seal_config = core.seal_config().await?;
 
     let resp = SealStatusResponse { sealed, t: seal_config.secret_shares, n: seal_config.secret_threshold, progress };
 
@@ -78,7 +79,9 @@ fn response_seal_status(core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvEr
 }
 
 async fn sys_init_get_request_handler(_req: HttpRequest, core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
-    //let conn = req.conn_data::<Connection>().unwrap();
+    #[cfg(not(feature = "sync_handler"))]
+    let inited = core.inited().await?;
+    #[cfg(feature = "sync_handler")]
     let inited = core.inited()?;
     Ok(response_ok(
         None,
@@ -101,6 +104,9 @@ async fn sys_init_put_request_handler(
     body.clear();
     let seal_config = SealConfig { secret_shares: payload.secret_shares, secret_threshold: payload.secret_threshold };
 
+    #[cfg(not(feature = "sync_handler"))]
+    let result = core.init(&seal_config).await?;
+    #[cfg(feature = "sync_handler")]
     let result = core.init(&seal_config)?;
 
     let resp = InitResponse {
@@ -115,10 +121,20 @@ async fn sys_seal_status_request_handler(
     _req: HttpRequest,
     core: web::Data<Arc<Core>>,
 ) -> Result<HttpResponse, RvError> {
-    response_seal_status(core)
+    #[cfg(not(feature = "sync_handler"))]
+    {
+        response_seal_status(core).await
+    }
+    #[cfg(feature = "sync_handler")]
+    {
+        response_seal_status(core)
+    }
 }
 
 async fn sys_seal_request_handler(_req: HttpRequest, core: web::Data<Arc<Core>>) -> Result<HttpResponse, RvError> {
+    #[cfg(not(feature = "sync_handler"))]
+    core.seal().await?;
+    #[cfg(feature = "sync_handler")]
     core.seal()?;
     Ok(response_ok(None, None))
 }
@@ -133,9 +149,17 @@ async fn sys_unseal_request_handler(
     body.clear();
     let key: Zeroizing<Vec<u8>> = Zeroizing::new(hex::decode(payload.key.clone())?);
 
-    let _result = core.unseal(&key)?;
+    #[cfg(not(feature = "sync_handler"))]
+    {
+        let _result = core.unseal(&key).await?;
+        response_seal_status(core).await
+    }
 
-    response_seal_status(core)
+    #[cfg(feature = "sync_handler")]
+    {
+        let _result = core.unseal(&key)?;
+        response_seal_status(core)
+    }
 }
 
 async fn sys_list_mounts_request_handler(

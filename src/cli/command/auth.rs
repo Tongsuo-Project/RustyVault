@@ -93,9 +93,9 @@ mod test {
 
     use crate::test_utils::TestHttpServer;
 
-    #[test]
-    fn test_cli_auth_help() {
-        let mut test_http_server = TestHttpServer::new("test_cli_auth_help", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_auth_help() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_help", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         // auth help token/
@@ -122,9 +122,9 @@ mod test {
         assert!(ret.unwrap().contains("Usage: rvault login -method=cert"));
     }
 
-    #[test]
-    fn test_cli_auth_list() {
-        let mut test_http_server = TestHttpServer::new("test_cli_auth_list", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_auth_list() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_list", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         // test auth list
@@ -137,9 +137,9 @@ mod test {
         assert_eq!(list["token/"]["type"], Value::String("token".into()));
     }
 
-    #[test]
-    fn test_cli_auth_enable_disable() {
-        let mut test_http_server = TestHttpServer::new("test_cli_auth_enable_disable", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_auth_enable_disable() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_enable_disable", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         // test auth enable
@@ -196,9 +196,9 @@ mod test {
         assert!(ret.is_err());
     }
 
-    #[test]
-    fn test_cli_auth_move() {
-        let mut test_http_server = TestHttpServer::new("test_cli_auth_move", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_auth_move() {
+        let mut test_http_server = TestHttpServer::new("test_cli_auth_move", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         // test auth enable

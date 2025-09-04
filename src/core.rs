@@ -159,12 +159,12 @@ impl Core {
         wrap_self
     }
 
-    pub fn inited(&self) -> Result<bool, RvError> {
-        self.barrier.inited()
+    pub async fn inited(&self) -> Result<bool, RvError> {
+        self.barrier.inited().await
     }
 
-    pub fn init(&self, seal_config: &SealConfig) -> Result<InitResult, RvError> {
-        let inited = self.inited()?;
+    pub async fn init(&self, seal_config: &SealConfig) -> Result<InitResult, RvError> {
+        let inited = self.inited().await?;
         if inited {
             return Err(RvError::ErrBarrierAlreadyInit);
         }
@@ -179,26 +179,26 @@ impl Core {
             key: SEAL_CONFIG_PATH.to_string(),
             value: serialized_seal_config.as_bytes().to_vec(),
         };
-        self.physical.put(&pe)?;
+        self.physical.put(&pe).await?;
 
         let deprecated_key_set = BHashSet::default();
         let pe = PhysicalBackendEntry {
             key: DEPRECATED_UNSEAL_KEY_SET_PATH.to_string(),
             value: serde_json::to_string(&deprecated_key_set)?.as_bytes().to_vec(),
         };
-        self.physical.put(&pe)?;
+        self.physical.put(&pe).await?;
 
         let barrier = &self.barrier;
         // Generate a key encryption key, will be zeroized on drop.
         let kek = barrier.generate_key()?;
 
         // Initialize the barrier
-        barrier.init(kek.deref().as_slice())?;
+        barrier.init(kek.deref().as_slice()).await?;
 
         let mut init_result = InitResult { secret_shares: Zeroizing::new(Vec::new()), root_token: String::new() };
 
         // Unseal the barrier
-        barrier.unseal(kek.deref().as_slice())?;
+        barrier.unseal(kek.deref().as_slice()).await?;
 
         let state_old = self.state.load_full();
         let mut state = (*self.state.load_full()).clone();
@@ -212,7 +212,7 @@ impl Core {
         if seal_config.secret_shares == 1 {
             init_result.secret_shares.deref_mut().push(kek.deref().clone());
         } else {
-            init_result.secret_shares = self.generate_unseal_keys()?;
+            init_result.secret_shares = self.generate_unseal_keys().await?;
         }
 
         defer! (
@@ -222,11 +222,11 @@ impl Core {
         );
 
         // Perform initial setup
-        self.post_unseal()?;
+        self.post_unseal().await?;
 
         // Generate a new root token
         if let Some(auth_module) = self.module_manager.get_module::<AuthModule>("auth") {
-            let te = auth_module.token_store.load().as_ref().unwrap().root_token()?;
+            let te = auth_module.token_store.load().as_ref().unwrap().root_token().await?;
             init_result.root_token = te.id;
         } else {
             log::error!("get auth module failed!");
@@ -306,8 +306,8 @@ impl Core {
         Ok(())
     }
 
-    pub fn seal_config(&self) -> Result<SealConfig, RvError> {
-        let pe = self.physical.get(SEAL_CONFIG_PATH)?;
+    pub async fn seal_config(&self) -> Result<SealConfig, RvError> {
+        let pe = self.physical.get(SEAL_CONFIG_PATH).await?;
 
         if pe.is_none() {
             return Err(RvError::ErrCoreSealConfigNotFound);
@@ -318,9 +318,9 @@ impl Core {
         Ok(config)
     }
 
-    pub fn deprecated_unseal_keys_set(&self) -> Result<BHashSet, RvError> {
+    pub async fn deprecated_unseal_keys_set(&self) -> Result<BHashSet, RvError> {
         let pe =
-            self.physical.get(DEPRECATED_UNSEAL_KEY_SET_PATH)?.ok_or(RvError::ErrCoreDeprecatedUnsealKeySetNotFound)?;
+            self.physical.get(DEPRECATED_UNSEAL_KEY_SET_PATH).await?.ok_or(RvError::ErrCoreDeprecatedUnsealKeySetNotFound)?;
         let used_key_set: BHashSet = serde_json::from_slice(pe.value.as_slice())?;
         Ok(used_key_set)
     }
@@ -333,8 +333,8 @@ impl Core {
         self.state.load().unseal_key_shares.len()
     }
 
-    pub fn do_unseal(&self, key: &[u8], once: bool) -> Result<bool, RvError> {
-        let inited = self.barrier.inited()?;
+    pub async fn do_unseal(&self, key: &[u8], once: bool) -> Result<bool, RvError> {
+        let inited = self.barrier.inited().await?;
         if !inited {
             return Err(RvError::ErrBarrierNotInit);
         }
@@ -351,12 +351,12 @@ impl Core {
         }
 
         let mut state = (*self.state.load_full()).clone();
-        let config = self.seal_config()?;
+        let config = self.seal_config().await?;
         if state.unseal_key_shares.iter().any(|v| *v == key) {
             return Ok(false);
         }
 
-        let mut deprecated_key_set = self.deprecated_unseal_keys_set();
+        let mut deprecated_key_set = self.deprecated_unseal_keys_set().await;
         if let Ok(deprecated_key_set) = &deprecated_key_set {
             if deprecated_key_set.contains(key) {
                 return Err(RvError::ErrBarrierKeyDeprecated);
@@ -382,7 +382,7 @@ impl Core {
         }
 
         // Unseal the barrier
-        if let Err(e) = self.barrier.unseal(kek.as_slice()) {
+        if let Err(e) = self.barrier.unseal(kek.as_slice()).await {
             state.unseal_key_shares.clear();
             self.state.store(Arc::new(state));
             return Err(e);
@@ -397,7 +397,7 @@ impl Core {
         self.state.store(Arc::new(state));
 
         // Perform initial setup
-        if let Err(e) = self.post_unseal() {
+        if let Err(e) = self.post_unseal().await {
             let mut state = (*self.state.load_full()).clone();
             state.unseal_key_shares.clear();
             state.kek.clear();
@@ -418,15 +418,15 @@ impl Core {
                     key: DEPRECATED_UNSEAL_KEY_SET_PATH.to_string(),
                     value: serde_json::to_string(deprecated_key_set)?.as_bytes().to_vec(),
                 };
-                self.physical.put(&pe)?;
+                self.physical.put(&pe).await?;
             }
         }
 
         Ok(true)
     }
 
-    pub fn unseal(&self, key: &[u8]) -> Result<bool, RvError> {
-        self.do_unseal(key, false)
+    pub async fn unseal(&self, key: &[u8]) -> Result<bool, RvError> {
+        self.do_unseal(key, false).await
     }
 
     /// Unseals the rusty_vault once and immediately generates new unseal keys.
@@ -457,17 +457,17 @@ impl Core {
     /// This method is typically used in high-security environments where unseal keys
     /// should only be valid for a single use, or in automated systems that need to
     /// rotate keys after each unseal operation.
-    pub fn unseal_once(&self, key: &[u8]) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
-        let unseal = self.do_unseal(key, true)?;
+    pub async fn unseal_once(&self, key: &[u8]) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
+        let unseal = self.do_unseal(key, true).await?;
         if unseal {
-            self.generate_unseal_keys()
+            self.generate_unseal_keys().await
         } else {
             Err(RvError::ErrBarrierUnsealing)
         }
     }
 
-    pub fn seal(&self) -> Result<(), RvError> {
-        let inited = self.barrier.inited()?;
+    pub async fn seal(&self) -> Result<(), RvError> {
+        let inited = self.barrier.inited().await?;
         if !inited {
             return Err(RvError::ErrBarrierNotInit);
         }
@@ -514,7 +514,7 @@ impl Core {
     /// # Usage
     /// This method should only be called when the rusty_vault is unsealed and a valid KEK exists.
     /// It's commonly used in key rotation scenarios or after unseal_once operations.
-    pub fn generate_unseal_keys(&self) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
+    pub async fn generate_unseal_keys(&self) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
         if self.state.load().sealed {
             return Err(RvError::ErrBarrierSealed);
         }
@@ -524,11 +524,11 @@ impl Core {
             return Err(RvError::ErrBarrierKeyInvalid);
         }
 
-        let config = self.seal_config()?;
+        let config = self.seal_config().await?;
         ShamirSecret::split(kek.as_slice(), config.secret_shares, config.secret_threshold)
     }
 
-    fn post_unseal(&self) -> Result<(), RvError> {
+    async fn post_unseal(&self) -> Result<(), RvError> {
         self.module_manager.setup(self)?;
 
         // Perform initial setup
@@ -536,11 +536,11 @@ impl Core {
             self.barrier.as_storage(),
             Some(&self.state.load().hmac_key),
             self.mount_entry_hmac_level,
-        )?;
+        ).await?;
 
         self.mounts_router.setup(self.self_ptr.upgrade().unwrap().clone())?;
 
-        self.module_manager.init(self)?;
+        self.module_manager.init(self).await?;
 
         if let Some(mounts_monitor) = self.mounts_monitor.load().as_ref() {
             mounts_monitor.add_mounts_router(self.mounts_router.clone());
@@ -700,16 +700,17 @@ mod test {
         let _ = new_unseal_test_rusty_vault("test_core_init");
     }
 
-    #[test]
-    fn test_generate_unseal_keys_basic() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_generate_unseal_keys_basic");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_generate_unseal_keys_basic() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_generate_unseal_keys_basic").await;
 
         // Test that generate_unseal_keys works when unsealed
-        let result = core.generate_unseal_keys();
+        let result = core.generate_unseal_keys().await;
         assert!(result.is_ok());
 
         let keys = result.unwrap();
-        assert_eq!(keys.len(), core.seal_config().unwrap().secret_shares as usize); // Default test configuration: 3 shares
+        let seal_config = core.seal_config().await.unwrap();
+        assert_eq!(keys.len(), seal_config.secret_shares as usize); // Default test configuration: 3 shares
 
         // Each key should have the expected length (32 bytes + 1 byte overhead)
         for key in keys.iter() {
@@ -724,27 +725,27 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_generate_unseal_keys_when_sealed() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_generate_unseal_keys_when_sealed");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_generate_unseal_keys_when_sealed() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_generate_unseal_keys_when_sealed").await;
 
         // Seal the vault
-        let seal_result = core.seal();
+        let seal_result = core.seal().await;
         assert!(seal_result.is_ok());
 
         // Should fail when sealed
-        let result = core.generate_unseal_keys();
+        let result = core.generate_unseal_keys().await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_generate_unseal_keys_multiple_calls() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_generate_unseal_keys_multiple_calls");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_generate_unseal_keys_multiple_calls() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_generate_unseal_keys_multiple_calls").await;
 
         // Generate keys multiple times
-        let keys1 = core.generate_unseal_keys().unwrap();
-        let keys2 = core.generate_unseal_keys().unwrap();
-        let keys3 = core.generate_unseal_keys().unwrap();
+        let keys1 = core.generate_unseal_keys().await.unwrap();
+        let keys2 = core.generate_unseal_keys().await.unwrap();
+        let keys3 = core.generate_unseal_keys().await.unwrap();
 
         // All should succeed and produce the same number of keys
         assert_eq!(keys1.len(), keys2.len());
@@ -755,20 +756,20 @@ mod test {
         assert_ne!(keys2[0], keys3[0]);
     }
 
-    #[test]
-    fn test_unseal_once_basic() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_basic");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_unseal_once_basic() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_basic").await;
 
         // Get initial keys for testing
-        let initial_keys = core.generate_unseal_keys().unwrap();
+        let initial_keys = core.generate_unseal_keys().await.unwrap();
 
         // Seal the vault
-        core.seal().unwrap();
+        core.seal().await.unwrap();
 
         // Test unseal_once with sufficient keys
         let mut new_keys = None;
         for key in initial_keys.iter() {
-            match core.unseal_once(key) {
+            match core.unseal_once(key).await {
                 Ok(keys) => {
                     new_keys = Some(keys);
                     break;
@@ -779,7 +780,8 @@ mod test {
 
         assert!(new_keys.is_some());
         let new_keys = new_keys.unwrap();
-        assert_eq!(new_keys.len(), core.seal_config().unwrap().secret_shares as usize); // Should generate new keys
+        let seal_config = core.seal_config().await.unwrap();
+        assert_eq!(new_keys.len(), seal_config.secret_shares as usize); // Should generate new keys
 
         // Vault should be unsealed
         assert!(!core.sealed());
@@ -788,38 +790,38 @@ mod test {
         assert_ne!(initial_keys[0], new_keys[0]);
     }
 
-    #[test]
-    fn test_unseal_once_insufficient_keys() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_insufficient_keys");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_unseal_once_insufficient_keys() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_insufficient_keys").await;
 
         // Get initial keys
-        let initial_keys = core.generate_unseal_keys().unwrap();
+        let initial_keys = core.generate_unseal_keys().await.unwrap();
 
         // Seal the vault
-        core.seal().unwrap();
+        core.seal().await.unwrap();
 
         // Try unseal_once with just one key (insufficient for threshold=2)
-        let result = core.unseal_once(&initial_keys[0]);
+        let result = core.unseal_once(&initial_keys[0]).await;
         assert!(result.is_err());
 
         // Vault should still be sealed
         assert!(core.sealed());
     }
 
-    #[test]
-    fn test_unseal_once_key_deprecation() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_key_deprecation");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_unseal_once_key_deprecation() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_key_deprecation").await;
 
         // Get initial keys
-        let initial_keys = core.generate_unseal_keys().unwrap();
+        let initial_keys = core.generate_unseal_keys().await.unwrap();
 
         // Seal the vault
-        core.seal().unwrap();
+        core.seal().await.unwrap();
 
         // Use unseal_once to unseal
         let mut new_keys = None;
         for key in initial_keys.iter() {
-            match core.unseal_once(key) {
+            match core.unseal_once(key).await {
                 Ok(keys) => {
                     new_keys = Some(keys);
                     break;
@@ -830,25 +832,29 @@ mod test {
 
         assert!(new_keys.is_some());
         let new_keys = new_keys.unwrap();
-        assert_eq!(new_keys.len(), core.seal_config().unwrap().secret_shares as usize);
+        let seal_config = core.seal_config().await.unwrap();
+        assert_eq!(new_keys.len(), seal_config.secret_shares as usize);
 
         // Seal again
-        core.seal().unwrap();
+        core.seal().await.unwrap();
 
         // Try to use the same key again - should fail due to deprecation
         for i in 0..5 {
-            assert!(matches!(core.unseal_once(&initial_keys[i]), Err(RvError::ErrBarrierKeyDeprecated)));
+            let result = core.unseal_once(&initial_keys[i]).await;
+            assert!(matches!(result, Err(RvError::ErrBarrierKeyDeprecated)));
         }
 
         for i in 5..initial_keys.len() {
-            assert!(matches!(core.unseal_once(&initial_keys[i]), Err(RvError::ErrBarrierUnsealing)));
+            let result = core.unseal_once(&initial_keys[i]).await;
+            assert!(matches!(result, Err(RvError::ErrBarrierUnsealing)));
         }
-        assert!(matches!(core.unseal_once(&new_keys[0]), Err(RvError::ErrBarrierUnsealFailed)));
+        let result = core.unseal_once(&new_keys[0]).await;
+        assert!(matches!(result, Err(RvError::ErrBarrierUnsealFailed)));
 
         // But new keys should work
         let mut new_keys2 = None;
         for key in new_keys.iter() {
-            match core.unseal_once(key) {
+            match core.unseal_once(key).await {
                 Ok(keys) => {
                     new_keys2 = Some(keys);
                     break;
@@ -859,33 +865,34 @@ mod test {
 
         assert!(new_keys2.is_some());
         let new_keys2 = new_keys2.unwrap();
-        assert_eq!(new_keys2.len(), core.seal_config().unwrap().secret_shares as usize);
+        let seal_config = core.seal_config().await.unwrap();
+        assert_eq!(new_keys2.len(), seal_config.secret_shares as usize);
     }
 
-    #[test]
-    fn test_unseal_once_when_already_unsealed() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_when_already_unsealed");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_unseal_once_when_already_unsealed() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_when_already_unsealed").await;
 
         // Get keys for testing
-        let keys = core.generate_unseal_keys().unwrap();
+        let keys = core.generate_unseal_keys().await.unwrap();
 
         // Vault is already unsealed, so unseal_once should fail
-        let result = core.unseal_once(&keys[0]);
+        let result = core.unseal_once(&keys[0]).await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_unseal_once_forward_secrecy() {
-        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_forward_secrecy");
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_unseal_once_forward_secrecy() {
+        let (_rvault, core, _) = new_unseal_test_rusty_vault("test_unseal_once_forward_secrecy").await;
 
         // Get initial keys
-        let keys1 = core.generate_unseal_keys().unwrap();
+        let keys1 = core.generate_unseal_keys().await.unwrap();
 
         // Seal and unseal_once to get new keys
-        core.seal().unwrap();
+        core.seal().await.unwrap();
         let mut keys2 = None;
         for key in keys1.iter() {
-            match core.unseal_once(key) {
+            match core.unseal_once(key).await {
                 Ok(keys) => {
                     keys2 = Some(keys);
                     break;
@@ -896,14 +903,15 @@ mod test {
 
         assert!(keys2.is_some());
         let keys2 = keys2.unwrap();
-        assert_eq!(keys2.len(), core.seal_config().unwrap().secret_shares as usize);
+        let seal_config = core.seal_config().await.unwrap();
+        assert_eq!(keys2.len(), seal_config.secret_shares as usize);
 
         // Seal and unseal_once again
-        core.seal().unwrap();
+        core.seal().await.unwrap();
 
         let mut keys3 = None;
         for key in keys2.iter() {
-            match core.unseal_once(key) {
+            match core.unseal_once(key).await {
                 Ok(keys) => {
                     keys3 = Some(keys);
                     break;
@@ -913,7 +921,8 @@ mod test {
         }
         assert!(keys3.is_some());
         let keys3 = keys3.unwrap();
-        assert_eq!(keys3.len(), core.seal_config().unwrap().secret_shares as usize);
+        let seal_config = core.seal_config().await.unwrap();
+        assert_eq!(keys3.len(), seal_config.secret_shares as usize);
 
         // All key sets should be different (forward secrecy)
         for i in 0..keys1.len() {
@@ -923,23 +932,30 @@ mod test {
         }
 
         // Old keys should be deprecated and unusable
-        core.seal().unwrap();
+        core.seal().await.unwrap();
         for key in keys1.iter() {
-            assert!(core.unseal_once(key).is_err());
+            let result = core.unseal_once(key).await;
+            assert!(result.is_err());
         }
         for key in keys2.iter() {
-            assert!(core.unseal_once(key).is_err());
+            let result = core.unseal_once(key).await;
+            assert!(result.is_err());
         }
         for key in keys3.iter() {
-            if let Err(RvError::ErrBarrierUnsealFailed) = core.unseal_once(key) {
+            if let Err(RvError::ErrBarrierUnsealFailed) = core.unseal_once(key).await {
                 break;
             }
         }
 
-        assert!(matches!(core.unseal_once(&keys3[0]), Err(RvError::ErrBarrierUnsealing)));
-        assert!(matches!(core.unseal_once(&keys3[1]), Err(RvError::ErrBarrierUnsealing)));
-        assert!(matches!(core.unseal_once(&keys3[2]), Err(RvError::ErrBarrierUnsealing)));
-        assert!(matches!(core.unseal_once(&keys3[3]), Err(RvError::ErrBarrierUnsealing)));
-        assert!(matches!(core.unseal_once(&keys3[4]), Ok(_)));
+        let result = core.unseal_once(&keys3[0]).await;
+        assert!(matches!(result, Err(RvError::ErrBarrierUnsealing)));
+        let result = core.unseal_once(&keys3[1]).await;
+        assert!(matches!(result, Err(RvError::ErrBarrierUnsealing)));
+        let result = core.unseal_once(&keys3[2]).await;
+        assert!(matches!(result, Err(RvError::ErrBarrierUnsealing)));
+        let result = core.unseal_once(&keys3[3]).await;
+        assert!(matches!(result, Err(RvError::ErrBarrierUnsealing)));
+        let result = core.unseal_once(&keys3[4]).await;
+        assert!(matches!(result, Ok(_)));
     }
 }

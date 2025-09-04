@@ -147,17 +147,17 @@ impl RustyVault {
         Ok(Self { core: ArcSwap::new(core), token: ArcSwap::new(Arc::new(String::new())) })
     }
 
-    pub fn init(&self, seal_config: &core::SealConfig) -> Result<core::InitResult, RvError> {
-        self.core.load().init(seal_config)
+    pub async fn init(&self, seal_config: &core::SealConfig) -> Result<core::InitResult, RvError> {
+        self.core.load().init(seal_config).await
     }
 
-    pub fn inited(&self) -> Result<bool, RvError> {
-        self.core.load().inited()
+    pub async fn inited(&self) -> Result<bool, RvError> {
+        self.core.load().inited().await
     }
 
-    pub fn unseal(&self, keys: &[&[u8]]) -> Result<bool, RvError> {
+    pub async fn unseal(&self, keys: &[&[u8]]) -> Result<bool, RvError> {
         for key in keys.iter() {
-            if self.core.load().unseal(key)? {
+            if self.core.load().unseal(key).await? {
                 return Ok(true);
             }
         }
@@ -180,8 +180,8 @@ impl RustyVault {
     /// - Prevents replay attacks by invalidating used keys
     /// - Automatically generates fresh keys for future use
     /// - Provides forward secrecy through key rotation
-    pub fn unseal_once(&self, key: &[u8]) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
-        self.core.load().unseal_once(key)
+    pub async fn unseal_once(&self, key: &[u8]) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
+        self.core.load().unseal_once(key).await
     }
 
     /// Generates new unseal keys using the current Key Encryption Key (KEK).
@@ -200,12 +200,12 @@ impl RustyVault {
     /// - Uses Shamir's Secret Sharing for key distribution
     /// - Generated keys are cryptographically independent
     /// - Returns zeroizing vector for secure memory cleanup
-    pub fn generate_unseal_keys(&self) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
-        self.core.load().generate_unseal_keys()
+    pub async fn generate_unseal_keys(&self) -> Result<Zeroizing<Vec<Vec<u8>>>, RvError> {
+        self.core.load().generate_unseal_keys().await
     }
 
-    pub fn seal(&self) -> Result<(), RvError> {
-        self.core.load().seal()
+    pub async fn seal(&self) -> Result<(), RvError> {
+        self.core.load().seal().await
     }
 
     pub fn set_token<S: Into<String>>(&self, token: S) {

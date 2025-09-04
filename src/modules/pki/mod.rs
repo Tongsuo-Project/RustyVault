@@ -101,11 +101,12 @@ impl PkiBackend {
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn revoke_secret_creds(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn revoke_secret_creds(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
-    pub fn renew_secret_creds(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn renew_secret_creds(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 }
@@ -399,7 +400,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_config_ca() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_config_ca");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_config_ca").await;
         let token = &root_token;
         let path = "pki/";
 
@@ -428,7 +429,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_config_role() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_config_role");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_config_role").await;
         let token = &root_token;
         let path = "pki/";
         let role_name = "test";
@@ -465,7 +466,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_issue_cert() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_issue_cert");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_issue_cert").await;
         let token = &root_token;
         let path = "pki/";
         let role_name = "test";
@@ -562,7 +563,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_generate_root() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_generate_root");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_generate_root").await;
         let token = &root_token;
         let path = "pki/";
         let role_name = "test";
@@ -858,7 +859,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_generate_key() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_generate_key");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_generate_key").await;
         let token = &root_token;
         let path = "pki";
 
@@ -959,7 +960,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_import_key() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_import_key");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_import_key").await;
         let token = &root_token;
         let path = "pki";
 

@@ -63,9 +63,9 @@ mod test {
 
     use crate::test_utils::TestHttpServer;
 
-    #[test]
-    fn test_cli_secrets_list() {
-        let mut test_http_server = TestHttpServer::new("test_cli_secrets_list", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_secrets_list() {
+        let mut test_http_server = TestHttpServer::new("test_cli_secrets_list", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         let ret = test_http_server.cli(&["secrets", "list"], &["--format=json"]);
@@ -78,9 +78,9 @@ mod test {
         assert_eq!(list["sys/"]["type"], Value::String("system".into()));
     }
 
-    #[test]
-    fn test_cli_secret_enable_disable() {
-        let mut test_http_server = TestHttpServer::new("test_cli_secret_enable_disable", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_secret_enable_disable() {
+        let mut test_http_server = TestHttpServer::new("test_cli_secret_enable_disable", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         // test secrets enable
@@ -124,9 +124,9 @@ mod test {
         assert!(list.get("kv1").is_none());
     }
 
-    #[test]
-    fn test_cli_secret_move() {
-        let mut test_http_server = TestHttpServer::new("test_cli_secret_move", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_cli_secret_move() {
+        let mut test_http_server = TestHttpServer::new("test_cli_secret_move", true).await;
         test_http_server.token = test_http_server.root_token.clone();
 
         // test secrets enable

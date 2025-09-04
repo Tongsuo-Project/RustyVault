@@ -20,7 +20,7 @@ use derive_more::Deref;
 use crate::{
     core::Core,
     errors::RvError,
-    logical::{Backend, LogicalBackend, Request, Response},
+    logical::{Backend, LogicalBackend},
     modules::{auth::AuthModule, Module},
     new_logical_backend, new_logical_backend_internal,
 };
@@ -404,10 +404,10 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_credential_cert_module_permitted_dns_domains_intermediate_ca() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_permitted_dns_domains_intermediate_ca() {
         let mut test_http_server =
-            TestHttpServer::new("test_credential_cert_module_permitted_dns_domains_intermediate_ca", true);
+            TestHttpServer::new("test_credential_cert_module_permitted_dns_domains_intermediate_ca", true).await;
 
         let (intermediate_ca_cert, intermediate_ca_key) = new_test_cert(
             true,
@@ -454,9 +454,9 @@ mod test {
         // TODO: testing pathLoginRenew for cert auth
     }
 
-    #[test]
-    fn test_credential_cert_module_non_ca_expiry() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_non_ca_expiry", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_non_ca_expiry() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_non_ca_expiry", true).await;
 
         // mount /pki as a root CA
         let ret = test_http_server.mount("pki", "pki");
@@ -506,9 +506,9 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_credential_cert_module_registered_non_ca_crl() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_registered_non_ca_crl", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_registered_non_ca_crl() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_registered_non_ca_crl", true).await;
 
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
@@ -554,9 +554,9 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_credential_cert_module_crls() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_crls", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_crls() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_crls", true).await;
 
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
 
@@ -618,9 +618,9 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_credential_cert_module_cert_writes() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_cert_writes", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_cert_writes() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_cert_writes", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
@@ -671,9 +671,9 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_credential_cert_module_basic_ca() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_basic_ca", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_basic_ca() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_basic_ca", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
@@ -748,9 +748,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_basic_crls() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_basic_crls", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_basic_crls() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_basic_crls", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert(true, true, true, "test-ca", None, None, None, None, None, None).unwrap();
@@ -801,9 +801,9 @@ mod test {
         assert_eq!(resp["auth"]["policies"], json!(["default", "foo"]));
     }
 
-    #[test]
-    fn test_credential_cert_module_basic_single_cert() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_basic_single_cert", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_basic_single_cert() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_basic_single_cert", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert(
@@ -900,9 +900,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_ext_single_cert() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_ext_single_cert", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_ext_single_cert() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_ext_single_cert", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert_ext(
@@ -1261,9 +1261,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_dns_single_cert() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_dns_single_cert", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_dns_single_cert() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_dns_single_cert", true).await;
 
         // CA cert
         let (ca_cert, ca_key) =
@@ -1360,9 +1360,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_email_single_cert() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_email_single_cert", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_email_single_cert() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_email_single_cert", true).await;
 
         // CA cert
         let (ca_cert, ca_key) =
@@ -1459,9 +1459,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_uri_single_cert() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_uri_single_cert", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_uri_single_cert() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_uri_single_cert", true).await;
 
         // CA cert
         let (ca_cert, ca_key) =
@@ -1559,9 +1559,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_ou_single_cert() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_ou_single_cert", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_ou_single_cert() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_ou_single_cert", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert_ext(
@@ -1630,9 +1630,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_mixed_constraints() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_mixed_constraints", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_mixed_constraints() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_mixed_constraints", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert_ext(
@@ -1700,9 +1700,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_untrusted() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_untrusted", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_untrusted() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_untrusted", true).await;
 
         // CA cert
         let (ca_cert, ca_key) = new_test_cert_ext(
@@ -1747,9 +1747,9 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_valid_cidr() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_valid_cidr", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_valid_cidr() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_valid_cidr", true).await;
 
         // CA cert
         let (ca_cert, ca_key) =
@@ -1788,9 +1788,9 @@ mod test {
         let _ = test_http_server.test_login(&test_http_server.ca_cert_pem, &client_cert, &client_key, None).unwrap();
     }
 
-    #[test]
-    fn test_credential_cert_module_invalid_cidr() {
-        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_invalid_cidr", true);
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_credential_cert_module_invalid_cidr() {
+        let mut test_http_server = TestHttpServer::new("test_credential_cert_module_invalid_cidr", true).await;
 
         // CA cert
         let (ca_cert, ca_key) =

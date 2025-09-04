@@ -81,12 +81,13 @@ pub struct SecretIdAccessorStorageEntry {
     pub secret_id_hmac: String,
 }
 
+#[maybe_async::maybe_async]
 impl AppRoleBackendInner {
     // get_secret_id_storage_entry fetches the secret ID properties from physical
     // storage. The entry will be indexed based on the given HMACs of both role
     // name and the secret ID. This method will not acquire secret ID lock to fetch
     // the storage entry. Locks need to be acquired before calling this method.
-    pub fn get_secret_id_storage_entry(
+    pub async fn get_secret_id_storage_entry(
         &self,
         storage: &dyn Storage,
         role_secret_id_prefix: &str,
@@ -102,7 +103,7 @@ impl AppRoleBackendInner {
         }
 
         let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
-        let storage_entry = storage.get(&entry_index)?;
+        let storage_entry = storage.get(&entry_index).await?;
         if storage_entry.is_none() {
             return Ok(None);
         }
@@ -118,7 +119,7 @@ impl AppRoleBackendInner {
     // role name and the secret ID. This method will not acquire secret ID lock to
     // create/update the storage entry. Locks need to be acquired before calling
     // this method.
-    pub fn set_secret_id_storage_entry(
+    pub async fn set_secret_id_storage_entry(
         &self,
         storage: &dyn Storage,
         role_secret_id_prefix: &str,
@@ -141,10 +142,10 @@ impl AppRoleBackendInner {
         let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
         let entry = StorageEntry::new(&entry_index, secret_entry)?;
 
-        storage.put(&entry)
+        storage.put(&entry).await
     }
 
-    pub fn delete_secret_id_storage_entry(
+    pub async fn delete_secret_id_storage_entry(
         &self,
         storage: &dyn Storage,
         role_secret_id_prefix: &str,
@@ -160,11 +161,11 @@ impl AppRoleBackendInner {
         }
 
         let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
-        storage.delete(&entry_index)
+        storage.delete(&entry_index).await
     }
 
     // register_secret_id_entry creates a new storage entry for the given secret_id.
-    pub fn register_secret_id_entry(
+    pub async fn register_secret_id_entry(
         &self,
         storage: &dyn Storage,
         role_name: &str,
@@ -178,19 +179,19 @@ impl AppRoleBackendInner {
 
         let lock_entry = self.secret_id_locks.get_lock(&secret_id_hmac);
         {
-            let _locked = lock_entry.lock.read()?;
+            let _locked = lock_entry.lock.read().await;
 
             let entry =
-                self.get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac)?;
+                self.get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac).await?;
             if entry.is_some() {
                 return Err(RvError::ErrResponse("secret_id is already registered".to_string()));
             }
         }
         {
-            let _locked = lock_entry.lock.write()?;
+            let _locked = lock_entry.lock.write().await;
 
             let entry =
-                self.get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac)?;
+                self.get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac).await?;
             if entry.is_some() {
                 return Err(RvError::ErrResponse("secret_id is already registered".to_string()));
             }
@@ -204,7 +205,7 @@ impl AppRoleBackendInner {
                 secret_entry.expiration_time = now + ttl;
             }
 
-            self.create_secret_id_accessor_entry(storage, secret_entry, &secret_id_hmac, role_secret_id_prefix)?;
+            self.create_secret_id_accessor_entry(storage, secret_entry, &secret_id_hmac, role_secret_id_prefix).await?;
 
             self.set_secret_id_storage_entry(
                 storage,
@@ -212,7 +213,7 @@ impl AppRoleBackendInner {
                 &role_name_hmac,
                 &secret_id_hmac,
                 secret_entry,
-            )?;
+            ).await?;
             Ok(())
         }
     }
@@ -233,7 +234,7 @@ impl AppRoleBackendInner {
 
     // secret_id_accessor_entry is used to read the storage entry that maps an
     // accessor to a secret_id.
-    pub fn get_secret_id_accessor_entry(
+    pub async fn get_secret_id_accessor_entry(
         &self,
         storage: &dyn Storage,
         secret_id_accessor: &str,
@@ -258,9 +259,9 @@ impl AppRoleBackendInner {
         let entry_index = format!("{accessor_prefix}{salt_id}");
 
         let lock_entry = self.secret_id_accessor_locks.get_lock(secret_id_accessor);
-        let _locked = lock_entry.lock.read()?;
+        let _locked = lock_entry.lock.read().await;
 
-        let storage_entry = storage.get(&entry_index)?;
+        let storage_entry = storage.get(&entry_index).await?;
         if storage_entry.is_none() {
             return Ok(None);
         }
@@ -274,7 +275,7 @@ impl AppRoleBackendInner {
     // create_secret_id_accessor_entry creates an identifier for the secret_id.
     // A storage index, mapping the accessor to the secret_id is also created.
     // This method should be called when the lock for the corresponding secret_id is held.
-    pub fn create_secret_id_accessor_entry(
+    pub async fn create_secret_id_accessor_entry(
         &self,
         storage: &dyn Storage,
         entry: &mut SecretIdStorageEntry,
@@ -298,18 +299,18 @@ impl AppRoleBackendInner {
         let entry_index = format!("{accessor_prefix}{salt_id}");
 
         let lock_entry = self.secret_id_accessor_locks.get_lock(&entry.secret_id_accessor);
-        let _locked = lock_entry.lock.write()?;
+        let _locked = lock_entry.lock.write().await;
 
         let entry = StorageEntry::new(
             &entry_index,
             &SecretIdAccessorStorageEntry { secret_id_hmac: secret_id_hmac.to_string() },
         )?;
 
-        storage.put(&entry)
+        storage.put(&entry).await
     }
 
     // delete_secret_id_accessor_entry deletes the storage index mapping the accessor to a secret_id.
-    pub fn delete_secret_id_accessor_entry(
+    pub async fn delete_secret_id_accessor_entry(
         &self,
         storage: &dyn Storage,
         secret_id_accessor: &str,
@@ -330,14 +331,14 @@ impl AppRoleBackendInner {
         let entry_index = format!("{accessor_prefix}{salt_id}");
 
         let lock_entry = self.secret_id_accessor_locks.get_lock(secret_id_accessor);
-        let _locked = lock_entry.lock.write()?;
+        let _locked = lock_entry.lock.write().await;
 
-        storage.delete(&entry_index)
+        storage.delete(&entry_index).await
     }
 
     // flush_role_secrets deletes all the secret_id that belong to the given
     // role_id.
-    pub fn flush_role_secrets(
+    pub async fn flush_role_secrets(
         &self,
         storage: &dyn Storage,
         role_name: &str,
@@ -346,12 +347,12 @@ impl AppRoleBackendInner {
     ) -> Result<(), RvError> {
         let role_name_hmac = create_hmac(hmac_key, role_name)?;
         let key = format!("{role_secret_id_prefix}{role_name_hmac}/");
-        let secret_id_hmacs = storage.list(&key)?;
+        let secret_id_hmacs = storage.list(&key).await?;
         for secret_id_hmac in secret_id_hmacs.iter() {
             let entry_index = format!("{role_secret_id_prefix}{role_name_hmac}/{secret_id_hmac}");
             let lock_entry = self.secret_id_locks.get_lock(secret_id_hmac);
-            let _locked = lock_entry.lock.write()?;
-            storage.delete(&entry_index)?
+            let _locked = lock_entry.lock.write().await;
+            storage.delete(&entry_index).await?
         }
 
         Ok(())

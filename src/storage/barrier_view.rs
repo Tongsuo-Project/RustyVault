@@ -8,15 +8,16 @@ pub struct BarrierView {
     prefix: String,
 }
 
+#[maybe_async::maybe_async]
 impl Storage for BarrierView {
-    fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
+    async fn list(&self, prefix: &str) -> Result<Vec<String>, RvError> {
         self.sanity_check(prefix)?;
-        self.barrier.list(self.expand_key(prefix).as_str())
+        self.barrier.list(self.expand_key(prefix).as_str()).await
     }
 
-    fn get(&self, key: &str) -> Result<Option<StorageEntry>, RvError> {
+    async fn get(&self, key: &str) -> Result<Option<StorageEntry>, RvError> {
         self.sanity_check(key)?;
-        let storage_entry = self.barrier.get(self.expand_key(key).as_str())?;
+        let storage_entry = self.barrier.get(self.expand_key(key).as_str()).await?;
         if let Some(entry) = storage_entry {
             Ok(Some(StorageEntry { key: self.truncate_key(entry.key.as_str()), value: entry.value }))
         } else {
@@ -24,22 +25,23 @@ impl Storage for BarrierView {
         }
     }
 
-    fn put(&self, entry: &StorageEntry) -> Result<(), RvError> {
+    async fn put(&self, entry: &StorageEntry) -> Result<(), RvError> {
         self.sanity_check(entry.key.as_str())?;
         let nested = StorageEntry { key: self.expand_key(entry.key.as_str()), value: entry.value.clone() };
-        self.barrier.put(&nested)
+        self.barrier.put(&nested).await
     }
 
-    fn delete(&self, key: &str) -> Result<(), RvError> {
+    async fn delete(&self, key: &str) -> Result<(), RvError> {
         self.sanity_check(key)?;
-        self.barrier.delete(self.expand_key(key).as_str())
+        self.barrier.delete(self.expand_key(key).as_str()).await
     }
 
-    fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
-        self.barrier.lock(lock_name)
+    async fn lock(&self, lock_name: &str) -> Result<Box<dyn Any>, RvError> {
+        self.barrier.lock(lock_name).await
     }
 }
 
+#[maybe_async::maybe_async]
 impl BarrierView {
     pub fn new(barrier: Arc<dyn SecurityBarrier>, prefix: &str) -> Self {
         Self { barrier, prefix: prefix.to_string() }
@@ -49,7 +51,7 @@ impl BarrierView {
         Self { barrier: self.barrier.clone(), prefix: self.expand_key(prefix) }
     }
 
-    pub fn get_keys(&self) -> Result<Vec<String>, RvError> {
+    pub async fn get_keys(&self) -> Result<Vec<String>, RvError> {
         let mut paths = vec!["".to_string()];
         let mut keys = Vec::new();
         while !paths.is_empty() {
@@ -57,7 +59,7 @@ impl BarrierView {
             let curr = paths[n - 1].to_owned();
             paths.pop();
 
-            let items = self.list(curr.as_str())?;
+            let items = self.list(curr.as_str()).await?;
             for p in items {
                 let path = format!("{curr}{p}");
                 if p.ends_with('/') {
@@ -71,10 +73,10 @@ impl BarrierView {
         Ok(keys)
     }
 
-    pub fn clear(&self) -> Result<(), RvError> {
-        let keys = self.get_keys()?;
+    pub async fn clear(&self) -> Result<(), RvError> {
+        let keys = self.get_keys().await?;
         for key in keys {
-            self.delete(key.as_str())?
+            self.delete(key.as_str()).await?
         }
         Ok(())
     }
@@ -113,8 +115,8 @@ mod test {
     use super::{super::*, *};
     use crate::test_utils::new_test_backend;
 
-    #[test]
-    fn test_new_barrier_view() {
+    #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
+    async fn test_new_barrier_view() {
         let backend = new_test_backend("test_new_barrier_view");
 
         let mut key = vec![0u8; 32];
@@ -122,7 +124,7 @@ mod test {
 
         let aes_gcm_view = barrier_aes_gcm::AESGCMBarrier::new(backend.clone());
 
-        let init = aes_gcm_view.init(key.as_slice());
+        let init = aes_gcm_view.init(key.as_slice()).await;
         assert!(init.is_ok());
 
         let view = barrier_view::BarrierView::new(Arc::new(aes_gcm_view), "test");

@@ -44,8 +44,9 @@ impl PkiBackend {
     }
 }
 
+#[maybe_async::maybe_async]
 impl PkiBackendInner {
-    pub fn generate_root(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn generate_root(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let mut export_private_key = false;
         if req.get_data_or_default("exported")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)? == "exported" {
             export_private_key = true;
@@ -59,7 +60,7 @@ impl PkiBackendInner {
 
         let cert_bundle = cert.to_cert_bundle(None, None)?;
 
-        self.store_ca_bundle(req, &cert_bundle)?;
+        self.store_ca_bundle(req, &cert_bundle).await?;
 
         let cert_expiration = utils::asn1time_to_timestamp(cert_bundle.certificate.not_after().to_string().as_str())?;
 
@@ -86,8 +87,8 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(Some(resp_data))))
     }
 
-    pub fn delete_root(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        self.delete_ca_bundle(req)?;
+    pub async fn delete_root(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        self.delete_ca_bundle(req).await?;
         Ok(None)
     }
 }

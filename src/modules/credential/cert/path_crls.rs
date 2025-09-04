@@ -108,9 +108,10 @@ one of them expiring.
     }
 }
 
+#[maybe_async::maybe_async]
 impl CertBackendInner {
-    pub fn get_crl(&self, req: &mut Request) -> Result<Option<Config>, RvError> {
-        let storage_entry = req.storage_get("crls")?;
+    pub async fn get_crl(&self, req: &mut Request) -> Result<Option<Config>, RvError> {
+        let storage_entry = req.storage_get("crls").await?;
         if storage_entry.is_none() {
             return Ok(None);
         }
@@ -120,14 +121,14 @@ impl CertBackendInner {
         Ok(Some(config))
     }
 
-    pub fn set_crl(
+    pub async fn set_crl(
         &self,
         req: &mut Request,
         x509crl: Option<X509Crl>,
         name: &str,
         cdp: Option<CDPInfo>,
     ) -> Result<(), RvError> {
-        self.update_crl_cache(req)?;
+        self.update_crl_cache(req).await?;
 
         let mut crl_info = CRLInfo { cdp, ..Default::default() };
 
@@ -142,14 +143,14 @@ impl CertBackendInner {
         }
 
         let entry = StorageEntry::new(format!("crls/{name}").as_str(), &crl_info)?;
-        req.storage_put(&entry)?;
+        req.storage_put(&entry).await?;
 
         self.crls.insert(name.to_string(), crl_info);
 
         Ok(())
     }
 
-    pub fn fetch_crl(&self, req: &mut Request, name: &str, crl: CRLInfo) -> Result<(), RvError> {
+    pub async fn fetch_crl(&self, req: &mut Request, name: &str, crl: CRLInfo) -> Result<(), RvError> {
         if crl.cdp.is_none() {
             return Err(RvError::ErrRequestInvalid);
         }
@@ -158,23 +159,23 @@ impl CertBackendInner {
         let body: String = ureq::get(url).call()?.into_string()?;
 
         let x509crl = X509Crl::from_pem(body.as_bytes())?;
-        self.set_crl(req, Some(x509crl), name, crl.cdp)?;
+        self.set_crl(req, Some(x509crl), name, crl.cdp).await?;
         Ok(())
     }
 
-    pub fn list_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
-        let crls = req.storage_list("crls/")?;
+    pub async fn list_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+        let crls = req.storage_list("crls/").await?;
         let resp = Response::list_response(&crls);
         Ok(Some(resp))
     }
 
-    pub fn read_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?.to_lowercase();
         if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 
-        self.update_crl_cache(req)?;
+        self.update_crl_cache(req).await?;
 
         let crl = self.crls.get(&name);
         if crl.is_none() {
@@ -188,7 +189,7 @@ impl CertBackendInner {
         Ok(Some(Response::data_response(Some(crl_data.as_object().unwrap().clone()))))
     }
 
-    pub fn write_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?.to_lowercase();
         if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
@@ -197,7 +198,7 @@ impl CertBackendInner {
         if let Ok(crl_value) = req.get_data("crl") {
             let crl = crl_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
             let x509crl = X509Crl::from_pem(crl.as_bytes())?;
-            self.set_crl(req, Some(x509crl), &name, None)?;
+            self.set_crl(req, Some(x509crl), &name, None).await?;
         } else if let Ok(url_value) = req.get_data("url") {
             let url = url_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
             if url.is_empty() {
@@ -207,7 +208,7 @@ impl CertBackendInner {
             let cdp_info = CDPInfo { url: url.to_string(), ..Default::default() };
             let crl_info = CRLInfo { cdp: Some(cdp_info), ..Default::default() };
 
-            self.fetch_crl(req, &name, crl_info)?;
+            self.fetch_crl(req, &name, crl_info).await?;
         } else {
             return Err(RvError::ErrRequestNoDataField);
         }
@@ -215,20 +216,20 @@ impl CertBackendInner {
         Ok(None)
     }
 
-    pub fn delete_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn delete_crl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?.to_lowercase();
         if name.is_empty() {
             return Err(RvError::ErrRequestNoDataField);
         }
 
-        self.update_crl_cache(req)?;
+        self.update_crl_cache(req).await?;
 
         if self.crls.get(&name).is_none() {
             log::error!("no such CRL {name}");
             return Err(RvError::ErrRequestInvalid);
         }
 
-        req.storage_delete(format!("crls/{}", name.to_lowercase()).as_str())?;
+        req.storage_delete(format!("crls/{}", name.to_lowercase()).as_str()).await?;
 
         self.crls.remove(&name);
 
@@ -248,18 +249,18 @@ impl CertBackendInner {
         Ok(ret)
     }
 
-    fn update_crl_cache(&self, req: &Request) -> Result<(), RvError> {
+    async fn update_crl_cache(&self, req: &Request) -> Result<(), RvError> {
         if !self.crls.is_empty() {
             return Ok(());
         }
 
-        let keys = req.storage_list("crls/")?;
+        let keys = req.storage_list("crls/").await?;
         if keys.is_empty() {
             return Ok(());
         }
 
         for key in &keys {
-            let entry = match req.storage_get(&format!("crls/{key}")) {
+            let entry = match req.storage_get(&format!("crls/{key}")).await {
                 Ok(None) => continue,
                 Ok(Some(entry)) => entry,
                 Err(err) => {

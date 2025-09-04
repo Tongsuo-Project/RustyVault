@@ -32,7 +32,7 @@ pub enum SockAddrType {
     IP = 0x6,
 }
 
-pub trait SockAddr: fmt::Display + AsAny + fmt::Debug + CloneBox {
+pub trait SockAddr: Sync + Send + fmt::Display + AsAny + fmt::Debug + CloneBox {
     // contains returns true if the other SockAddr is contained within the receiver
     fn contains(&self, other: &dyn SockAddr) -> bool;
 

@@ -221,6 +221,7 @@ impl MountEntry {
     }
 }
 
+#[maybe_async::maybe_async]
 impl MountTable {
     pub fn new(path: &str) -> Self {
         Self { path: path.to_string(), id: RwLock::new(generate_uuid()), entries: RwLock::new(HashMap::new()) }
@@ -272,16 +273,16 @@ impl MountTable {
         Ok(())
     }
 
-    pub fn load_or_default(
+    pub async fn load_or_default(
         &self,
         storage: &dyn Storage,
         hmac_key: Option<&[u8]>,
         hmac_level: MountEntryHMACLevel,
     ) -> Result<(), RvError> {
-        match self.load(storage, hmac_key, hmac_level) {
+        match self.load(storage, hmac_key, hmac_level).await {
             Err(RvError::ErrConfigLoadFailed) => {
                 self.set_default(DEFAULT_CORE_MOUNTS.to_vec(), hmac_key)?;
-                self.persist(storage)?;
+                self.persist(storage).await?;
                 return Ok(());
             }
             Err(err) => {
@@ -290,16 +291,16 @@ impl MountTable {
             _ => {}
         }
 
-        self.mount_update(storage, hmac_key, hmac_level)
+        self.mount_update(storage, hmac_key, hmac_level).await
     }
 
-    pub fn load(
+    pub async fn load(
         &self,
         storage: &dyn Storage,
         hmac_key: Option<&[u8]>,
         hmac_level: MountEntryHMACLevel,
     ) -> Result<Option<()>, RvError> {
-        let entry = storage.get(&self.path)?;
+        let entry = storage.get(&self.path).await?;
         if entry.is_none() {
             return Err(RvError::ErrConfigLoadFailed);
         }
@@ -341,13 +342,13 @@ impl MountTable {
         Ok(Some(()))
     }
 
-    pub fn persist(&self, storage: &dyn Storage) -> Result<(), RvError> {
+    pub async fn persist(&self, storage: &dyn Storage) -> Result<(), RvError> {
         let value = serde_json::to_string(self)?;
-        storage.put(&StorageEntry { key: self.path.clone(), value: value.into_bytes() })?;
+        storage.put(&StorageEntry { key: self.path.clone(), value: value.into_bytes() }).await?;
         Ok(())
     }
 
-    fn mount_update(
+    async fn mount_update(
         &self,
         storage: &dyn Storage,
         hmac_key: Option<&[u8]>,
@@ -370,7 +371,7 @@ impl MountTable {
         }
 
         if need_persist {
-            self.persist(storage)?;
+            self.persist(storage).await?;
         }
 
         Ok(())
@@ -411,30 +412,39 @@ impl MountsMonitor {
 
         let ticker = tick(Duration::from_secs(self.interval));
         let handle = thread::spawn(move || {
-            while running_flag.load(Ordering::Relaxed) {
-                select! {
-                    recv(ticker) -> _ => {
-                        let mut changed = false;
-                        let tables = mount_tables.read().unwrap();
-                        for table in tables.iter() {
-                            match table.load(core.barrier.as_storage(), Some(&core.state.load().hmac_key), core.mount_entry_hmac_level) {
-                                Ok(Some(())) => changed = true,
-                                _ => continue,
-                            }
-                        }
-
-                        if changed {
-                            let _ = core.router.clear();
-
+            let rt = actix_rt::Runtime::new().unwrap();
+            rt.block_on(async move {
+                while running_flag.load(Ordering::Relaxed) {
+                    select! {
+                        recv(ticker) -> _ => {
+                            let mut changed = false;
+                            let tables = mount_tables.read().unwrap();
                             for table in tables.iter() {
-                                if let Err(err) = table.setup(core.clone()) {
-                                    log::error!("update mount table failed, path: {}, err: {:?}", table.path, err);
+                                #[cfg(not(feature = "sync_handler"))]
+                                match table.load(core.barrier.as_storage(), Some(&core.state.load().hmac_key), core.mount_entry_hmac_level).await {
+                                    Ok(Some(())) => changed = true,
+                                    _ => continue,
+                                }
+                                #[cfg(feature = "sync_handler")]
+                                match table.load(core.barrier.as_storage(), Some(&core.state.load().hmac_key), core.mount_entry_hmac_level) {
+                                    Ok(Some(())) => changed = true,
+                                    _ => continue,
+                                }
+                            }
+
+                            if changed {
+                                let _ = core.router.clear();
+
+                                for table in tables.iter() {
+                                    if let Err(err) = table.setup(core.clone()) {
+                                        log::error!("update mount table failed, path: {}, err: {:?}", table.path, err);
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
+            });
         });
 
         self.handle.lock().unwrap().replace(handle);
@@ -448,8 +458,9 @@ impl MountsMonitor {
     }
 }
 
+#[maybe_async::maybe_async]
 impl Core {
-    pub fn mount(&self, me: &MountEntry) -> Result<(), RvError> {
+    pub async fn mount(&self, me: &MountEntry) -> Result<(), RvError> {
         {
             let mut table = self.mounts_router.entries.write()?;
             let mut entry = me.clone();
@@ -490,12 +501,12 @@ impl Core {
             table.insert(path, mount_entry);
         }
 
-        self.mounts_router.persist(self.barrier.as_storage())?;
+        self.mounts_router.persist(self.barrier.as_storage()).await?;
 
         Ok(())
     }
 
-    pub fn unmount(&self, path: &str) -> Result<(), RvError> {
+    pub async fn unmount(&self, path: &str) -> Result<(), RvError> {
         let mut path = path.to_string();
         if !path.ends_with('/') {
             path += "/";
@@ -512,22 +523,22 @@ impl Core {
 
         let view = self.router.matching_view(&path)?;
 
-        self.taint_mount_entry(&path)?;
+        self.taint_mount_entry(&path).await?;
 
         self.router.taint(&path)?;
 
         self.router.unmount(&path)?;
 
         if view.is_some() {
-            view.unwrap().clear()?;
+            view.unwrap().clear().await?;
         }
 
-        self.remove_mount_entry(&path)?;
+        self.remove_mount_entry(&path).await?;
 
         Ok(())
     }
 
-    pub fn remount(&self, src: &str, dst: &str) -> Result<(), RvError> {
+    pub async fn remount(&self, src: &str, dst: &str) -> Result<(), RvError> {
         let mut src = src.to_string();
         let mut dst = dst.to_string();
 
@@ -548,29 +559,31 @@ impl Core {
             return Err(RvError::ErrMountPathExist);
         }
 
-        let src_match = self.router.matching_mount_entry(&src)?;
-        if src_match.is_none() {
+        let Some(src_match) = self.router.matching_mount_entry(&src)? else {
             return Err(RvError::ErrMountNotMatch);
+        };
+
+        let src_path;
+        {
+            let mut src_entry = src_match.write()?;
+            src_entry.tainted = true;
+
+            self.router.taint(&src)?;
+
+            if !(self.router.matching_mount(&dst)?).is_empty() {
+                return Err(RvError::ErrMountPathExist);
+            }
+
+            src_path = src_entry.path.clone();
+            src_entry.path.clone_from(&dst);
+            src_entry.tainted = false;
+            src_entry.calc_hmac(&self.state.load().hmac_key)?;
+
+            std::mem::drop(src_entry);
         }
 
-        let mut src_entry = src_match.as_ref().unwrap().write()?;
-        src_entry.tainted = true;
-
-        self.router.taint(&src)?;
-
-        if !(self.router.matching_mount(&dst)?).is_empty() {
-            return Err(RvError::ErrMountPathExist);
-        }
-
-        let src_path = src_entry.path.clone();
-        src_entry.path.clone_from(&dst);
-        src_entry.tainted = false;
-        src_entry.calc_hmac(&self.state.load().hmac_key)?;
-
-        std::mem::drop(src_entry);
-
-        if let Err(e) = self.mounts_router.persist(self.barrier.as_storage()) {
-            let mut src_entry = src_match.as_ref().unwrap().write()?;
+        if let Err(e) = self.mounts_router.persist(self.barrier.as_storage()).await {
+            let mut src_entry = src_match.write()?;
             src_entry.path = src_path;
             src_entry.tainted = true;
             src_entry.calc_hmac(&self.state.load().hmac_key)?;
@@ -590,16 +603,16 @@ impl Core {
         Ok(())
     }
 
-    fn taint_mount_entry(&self, path: &str) -> Result<(), RvError> {
+    async fn taint_mount_entry(&self, path: &str) -> Result<(), RvError> {
         if self.mounts_router.set_taint(path, true) {
-            self.mounts_router.persist(self.barrier.as_storage())?;
+            self.mounts_router.persist(self.barrier.as_storage()).await?;
         }
         Ok(())
     }
 
-    fn remove_mount_entry(&self, path: &str) -> Result<(), RvError> {
+    async fn remove_mount_entry(&self, path: &str) -> Result<(), RvError> {
         if self.mounts_router.delete(path) {
-            self.mounts_router.persist(self.barrier.as_storage())?;
+            self.mounts_router.persist(self.barrier.as_storage()).await?;
         }
         Ok(())
     }
