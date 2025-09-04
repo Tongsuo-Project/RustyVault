@@ -319,8 +319,11 @@ impl Core {
     }
 
     pub async fn deprecated_unseal_keys_set(&self) -> Result<BHashSet, RvError> {
-        let pe =
-            self.physical.get(DEPRECATED_UNSEAL_KEY_SET_PATH).await?.ok_or(RvError::ErrCoreDeprecatedUnsealKeySetNotFound)?;
+        let pe = self
+            .physical
+            .get(DEPRECATED_UNSEAL_KEY_SET_PATH)
+            .await?
+            .ok_or(RvError::ErrCoreDeprecatedUnsealKeySetNotFound)?;
         let used_key_set: BHashSet = serde_json::from_slice(pe.value.as_slice())?;
         Ok(used_key_set)
     }
@@ -532,11 +535,9 @@ impl Core {
         self.module_manager.setup(self)?;
 
         // Perform initial setup
-        self.mounts_router.load_or_default(
-            self.barrier.as_storage(),
-            Some(&self.state.load().hmac_key),
-            self.mount_entry_hmac_level,
-        ).await?;
+        self.mounts_router
+            .load_or_default(self.barrier.as_storage(), Some(&self.state.load().hmac_key), self.mount_entry_hmac_level)
+            .await?;
 
         self.mounts_router.setup(self.self_ptr.upgrade().unwrap().clone())?;
 

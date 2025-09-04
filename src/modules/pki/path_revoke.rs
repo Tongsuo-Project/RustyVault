@@ -54,7 +54,11 @@ impl PkiBackendInner {
         Ok(None)
     }
 
-    pub async fn read_rotate_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_rotate_crl(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 }

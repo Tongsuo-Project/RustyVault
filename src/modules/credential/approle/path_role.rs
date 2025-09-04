@@ -941,7 +941,12 @@ impl AppRoleBackendInner {
         Ok(Some(role_id_entry))
     }
 
-    pub async fn set_role_id(&self, req: &mut Request, role_id: &str, role_id_entry: &RoleIdEntry) -> Result<(), RvError> {
+    pub async fn set_role_id(
+        &self,
+        req: &mut Request,
+        role_id: &str,
+        role_id_entry: &RoleIdEntry,
+    ) -> Result<(), RvError> {
         let Some(salt) = self.salt.load_full() else {
             return Err(RvError::ErrResponse("salt not found".to_string()));
         };
@@ -1239,7 +1244,8 @@ impl AppRoleBackendInner {
         if let Some(entry) = self.get_role(req, &role_name).await? {
             let storage = req.storage.as_ref().unwrap();
 
-            self.flush_role_secrets(Arc::as_ref(storage), &entry.name, &entry.hmac_key, &entry.secret_id_prefix).await?;
+            self.flush_role_secrets(Arc::as_ref(storage), &entry.name, &entry.hmac_key, &entry.secret_id_prefix)
+                .await?;
 
             self.delete_role_id(req, &entry.role_id).await?;
 
@@ -1249,7 +1255,11 @@ impl AppRoleBackendInner {
         Ok(None)
     }
 
-    pub async fn read_role_policies(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_role_policies(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let role_name = req.get_data_as_str("role_name")?;
 
         let lock_entry = self.role_locks.get_lock(&role_name);
@@ -1273,7 +1283,11 @@ impl AppRoleBackendInner {
         }
     }
 
-    pub async fn write_role_policies(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_role_policies(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let role_name = req.get_data_as_str("role_name")?;
 
         let token_policies_value = req.get_data_or_next(&["token_policies", "policies"])?;
@@ -1294,7 +1308,11 @@ impl AppRoleBackendInner {
         Ok(None)
     }
 
-    pub async fn delete_role_policies(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn delete_role_policies(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let role_name = req.get_data_as_str("role_name")?;
 
         let lock_entry = self.role_locks.get_lock(&role_name);
@@ -1712,15 +1730,27 @@ impl AppRoleBackendInner {
         self.delete_role_field(req, "secret_id_ttl").await
     }
 
-    pub async fn read_role_period(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_role_period(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.read_role_field(req, "token_period").await
     }
 
-    pub async fn write_role_period(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_role_period(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.update_role_field(req, "token_period").await
     }
 
-    pub async fn delete_role_period(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn delete_role_period(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.delete_role_field(req, "token_period").await
     }
 
@@ -1748,11 +1778,19 @@ impl AppRoleBackendInner {
         self.delete_role_field(req, "token_num_uses").await
     }
 
-    pub async fn read_role_token_ttl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_role_token_ttl(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.read_role_field(req, "token_ttl").await
     }
 
-    pub async fn write_role_token_ttl(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_role_token_ttl(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.update_role_field(req, "token_ttl").await
     }
 
@@ -1788,15 +1826,27 @@ impl AppRoleBackendInner {
         self.delete_role_field(req, "token_max_ttl").await
     }
 
-    pub async fn read_role_role_id(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_role_role_id(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.read_role_field(req, "role_id").await
     }
 
-    pub async fn write_role_role_id(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_role_role_id(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.update_role_field(req, "role_id").await
     }
 
-    pub async fn list_role_secret_id(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn list_role_secret_id(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let role_name = req.get_data_as_str("role_name")?;
 
         let lock_entry = self.role_locks.get_lock(&role_name);
@@ -1940,7 +1990,8 @@ impl AppRoleBackendInner {
             &role.hmac_key,
             &role.secret_id_prefix,
             &mut secret_id_storage,
-        ).await?;
+        )
+        .await?;
 
         let resp_data = json!({
             "secret_id": secret_id,
@@ -1952,7 +2003,11 @@ impl AppRoleBackendInner {
         Ok(Some(Response::data_response(resp_data.as_object().cloned())))
     }
 
-    pub async fn write_role_secret_id(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_role_secret_id(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let secret_id = utils::generate_uuid();
         self.update_role_secret_id_common(req, &secret_id).await
     }
@@ -1990,11 +2045,9 @@ impl AppRoleBackendInner {
         {
             // If a secret ID entry does not have a corresponding accessor
             // entry, revoke the secret ID immediately
-            let accessor_entry = self.get_secret_id_accessor_entry(
-                storage,
-                &secret_id_entry.secret_id_accessor,
-                &role.secret_id_prefix,
-            ).await?;
+            let accessor_entry = self
+                .get_secret_id_accessor_entry(storage, &secret_id_entry.secret_id_accessor, &role.secret_id_prefix)
+                .await?;
             if accessor_entry.is_none() {
                 req.storage_delete(&entry_index).await?;
                 return Err(RvError::ErrResponse("invalid secret_id".to_string()));
@@ -2047,7 +2100,8 @@ impl AppRoleBackendInner {
             self.get_secret_id_storage_entry(storage, &role.secret_id_prefix, &role_name_hmac, &secret_id_hmac).await?
         {
             // Delete the accessor of the secret_id first
-            self.delete_secret_id_accessor_entry(storage, &secret_id_entry.secret_id_accessor, &role.secret_id_prefix).await?;
+            self.delete_secret_id_accessor_entry(storage, &secret_id_entry.secret_id_accessor, &role.secret_id_prefix)
+                .await?;
 
             // Delete the storage entry that corresponds to the secret_id
             storage.delete(&entry_index).await?;
@@ -2084,12 +2138,15 @@ impl AppRoleBackendInner {
             let lock_entry = self.secret_id_locks.get_lock(&accessor_entry.secret_id_hmac);
             let _locked = lock_entry.lock.read().await;
 
-            if let Some(secret_id_entry) = self.get_secret_id_storage_entry(
-                storage,
-                &role.secret_id_prefix,
-                &role_name_hmac,
-                &accessor_entry.secret_id_hmac,
-            ).await? {
+            if let Some(secret_id_entry) = self
+                .get_secret_id_storage_entry(
+                    storage,
+                    &role.secret_id_prefix,
+                    &role_name_hmac,
+                    &accessor_entry.secret_id_hmac,
+                )
+                .await?
+            {
                 let data = serde_json::to_value(secret_id_entry)?;
                 return Ok(Some(Response::data_response(Some(data.as_object().unwrap().clone()))));
             }
@@ -2150,7 +2207,8 @@ impl AppRoleBackendInner {
                     &role.secret_id_prefix,
                     &role_name_hmac,
                     &accessor_entry.secret_id_hmac,
-                ).await?
+                )
+                .await?
                 .is_none()
             {
                 return Err(RvError::ErrResponseStatus(
@@ -2333,7 +2391,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_local_secret_id_immutablility() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_local_secret_id_immutablility").await;
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_local_secret_id_immutablility").await;
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2678,7 +2737,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_token_bound_cidr_subset_32_mask() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_token_bound_cidr_subset_32_mask").await;
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_token_bound_cidr_subset_32_mask").await;
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2863,7 +2923,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_and_destroy_role_secret_id() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id").await;
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_lookup_and_destroy_role_secret_id").await;
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -2949,7 +3010,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_lookup_role_secret_id_accessor() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_lookup_role_secret_id_accessor").await;
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_lookup_role_secret_id_accessor").await;
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3015,7 +3077,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_without_fields() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_secret_id_without_fields").await;
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_role_secret_id_without_fields").await;
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;
@@ -3068,7 +3131,8 @@ mod test {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_approle_role_secret_id_with_valid_fields() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_role_secret_id_with_valid_fields").await;
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_approle_role_secret_id_with_valid_fields").await;
 
         // Mount approle auth to path: auth/approle
         test_mount_auth_api(&core, &root_token, "approle", "approle").await;

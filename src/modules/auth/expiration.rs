@@ -653,7 +653,11 @@ impl ExpirationManager {
 
     /// Renews a secret lease entry with a specified increment duration.
     #[maybe_async::maybe_async]
-    async fn renew_secret_lease_entry(&self, le: &LeaseEntry, increment: Duration) -> Result<Option<Response>, RvError> {
+    async fn renew_secret_lease_entry(
+        &self,
+        le: &LeaseEntry,
+        increment: Duration,
+    ) -> Result<Option<Response>, RvError> {
         let mut secret: Option<SecretData> = None;
         if le.secret.is_some() {
             let mut s = le.secret.as_ref().unwrap().clone();
@@ -772,7 +776,7 @@ mod mod_expiration_tests {
             default_duration: Duration::from_secs(5),
             renew_handler: Some(Arc::new(
                 #[cfg(not(feature = "sync_handler"))]
-                move | _backend: &dyn Backend, req: &mut Request | {
+                move |_backend: &dyn Backend, req: &mut Request| {
                     let renew_flag_cloned = renew_flag_cloned.clone();
                     Box::pin(async move {
                         //let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0);

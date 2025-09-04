@@ -70,7 +70,8 @@ impl AppRoleBackendInner {
             let _locked = lock_entry.lock.read().await;
 
             role_entry = self
-                .get_role(req, &role_id_entry.name).await?
+                .get_role(req, &role_id_entry.name)
+                .await?
                 .ok_or_else(|| RvError::ErrResponse("invalid role_id".to_string()))?;
         }
 
@@ -91,15 +92,18 @@ impl AppRoleBackendInner {
             let locked = lock.read_owned().await;
 
             let secret_id_entry = self
-                .get_secret_id_storage_entry(storage, &role_entry.secret_id_prefix, &role_name_hmac, &secret_id_hmac).await?
+                .get_secret_id_storage_entry(storage, &role_entry.secret_id_prefix, &role_name_hmac, &secret_id_hmac)
+                .await?
                 .ok_or(RvError::ErrResponse("invalid secret id".to_string()))?;
 
             // If a secret ID entry does not have a corresponding accessor entry, revoke the secret ID immediately
-            let accessor_entry = self.get_secret_id_accessor_entry(
-                storage,
-                &secret_id_entry.secret_id_accessor,
-                &role_entry.secret_id_prefix,
-            ).await?;
+            let accessor_entry = self
+                .get_secret_id_accessor_entry(
+                    storage,
+                    &secret_id_entry.secret_id_accessor,
+                    &role_entry.secret_id_prefix,
+                )
+                .await?;
             if accessor_entry.is_none() {
                 if let Err(err) = storage.delete(&entry_index).await {
                     return Err(RvError::ErrResponse(format!(
@@ -148,7 +152,8 @@ impl AppRoleBackendInner {
                         &role_entry.secret_id_prefix,
                         &role_name_hmac,
                         &secret_id_hmac,
-                    ).await?
+                    )
+                    .await?
                     .ok_or(RvError::ErrResponse("invalid secret id".to_string()))?;
 
                 // If there exists a single use left, delete the secret_id entry from the storage but do not fail the
@@ -159,7 +164,8 @@ impl AppRoleBackendInner {
                         storage,
                         &secret_id_entry.secret_id_accessor,
                         &role_entry.secret_id_prefix,
-                    ).await?;
+                    )
+                    .await?;
 
                     storage.delete(&entry_index).await?;
                 } else {
@@ -241,7 +247,8 @@ impl AppRoleBackendInner {
         }
 
         let role = self
-            .get_role(req, role_name).await?
+            .get_role(req, role_name)
+            .await?
             .ok_or(rv_error_response!(format!("role {} does not exist during renewal", role_name)))?;
 
         auth.period = role.token_period;

@@ -41,7 +41,11 @@ impl PolicyModule {
         self.policy_store.load().load_default_acl_policy().await
     }
 
-    pub async fn handle_policy_list(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_list(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let mut policies = self.policy_store.load().list_policy(PolicyType::Acl).await?;
 
         // TODO: After the "namespace" feature is added here, it is necessary to determine whether it is the root
@@ -57,7 +61,11 @@ impl PolicyModule {
         Ok(Some(resp))
     }
 
-    pub async fn handle_policy_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_read(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
         if let Some(policy) = self.policy_store.load().get_policy(&name, PolicyType::Acl).await? {
             let mut resp_data = Map::new();
@@ -80,7 +88,11 @@ impl PolicyModule {
         Err(rv_error_response_status!(404, &format!("No policy named: {name}")))
     }
 
-    pub async fn handle_policy_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_write(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
         let policy_str = req.get_data("policy")?.as_str().ok_or(RvError::ErrRequestFieldInvalid)?.to_string();
         let policy_raw = if let Ok(policy_bytes) = STANDARD.decode(&policy_str) {
@@ -101,7 +113,11 @@ impl PolicyModule {
         Ok(None)
     }
 
-    pub async fn handle_policy_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_delete(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let name = req.get_data_as_str("name")?;
         self.policy_store.load().delete_policy(&name, PolicyType::Acl).await?;
         Ok(None)
@@ -431,7 +447,8 @@ mod mod_policy_tests {
 
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_policy_acl_check_with_policy_parameters() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_policy_acl_check_with_policy_parameters").await;
+        let (_rvault, core, root_token) =
+            new_unseal_test_rusty_vault("test_policy_acl_check_with_policy_parameters").await;
 
         let policy1_name = "policy1";
         let policy1_hcl = r#"

@@ -36,9 +36,7 @@ impl Locks {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        sync::RwLock, thread::sleep, time::Duration
-    };
+    use std::{sync::RwLock, thread::sleep, time::Duration};
 
     use super::*;
 

@@ -340,7 +340,11 @@ impl SystemBackend {
         backend
     }
 
-    pub async fn handle_mount_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_mount_table(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let mut data: Map<String, Value> = Map::new();
 
         let mounts = self.core.mounts_router.entries.read()?;
@@ -448,12 +452,20 @@ impl SystemBackend {
         Ok(None)
     }
 
-    pub async fn handle_revoke_prefix(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_revoke_prefix(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let _prefix = req.get_data("prefix")?;
         Ok(None)
     }
 
-    pub async fn handle_auth_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_auth_table(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let mut data: Map<String, Value> = Map::new();
 
         let auth_module = self.get_module::<AuthModule>("auth")?;
@@ -472,7 +484,11 @@ impl SystemBackend {
         Ok(Some(Response::data_response(Some(data))))
     }
 
-    pub async fn handle_auth_enable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_auth_enable(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let logical_type = req.get_data("type")?;
         let description = req.get_data_or_default("description")?;
@@ -497,7 +513,11 @@ impl SystemBackend {
         Ok(None)
     }
 
-    pub async fn handle_auth_disable(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_auth_disable(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let path = sanitize_path(req.path.trim_start_matches("auth/"));
         if path.is_empty() {
             return Err(RvError::ErrRequestInvalid);
@@ -510,35 +530,59 @@ impl SystemBackend {
         Ok(None)
     }
 
-    pub async fn handle_policy_list(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_list(
+        &self,
+        backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_list(backend, req).await
     }
 
-    pub async fn handle_policy_read(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_read(
+        &self,
+        backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_read(backend, req).await
     }
 
-    pub async fn handle_policy_write(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_write(
+        &self,
+        backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_write(backend, req).await
     }
 
-    pub async fn handle_policy_delete(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_policy_delete(
+        &self,
+        backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let policy_module = self.get_module::<PolicyModule>("policy")?;
 
         policy_module.handle_policy_delete(backend, req).await
     }
 
-    pub async fn handle_audit_table(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_audit_table(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
-    pub async fn handle_audit_enable(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_audit_enable(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
@@ -550,7 +594,11 @@ impl SystemBackend {
         Ok(None)
     }
 
-    pub async fn handle_raw_read(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_raw_read(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
 
         let path = path.as_str().unwrap();
@@ -569,7 +617,11 @@ impl SystemBackend {
         Ok(Some(Response::data_response(data)))
     }
 
-    pub async fn handle_raw_write(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_raw_write(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
         let value = req.get_data("value")?;
 
@@ -583,7 +635,11 @@ impl SystemBackend {
         Ok(None)
     }
 
-    pub async fn handle_raw_delete(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_raw_delete(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let path = req.get_data("path")?;
 
         let path = path.as_str().unwrap();

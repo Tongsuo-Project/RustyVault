@@ -41,7 +41,11 @@ impl PkiBackendInner {
         Ok(None)
     }
 
-    pub async fn write_path_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_path_crl(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 }

@@ -388,7 +388,11 @@ impl AppRoleBackendInner {
     }
 
     #[maybe_async::maybe_async]
-    pub async fn handle_tidy_secret_id(&self, backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn handle_tidy_secret_id(
+        &self,
+        backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         self.tidy_secret_id(backend, req)
     }
 }
@@ -415,8 +419,7 @@ mod test {
     #[actix_rt::test]
     async fn test_approle_tidy_dangling_accessors_normal() {
         #[cfg(feature = "sync_handler")]
-        let (_rvault, core, root_token) =
-            new_unseal_test_rusty_vault("test_approle_tidy_dangling_accessors_normal");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_tidy_dangling_accessors_normal");
         #[cfg(not(feature = "sync_handler"))]
         let (_rvault, core, root_token) =
             new_unseal_test_rusty_vault("test_approle_tidy_dangling_accessors_normal").await;
@@ -532,10 +535,9 @@ mod test {
     async fn test_approle_tidy_dangling_accessors_race() {
         #[cfg(not(feature = "sync_handler"))]
         let (_rvault, core, root_token) =
-                new_unseal_test_rusty_vault("test_approle_tidy_dangling_accessors_race").await;
+            new_unseal_test_rusty_vault("test_approle_tidy_dangling_accessors_race").await;
         #[cfg(feature = "sync_handler")]
-        let (_rvault, core, root_token) =
-                new_unseal_test_rusty_vault("test_approle_tidy_dangling_accessors_race");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_approle_tidy_dangling_accessors_race");
 
         // Mount approle auth to path: auth/approle
         #[cfg(feature = "sync_handler")]

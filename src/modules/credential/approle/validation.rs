@@ -181,8 +181,9 @@ impl AppRoleBackendInner {
         {
             let _locked = lock_entry.lock.read().await;
 
-            let entry =
-                self.get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac).await?;
+            let entry = self
+                .get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac)
+                .await?;
             if entry.is_some() {
                 return Err(RvError::ErrResponse("secret_id is already registered".to_string()));
             }
@@ -190,8 +191,9 @@ impl AppRoleBackendInner {
         {
             let _locked = lock_entry.lock.write().await;
 
-            let entry =
-                self.get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac).await?;
+            let entry = self
+                .get_secret_id_storage_entry(storage, role_secret_id_prefix, &role_name_hmac, &secret_id_hmac)
+                .await?;
             if entry.is_some() {
                 return Err(RvError::ErrResponse("secret_id is already registered".to_string()));
             }
@@ -213,7 +215,8 @@ impl AppRoleBackendInner {
                 &role_name_hmac,
                 &secret_id_hmac,
                 secret_entry,
-            ).await?;
+            )
+            .await?;
             Ok(())
         }
     }

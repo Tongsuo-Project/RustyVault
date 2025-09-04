@@ -933,7 +933,6 @@ mod mod_token_store_tests {
             let name = format!("{}_{}", file!(), line!()).replace("/", "_").replace("\\", "_").replace(".", "_");
             println!("init_test_rusty_vault, name: {}", name);
             #[cfg(not(feature = "sync_handler"))]
-
             let (_, core, _) = new_unseal_test_rusty_vault(&name).await;
             #[cfg(feature = "sync_handler")]
             let (_, core, _) = new_unseal_test_rusty_vault(&name);

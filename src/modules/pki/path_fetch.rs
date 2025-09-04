@@ -112,16 +112,28 @@ impl PkiBackendInner {
         Ok(Some(Response::data_response(resp_data)))
     }
 
-    pub async fn read_path_fetch_ca(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_path_fetch_ca(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let ca_bundle = self.fetch_ca_bundle(req).await?;
         self.handle_fetch_cert_bundle(&ca_bundle).await
     }
 
-    pub async fn read_path_fetch_crl(&self, _backend: &dyn Backend, _req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_path_fetch_crl(
+        &self,
+        _backend: &dyn Backend,
+        _req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         Ok(None)
     }
 
-    pub async fn read_path_fetch_cert(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn read_path_fetch_cert(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let serial_number_value = req.get_data("serial")?;
         let serial_number = serial_number_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
         let serial_number_hex = serial_number.replace(':', "-").to_lowercase();

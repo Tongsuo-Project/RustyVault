@@ -1,6 +1,6 @@
-use std::{sync::Arc, time::Duration};
 #[cfg(not(feature = "sync_handler"))]
 use std::{future::Future, pin::Pin};
+use std::{sync::Arc, time::Duration};
 
 use derive_more::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};

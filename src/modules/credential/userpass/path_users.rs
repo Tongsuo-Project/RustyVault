@@ -295,7 +295,11 @@ impl UserPassBackendInner {
         Ok(Some(resp))
     }
 
-    pub async fn write_user_password(&self, _backend: &dyn Backend, req: &mut Request) -> Result<Option<Response>, RvError> {
+    pub async fn write_user_password(
+        &self,
+        _backend: &dyn Backend,
+        req: &mut Request,
+    ) -> Result<Option<Response>, RvError> {
         let username_value = req.get_data("username")?;
         let username = username_value.as_str().ok_or(RvError::ErrRequestFieldInvalid)?;
 
