@@ -596,7 +596,7 @@ x/+V28hUf8m8P2NxP5ALaDZagdaMfzjGZo3O3wDv33Cds0P5GMGQYnRXDxcZN/2L
     #[cfg(feature = "crypto_adaptor_tongsuo")]
     #[maybe_async::test(feature = "sync_handler", async(all(not(feature = "sync_handler")), tokio::test))]
     async fn test_pki_sm2_generate_root() {
-        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_sm2_generate_root");
+        let (_rvault, core, root_token) = new_unseal_test_rusty_vault("test_pki_sm2_generate_root").await;
         let token = &root_token;
         let path = "sm2pki/";
         let role_name = "test";
