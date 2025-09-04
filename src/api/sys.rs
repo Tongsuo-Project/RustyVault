@@ -74,7 +74,7 @@ pub struct Sys<'a> {
 }
 
 impl Client {
-    pub fn sys(&self) -> Sys {
+    pub fn sys(&self) -> Sys<'_> {
         Sys { client: self }
     }
 }

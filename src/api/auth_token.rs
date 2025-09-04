@@ -41,7 +41,7 @@ pub struct TokenAuth<'a> {
 }
 
 impl Client {
-    pub fn token(&self) -> TokenAuth {
+    pub fn token(&self) -> TokenAuth<'_> {
         TokenAuth { client: self }
     }
 }

@@ -316,7 +316,7 @@ fn load_config_file(path: &str) -> Result<Config, RvError> {
         check_config(&config)?;
         Ok(config)
     } else {
-        return Err(RvError::ErrConfigPathInvalid);
+        Err(RvError::ErrConfigPathInvalid)
     }
 }
 

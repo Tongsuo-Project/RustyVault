@@ -11,7 +11,7 @@ pub struct Logical<'a> {
 }
 
 impl Client {
-    pub fn logical(&self) -> Logical {
+    pub fn logical(&self) -> Logical<'_> {
         Logical { client: self }
     }
 }
