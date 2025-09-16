@@ -301,6 +301,12 @@ pub enum RvError {
         source: tokio::task::JoinError,
     },
 
+    #[error("Some sqlx error happened")]
+    SqlxError {
+        #[from]
+        source: sqlx::Error,
+    },
+
     #[error("Some string utf8 error happened, {:?}", .source)]
     StringUtf8Error {
         #[from]

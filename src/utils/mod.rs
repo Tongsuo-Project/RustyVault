@@ -16,6 +16,7 @@ use crate::errors::RvError;
 pub mod cert;
 pub mod cidr;
 pub mod crypto;
+pub mod db;
 pub mod ip_sock_addr;
 pub mod key;
 pub mod kv_builder;
@@ -28,6 +29,8 @@ pub mod sock_addr;
 pub mod string;
 pub mod token_util;
 pub mod unix_sock_addr;
+
+pub use db::DatabaseName;
 
 /// A hash set that stores Blake3 hashes of arbitrary byte data.
 ///

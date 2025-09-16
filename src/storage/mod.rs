@@ -27,6 +27,8 @@ pub mod barrier_view;
 #[cfg(feature = "storage_mysql")]
 pub mod mysql;
 pub mod physical;
+#[cfg(all(not(feature = "sync_handler"), feature = "storage_sqlx"))]
+pub mod sqlx;
 
 /// A trait that abstracts core methods for all storage barrier types.
 #[maybe_async::maybe_async]
@@ -85,6 +87,11 @@ pub fn new_backend(t: &str, conf: &HashMap<String, Value>) -> Result<Arc<dyn Bac
         #[cfg(feature = "storage_mysql")]
         "mysql" => {
             let backend = mysql::mysql_backend::MysqlBackend::new(conf)?;
+            Ok(Arc::new(backend))
+        }
+        #[cfg(all(not(feature = "sync_handler"), feature = "storage_sqlx"))]
+        "sqlx" => {
+            let backend = sqlx::SqlxBackend::new(conf)?;
             Ok(Arc::new(backend))
         }
         "mock" => Ok(Arc::new(physical::mock::MockBackend::new())),
