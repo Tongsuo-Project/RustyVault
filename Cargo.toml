@@ -95,8 +95,11 @@ openssl-sys = { git = "https://github.com/Tongsuo-Project/rust-tongsuo.git" }
 [build-dependencies]
 toml = "0.8.19"
 
+[dev-dependencies]
+serial_test = "3.2"
+
 [features]
-default = ["crypto_adaptor_openssl", "storage_sqlx"]
+default = ["crypto_adaptor_openssl"]
 storage_sqlx = ["sqlx"]
 storage_mysql = ["diesel", "r2d2", "r2d2-diesel"]
 crypto_adaptor_openssl = ["dep:openssl", "dep:openssl-sys"]

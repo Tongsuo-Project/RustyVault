@@ -115,6 +115,35 @@ jobs:
     - name: Build crate doc
       run: cargo doc --no-deps
 
+  unix-sqlx-mysql-test:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{matrix.os}}
+    env:
+      CARGO_TEST_MYSQL_PASSWORD: password
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: shogo82148/actions-setup-mysql@v1
+      with:
+        mysql-version: "5.7"
+        root-password: "password"
+        my-cnf: |
+          skip-ssl
+          port=3306
+    - name: ulimit -n
+      run: ulimit -n 65535
+    - name: Run tests for macOS
+      if: runner.os == 'macOS'
+      run: cargo test --features storage_sqlx --lib --bins --tests --verbose
+    - name: Run tests for non-macOS
+      if: runner.os != 'macOS'
+      run: cargo test --features storage_sqlx --verbose
+    - name: Build crate doc
+      run: cargo doc --no-deps
 
   windows-default-test:
     strategy:
@@ -180,5 +209,47 @@ jobs:
       run: cargo build --features storage_mysql --verbose
     - name: Run tests
       run: cargo test --features storage_mysql --verbose
+    - name: Build crate doc
+      run: cargo doc --no-deps
+
+  windows-sqlx-mysql-test:
+    strategy:
+      matrix:
+        os:
+          - windows-latest
+    runs-on: ${{matrix.os}}
+    env:
+      CARGO_TEST_MYSQL_PASSWORD: password
+
+    steps:
+    - uses: actions/checkout@v3
+    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - name: install openssl
+      run: vcpkg install openssl:x64-windows-static-md
+    - name: Download MySQL Connector/C
+      run: |
+        Invoke-WebRequest -Uri "https://cdn.mysql.com/Downloads/Connector-C/mysql-connector-c-6.1.11-winx64.msi" -OutFile "mysql-connector.msi"
+    - name: Install MySQL Connector/C
+      run: |
+        Start-Process msiexec.exe -ArgumentList '/i', 'mysql-connector.msi', '/quiet', '/norestart' -NoNewWindow -Wait
+    - name: Set MySQLCLIENT_LIB_DIR
+      run: echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 6.1\lib\vs14" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - name: Set MYSQLCLIENT_VERSION
+      run: echo "MYSQLCLIENT_VERSION=8.4.0" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - uses: shogo82148/actions-setup-mysql@v1
+      with:
+        mysql-version: "5.7"
+        root-password: "password"
+        my-cnf: |
+          skip-ssl
+          port=3306
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+    - name: Build
+      run: cargo build --features storage_sqlx --verbose
+    - name: Run tests
+      run: cargo test --features storage_sqlx --verbose
     - name: Build crate doc
       run: cargo doc --no-deps

@@ -301,6 +301,7 @@ pub enum RvError {
         source: tokio::task::JoinError,
     },
 
+    #[cfg(all(not(feature = "sync_handler"), feature = "storage_sqlx"))]
     #[error("Some sqlx error happened")]
     SqlxError {
         #[from]

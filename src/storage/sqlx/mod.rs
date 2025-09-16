@@ -188,7 +188,7 @@ impl SqlxBackend {
         match db_name {
             DatabaseName::MySql(database_name) => {
                 let _ = sqlx::query(&format!("CREATE DATABASE IF NOT EXISTS `{database_name}`")).execute(&pool).await?;
-                let _ = sqlx::query(&format!("CREATE TABLE IF NOT EXISTS `{database_name}.{table_name}` (vault_key varbinary(3072), vault_value mediumblob, PRIMARY KEY (vault_key))")).execute(&pool).await?;
+                let _ = sqlx::query(&format!("CREATE TABLE IF NOT EXISTS `{database_name}`.`{table_name}` (vault_key varbinary(3072), vault_value mediumblob, PRIMARY KEY (vault_key))")).execute(&pool).await?;
             }
             _ => {
                 return Err(RvError::ErrDatabaseTypeInvalid);
@@ -232,6 +232,7 @@ mod test {
     use std::{collections::HashMap, env};
 
     use serde_json::Value;
+    use serial_test::serial;
 
     use super::SqlxBackend;
 
@@ -244,6 +245,7 @@ mod test {
         Ok(())
     }
 
+    #[serial]
     #[tokio::test]
     async fn test_sqlx_backend() {
         let sqlx_pwd = env::var("CARGO_TEST_MYSQL_PASSWORD").unwrap_or("".into());
@@ -263,6 +265,7 @@ mod test {
         test_backend_list_prefix(&backend).await;
     }
 
+    #[serial]
     #[tokio::test]
     async fn test_sqlx_backend_multi_routine() {
         let sqlx_pwd = env::var("CARGO_TEST_MYSQL_PASSWORD").unwrap_or("".into());
