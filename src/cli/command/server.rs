@@ -42,7 +42,7 @@ server can respond to requests.
 
 Start a server with a configuration file:
 
-  $ rvault server -config=/etc/rvault/config.hcl"#
+  $ rvault server --config=/etc/rvault/config.hcl"#
 )]
 pub struct Server {
     #[deref]
