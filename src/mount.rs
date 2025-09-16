@@ -8,7 +8,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, RwLock,
+        Arc, Condvar, Mutex, RwLock,
     },
     thread::{self, JoinHandle},
     time::Duration,
@@ -68,6 +68,7 @@ pub struct MountsMonitor {
     interval: u64,
     tables: Arc<RwLock<Vec<Arc<MountsRouter>>>>,
     running: Arc<AtomicBool>,
+    stop_condvar: Arc<(Mutex<bool>, Condvar)>,
     handle: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -387,6 +388,7 @@ impl MountsMonitor {
             interval,
             tables: Arc::new(RwLock::new(Vec::new())),
             running: Arc::new(AtomicBool::new(false)),
+            stop_condvar: Arc::new((Mutex::new(false), Condvar::new())),
             handle: Mutex::new(None),
         }
     }
@@ -408,6 +410,7 @@ impl MountsMonitor {
 
         self.running.store(true, Ordering::Relaxed);
         let running_flag = self.running.clone();
+        let stop_condvar = self.stop_condvar.clone();
 
         let core = self.core.clone();
         let mount_tables = self.tables.clone();
@@ -444,6 +447,14 @@ impl MountsMonitor {
                                 }
                             }
                         }
+                        default => {
+                            let (stop_mutex, stop_condvar) = &*stop_condvar;
+                            let stop_guard = stop_mutex.lock().unwrap();
+                            if *stop_guard {
+                                break;
+                            }
+                            let _ = stop_condvar.wait_timeout(stop_guard, Duration::from_millis(10)).unwrap();
+                        }
                     }
                 }
             });
@@ -454,6 +465,12 @@ impl MountsMonitor {
 
     pub fn stop(&self) {
         self.running.store(false, Ordering::Relaxed);
+        let (stop_mutex, stop_condvar) = &*self.stop_condvar;
+        {
+            let mut stop_guard = stop_mutex.lock().unwrap();
+            *stop_guard = true;
+        }
+        stop_condvar.notify_one();
         if let Some(handle) = self.handle.lock().unwrap().take() {
             let _ = handle.join();
         }
