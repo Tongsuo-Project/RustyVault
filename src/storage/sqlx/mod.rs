@@ -187,8 +187,14 @@ impl SqlxBackend {
 
         match db_name {
             DatabaseName::MySql(database_name) => {
-                let _ = sqlx::query(&format!("CREATE DATABASE IF NOT EXISTS `{database_name}`")).execute(&pool).await?;
-                let _ = sqlx::query(&format!("CREATE TABLE IF NOT EXISTS `{database_name}`.`{table_name}` (vault_key varbinary(3072), vault_value mediumblob, PRIMARY KEY (vault_key))")).execute(&pool).await?;
+                let ret = sqlx::query(&format!("CREATE DATABASE IF NOT EXISTS `{database_name}`")).execute(&pool).await;
+                if ret.is_err() {
+                    log::warn!("sqlx create database error: {:?}", ret.err());
+                }
+                let ret = sqlx::query(&format!("CREATE TABLE IF NOT EXISTS `{database_name}`.`{table_name}` (vault_key varbinary(3072), vault_value mediumblob, PRIMARY KEY (vault_key))")).execute(&pool).await;
+                if ret.is_err() {
+                    log::warn!("sqlx create table error: {:?}", ret.err());
+                }
             }
             _ => {
                 return Err(RvError::ErrDatabaseTypeInvalid);
