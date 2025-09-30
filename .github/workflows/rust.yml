@@ -29,6 +29,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+        override: true
     - name: Run cargo fmt --all -- --check
       run: cargo fmt --all -- --check
     - name: Build
@@ -60,6 +66,12 @@ jobs:
     runs-on: ${{matrix.os}}
 
     steps:
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+        override: true
     - name: Build Tongsuo
       run: |
         wget "https://github.com/Tongsuo-Project/Tongsuo/archive/refs/tags/${TONGSUO_VERSION}.tar.gz"
@@ -93,6 +105,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+        override: true
     - uses: shogo82148/actions-setup-mysql@v1
       with:
         mysql-version: "5.7"
@@ -126,6 +144,12 @@ jobs:
       CARGO_TEST_MYSQL_PASSWORD: password
 
     steps:
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+        override: true
     - uses: actions/checkout@v3
     - uses: shogo82148/actions-setup-mysql@v1
       with:
