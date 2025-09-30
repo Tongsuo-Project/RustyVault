@@ -38,12 +38,6 @@ use crate::{
     },
 };
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Asn1StringData {
-    #[serde(rename = "value")]
-    value: String,
-}
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ParsedCert {
     pub entry: CertEntry,
