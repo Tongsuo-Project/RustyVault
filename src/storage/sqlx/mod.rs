@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap};
+use std::{any::Any, collections::HashMap, time::Duration};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -203,7 +203,12 @@ impl SqlxBackend {
 
         pool.close().await;
 
-        let pool = sqlx::AnyPool::connect_lazy(database_url)?;
+        let pool = sqlx::any::AnyPoolOptions::new()
+            .max_connections(100)
+            .idle_timeout(Duration::from_secs(300))
+            .max_lifetime(Duration::from_secs(1800))
+            .acquire_timeout(Duration::from_secs(5))
+            .connect_lazy(database_url)?;
 
         let lock = SqlxBackendLock::new(&pool, db_scheme.as_str(), 1);
         Ok(SqlxBackend { pool, table_name: table_name.to_string(), db_scheme, lock })
