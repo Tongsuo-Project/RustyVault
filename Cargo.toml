@@ -107,7 +107,7 @@ crypto_adaptor_tongsuo = ["dep:openssl", "dep:openssl-sys"]
 sync_handler = ["maybe-async/is_sync"]
 
 [target.'cfg(unix)'.dependencies]
-daemonize = "0.5"
+daemonize = { package = "daemonize-next", version = "0.1" }
 
 [dependencies.foreign-types]
 version = "0.3.1"

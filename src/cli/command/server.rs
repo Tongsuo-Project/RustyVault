@@ -104,14 +104,9 @@ impl Server {
                 pid_path = work_dir.clone() + pid_path.as_str();
             }
 
-            let mut user = "onbody".to_owned();
+            let mut user = "nobody".to_owned();
             if !config.daemon_user.is_empty() {
                 user.clone_from(&config.daemon_user);
-            }
-
-            let mut group = "onbody".to_owned();
-            if !config.daemon_group.is_empty() {
-                group.clone_from(&config.daemon_group);
             }
 
             let log_file = std::fs::OpenOptions::new()
@@ -125,7 +120,6 @@ impl Server {
             let daemonize = daemonize::Daemonize::new()
                 .working_directory(work_dir.as_str())
                 .user(user.as_str())
-                .group(group.as_str())
                 .umask(0o027)
                 .stdout(log_file.try_clone().unwrap())
                 .stderr(log_file)
@@ -133,13 +127,20 @@ impl Server {
                 .chown_pid_file(true)
                 .privileged_action(|| log::info!("Start rusty_vault server daemon"));
 
+            // Without a group, the daemon switches to the user's primary group.
+            let daemonize =
+                if config.daemon_group.is_empty() { daemonize } else { daemonize.group(config.daemon_group.as_str()) };
+
             match daemonize.start() {
                 Ok(_) => {
                     let pid = std::fs::read_to_string(pid_path)?;
                     log::info!("The rusty_vault server daemon process started successfully, pid is {pid}");
-                    log::debug!("run user: {user}, group: {group}");
+                    log::debug!("run user: {user}, group: {}", config.daemon_group);
                 }
-                Err(e) => log::error!("Error, {e}"),
+                Err(e) => {
+                    log::error!("Error, {e}");
+                    return Err(RvError::ErrString(format!("failed to start the daemon: {e}")));
+                }
             }
         }
 
